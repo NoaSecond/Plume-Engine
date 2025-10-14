@@ -15,10 +15,8 @@ void Camera::Update(Input& input, float deltaTime) {
     int mouseX, mouseY;
     input.GetMouseMotion(mouseX, mouseY);
     if (input.IsMouseButtonPressed(SDL_BUTTON_RIGHT)) {
-        // CORRECTION : Les signes négatifs ont été retirés pour un contrôle standard
         glm::quat yawRotation = glm::angleAxis(glm::radians(mouseX * m_MouseSensitivity), glm::vec3(0, 1, 0));
         glm::quat pitchRotation = glm::angleAxis(glm::radians(mouseY * m_MouseSensitivity), m_Right);
-
         m_Orientation = yawRotation * m_Orientation * pitchRotation;
     }
     
@@ -45,8 +43,14 @@ void Camera::Update(Input& input, float deltaTime) {
     if (input.IsKeyPressed(SDL_SCANCODE_S) || input.IsKeyPressed(SDL_SCANCODE_DOWN))  { m_Position -= m_Front * velocity; }
     if (input.IsKeyPressed(SDL_SCANCODE_A) || input.IsKeyPressed(SDL_SCANCODE_LEFT))  { m_Position -= m_Right * velocity; }
     if (input.IsKeyPressed(SDL_SCANCODE_D) || input.IsKeyPressed(SDL_SCANCODE_RIGHT)) { m_Position += m_Right * velocity; }
-    if (input.IsKeyPressed(SDL_SCANCODE_LSHIFT)) { m_Position += glm::vec3(0, 1, 0) * velocity; }
-    if (input.IsKeyPressed(SDL_SCANCODE_LCTRL))  { m_Position -= glm::vec3(0, 1, 0) * velocity; }
+    
+    // CORRECTION : Utiliser l'axe Y du monde (glm::vec3(0, 1, 0)) pour un mouvement vertical pur
+    if (input.IsKeyPressed(SDL_SCANCODE_LSHIFT)) { 
+    m_Position += m_Up * velocity; 
+}
+if (input.IsKeyPressed(SDL_SCANCODE_LCTRL))  { 
+    m_Position -= m_Up * velocity; 
+}
 
     // --- 4. Mettre à jour la matrice de vue finale ---
     m_ViewMatrix = glm::mat4_cast(m_Orientation) * glm::translate(glm::mat4(1.0f), -m_Position);
