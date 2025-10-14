@@ -1,68 +1,65 @@
 # Plume Engine 🪶
 
-**Plume Engine 🪶 Un moteur de jeu 3D simple et léger en C++**
+**Plume Engine 🪶 — A small, lightweight 3D game engine written in modern C++.**
 
-## Roadmap
+---
 
-- [x] Création de fenêtre et gestion des entrées
-- [ ] Contexte de rendu 3D
-- [ ] Import de modèles 3D
-- [ ] Caméra 3D simple
-- [ ] Système d'éclairage basique (lumières directionnelles, ponctuelles)
-- [ ] Gestion des textures
-- [ ] Lecture de fichiers audio
-- [ ] Architecture Entité-Composant (ECS) de base
+## 🧰 Prerequisites
 
-# Plume Engine 🪶
+Before building, make sure you have the following installed:
 
-A small, lightweight 3D game engine written in C++.
+### 🔹 Required
+- **CMake** ≥ 3.15
+  - 👉 [Download CMake](https://cmake.org/download/)
+- **C++ Toolchain**
+  - Windows → MSVC (Visual Studio 2022 or Build Tools)
+  - Linux/macOS → GCC or Clang
+- **Git** → [git-scm.com](https://git-scm.com/)
 
-## Overview
+### 🔹 Recommended
+- **vcpkg** (C++ package manager by Microsoft)
+  - 👉 [https://github.com/microsoft/vcpkg](https://github.com/microsoft/vcpkg)
 
-Plume Engine is an educational project: a minimal 3D engine to demonstrate a simple rendering pipeline, basic ECS ideas, and a lightweight build setup. The focus is clarity and incremental learning rather than production features.
+### 🔹 Recommended Development Environment
+- **Visual Studio Code**
+- **CMake Tools Extension** (by Microsoft)
+  - This extension automatically configures IntelliSense, resolving `#include` errors in the editor and providing code completion for your dependencies.
 
-## Prerequisites
-
-Install the following before building:
-
-- CMake (recommended >= 3.15): https://cmake.org/download/
-- A C++ toolchain (MSVC on Windows, or GCC/Clang on Linux/macOS)
-- vcpkg (optional, recommended): https://github.com/microsoft/vcpkg
+---
 
 ## Dependencies
 
-Recommended to install via vcpkg:
+It is recommended to install dependencies via **vcpkg**.
 
-- SDL2 — windowing, input, and OpenGL context
-- ufbx — FBX model loading
-- GLM — math (vectors, matrices)
+- **SDL2** — Windowing, input, and OpenGL context management.
+- **glad** — OpenGL function loader, essential for accessing modern OpenGL features.
+- **GLM** — Mathematics library for vectors and matrices.
+- **ufbx** — Lightweight library for loading `.fbx` models.
 
-## Build (recommended using vcpkg)
+---
 
-1. Clone the repository:
+## Build (using CMake and vcpkg)
 
-```powershell
-git clone https://github.com/NoaSecond/Plume-Engine.git
-cd Plume-Engine
-```
+1.  **Clone the repository:**
+    ```powershell
+    git clone [https://github.com/NoaSecond/Plume-Engine.git](https://github.com/NoaSecond/Plume-Engine.git)
+    cd Plume-Engine
+    ```
+2.  **Install dependencies with vcpkg:**
+    ```powershell
+    vcpkg install sdl2 glad glm ufbx
+    ```
+3.  **Configure and build with CMake:**
+    ```powershell
+    # Configure the project
+    cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE=<path-to-vcpkg>/scripts/buildsystems/vcpkg.cmake
 
-2. Install dependencies with vcpkg (example):
+    # Build the project (in Release mode)
+    cmake --build build --config Release
+    ```
+    **Note**: Replace `<path-to-vcpkg>` with the root path of your vcpkg installation (e.g., `C:\dev\vcpkg`).
 
-```powershell
-vcpkg install sdl2 ufbx glm
-```
-
-3. Configure and build with CMake (example):
-
-```powershell
-cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE=<path-to-vcpkg>/scripts/buildsystems/vcpkg.cmake
-cmake --build build --config Release
-```
-
-Notes:
-
-- On Windows, replace `<path-to-vcpkg>` with your vcpkg root (e.g. `C:\dev\vcpkg`).
-- If you don't use vcpkg, ensure the libraries are discoverable by your CMake configuration.
+---
 
 ## Usage — Git, commits and style
 
@@ -94,17 +91,6 @@ Optional: use `gitmoji-cli` for interactive commits:
 npm install -g gitmoji-cli
 npx gitmoji-cli -c
 ```
-
-## Roadmap
-
-- [x] Window creation and input handling
-- [ ] 3D rendering context
-- [ ] Model import (FBX)
-- [ ] Simple 3D camera
-- [ ] Basic lighting (directional, point lights)
-- [ ] Texture management
-- [ ] Audio playback
-- [ ] Simple Entity-Component System (ECS)
 
 ## Contributing
 
