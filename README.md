@@ -1,8 +1,10 @@
 # Plume Engine 🪶
 
 <p align="center">
-  <img src="assets/icons/PlumeEngineIcon_500px.png" alt="Plume Engine" />
+  <img src="branding/PlumeEngineIcon_1000px.png" alt="Plume Engine" />
 </p>
+
+[Press kit](branding/press-kit.md)
 
 **Plume Engine 🪶 — A modern, lightweight 3D game engine written in C++ with multi-backend rendering architecture.**
 

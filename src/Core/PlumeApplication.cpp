@@ -153,6 +153,10 @@ void PlumeApplication::Run() {
             if (event.type == SDL_QUIT) { m_IsRunning = false; }
             m_Input->Update(event);
         }
+        // Show About dialog on F1
+        if (m_Input->IsKeyPressed(SDL_SCANCODE_F1)) {
+            ShowAbout();
+        }
         m_Camera->Update(*m_Input, deltaTime);
         
         // --- Rendu de la Scène ---
@@ -196,4 +200,10 @@ void PlumeApplication::Shutdown() {
     SDL_DestroyWindow(m_Window);
     SDL_Quit();
     std::cout << "Fermeture de Plume Engine." << std::endl;
+}
+
+void PlumeApplication::ShowAbout() {
+    // Build about text from generated macros
+    std::string aboutText = std::string(PLUME_PRODUCT_NAME) + "\nVersion " + std::string(PLUME_FILE_VERSION_STR) + "\n" + std::string(PLUME_COMPANY_NAME) + "\n" + std::string(PLUME_LEGAL_COPYRIGHT);
+    SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION, "About", aboutText.c_str(), m_Window);
 }
