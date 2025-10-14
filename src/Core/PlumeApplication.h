@@ -3,7 +3,9 @@
 
 #include <memory>
 #include "../Renderer/Shader.h"
-#include "../Renderer/VertexArray.h" // <-- INCLURE VertexArray
+#include "../Renderer/VertexArray.h"
+#include "../Renderer/Camera.h"
+#include "Input.h" // <-- INCLURE INPUT
 
 struct SDL_Window;
 typedef void* SDL_GLContext;
@@ -23,7 +25,11 @@ private:
     SDL_GLContext m_GLContext = nullptr;
     bool m_IsRunning = true;
 
-    // Objets de rendu (maintenant avec nos nouvelles classes)
+    // Objets
     std::unique_ptr<Shader> m_Shader;
-    std::shared_ptr<VertexArray> m_TriangleVA; // <-- MODIFIÉ
+    std::shared_ptr<VertexArray> m_CubeVA;
+    std::unique_ptr<Camera> m_Camera;
+    
+    // NOUVEAU : Un objet Input
+    std::unique_ptr<Input> m_Input;
 };

@@ -12,6 +12,7 @@
 const int WINDOW_WIDTH = 1280;
 const int WINDOW_HEIGHT = 720;
 
+// Les sources des shaders pour la 3D
 const std::string vertexShaderSource = R"(
     #version 330 core
     layout (location = 0) in vec3 a_Position;
@@ -72,9 +73,15 @@ void PlumeApplication::Init() {
     std::cout << "OpenGL Version: " << glGetString(GL_VERSION) << std::endl;
 
     glEnable(GL_DEPTH_TEST);
+    // Cacher le curseur et le "capturer" dans la fenêtre pour un mouvement de caméra fluide
+    SDL_SetRelativeMouseMode(SDL_TRUE);
+
+    // --- PRÉPARATION ---
+    m_Input = std::make_unique<Input>();
+    m_Camera = std::make_unique<Camera>(45.0f, (float)WINDOW_WIDTH / (float)WINDOW_HEIGHT, 0.1f, 100.0f);
 
     m_Shader = std::make_unique<Shader>(vertexShaderSource, fragmentShaderSource);
-    m_TriangleVA = std::make_shared<VertexArray>();
+    m_CubeVA = std::make_shared<VertexArray>();
 
     float vertices[] = {
         -0.5f, -0.5f, -0.5f,  1.0f, 0.0f, 0.0f,
@@ -91,7 +98,7 @@ void PlumeApplication::Init() {
         { ShaderDataType::Float3, "a_Position" },
         { ShaderDataType::Float3, "a_Color" }
     });
-    m_TriangleVA->AddVertexBuffer(vb);
+    m_CubeVA->AddVertexBuffer(vb);
 
     uint32_t indices[] = {
         0, 1, 2, 2, 3, 0,
@@ -101,33 +108,44 @@ void PlumeApplication::Init() {
         0, 3, 7, 7, 4, 0,
         1, 2, 6, 6, 5, 1
     };
-    // CORRECTION APPLIQUÉE ICI
     std::shared_ptr<IndexBuffer> ib = std::make_shared<IndexBuffer>(indices, static_cast<uint32_t>(sizeof(indices) / sizeof(uint32_t)));
-    m_TriangleVA->SetIndexBuffer(ib);
+    m_CubeVA->SetIndexBuffer(ib);
 }
 
 void PlumeApplication::Run() {
+    uint64_t lastFrameTime = SDL_GetPerformanceCounter();
+
     while (m_IsRunning) {
+        // Calcul du DeltaTime pour un mouvement indépendant de la vitesse de l'ordinateur
+        uint64_t now = SDL_GetPerformanceCounter();
+        float deltaTime = (float)((now - lastFrameTime) * 1000 / (double)SDL_GetPerformanceFrequency()) / 1000.0f;
+        lastFrameTime = now;
+
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
             if (event.type == SDL_QUIT) { m_IsRunning = false; }
+            // Mettre à jour notre gestionnaire d'input avec les nouveaux événements
+            m_Input->Update(event);
         }
 
+        // Mettre à jour la caméra en fonction des entrées
+        m_Camera->Update(*m_Input, deltaTime);
+
+        // --- Rendu ---
         glClearColor(0.1f, 0.2f, 0.3f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         m_Shader->Bind();
 
-        glm::mat4 model = glm::rotate(glm::mat4(1.0f), (float)SDL_GetTicks() * 0.001f, glm::vec3(0.5f, 1.0f, 0.0f));
-        glm::mat4 view = glm::lookAt(glm::vec3(0, 0, 3), glm::vec3(0, 0, 0), glm::vec3(0, 1, 0));
-        glm::mat4 projection = glm::perspective(glm::radians(45.0f), (float)WINDOW_WIDTH / (float)WINDOW_HEIGHT, 0.1f, 100.0f);
+        // Le cube ne tourne plus tout seul, sa position est statique (matrice identité)
+        glm::mat4 model = glm::mat4(1.0f); 
         
         m_Shader->UploadUniformMat4("u_Model", model);
-        m_Shader->UploadUniformMat4("u_View", view);
-        m_Shader->UploadUniformMat4("u_Projection", projection);
+        m_Shader->UploadUniformMat4("u_View", m_Camera->GetViewMatrix());
+        m_Shader->UploadUniformMat4("u_Projection", m_Camera->GetProjectionMatrix());
 
-        m_TriangleVA->Bind();
-        glDrawElements(GL_TRIANGLES, m_TriangleVA->GetIndexBuffer()->GetCount(), GL_UNSIGNED_INT, nullptr);
+        m_CubeVA->Bind();
+        glDrawElements(GL_TRIANGLES, m_CubeVA->GetIndexBuffer()->GetCount(), GL_UNSIGNED_INT, nullptr);
 
         SDL_GL_SwapWindow(m_Window);
     }
