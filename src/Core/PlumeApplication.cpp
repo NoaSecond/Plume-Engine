@@ -12,24 +12,33 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
-// Shaders
 const std::string vertexShaderSource = R"(
     #version 330 core
     layout (location = 0) in vec3 a_Position;
     layout (location = 1) in vec3 a_Normal;
     layout (location = 2) in vec2 a_TexCoords;
+
     uniform mat4 u_Model;
     uniform mat4 u_View;
     uniform mat4 u_Projection;
+
+    out vec2 v_TexCoords;
+
     void main() {
        gl_Position = u_Projection * u_View * u_Model * vec4(a_Position, 1.0);
+       v_TexCoords = a_TexCoords;
     }
 )";
+
 const std::string fragmentShaderSource = R"(
     #version 330 core
+    in vec2 v_TexCoords;
     out vec4 FragColor;
+
+    uniform sampler2D u_TextureDiffuse;
+
     void main() {
-       FragColor = vec4(1.0, 1.0, 1.0, 1.0);
+       FragColor = texture(u_TextureDiffuse, v_TexCoords);
     }
 )";
 
@@ -40,7 +49,7 @@ PlumeApplication::PlumeApplication() { Init(); }
 PlumeApplication::~PlumeApplication() { Shutdown(); }
 
 void PlumeApplication::Init() {
-    // ... (Initialisation de SDL, Glad, etc. ne change pas)
+    // ... (Initialisation de SDL, Glad, etc.)
     if (SDL_Init(SDL_INIT_VIDEO) != 0) { std::cerr << "Erreur SDL_Init: " << SDL_GetError() << std::endl; return; }
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
@@ -59,14 +68,10 @@ void PlumeApplication::Init() {
 
     // --- CHARGEMENT DU MODÈLE ---
     auto modelEntity = m_ActiveScene->CreateEntity("Backpack");
-    
     std::string modelPath = "assets/models/backpack/12305_backpack_v2_l3.obj";
     auto backpackModel = std::make_shared<Model>(modelPath);
-
-    // VÉRIFICATION DU CHARGEMENT
     if (backpackModel->GetMeshes().empty()) {
         std::cerr << "ERREUR CRITIQUE: Le modele n'a pas pu etre charge depuis le chemin : " << modelPath << std::endl;
-        std::cerr << "Verifiez que le chemin est correct et que le dossier 'assets' est present a la racine du projet." << std::endl;
     } else {
         modelEntity.AddComponent<ModelComponent>(backpackModel);
         auto& transform = modelEntity.GetComponent<TransformComponent>();
@@ -79,7 +84,7 @@ void PlumeApplication::Run() {
     
     uint64_t lastFrameTime = SDL_GetPerformanceCounter();
     while (m_IsRunning) {
-        // ... (Gestion du deltaTime, des inputs et de la caméra ne change pas)
+        // ... (Gestion du deltaTime, des inputs et de la caméra)
         uint64_t now = SDL_GetPerformanceCounter();
         float deltaTime = (float)((now - lastFrameTime) * 1000 / (double)SDL_GetPerformanceFrequency()) / 1000.0f;
         lastFrameTime = now;
@@ -103,7 +108,6 @@ void PlumeApplication::Run() {
         for (auto entity : view) {
             auto& transform = view.get<TransformComponent>(entity);
             auto& modelComp = view.get<ModelComponent>(entity);
-
             shader->UploadUniformMat4("u_Model", transform.GetTransform());
             modelComp.model->Draw(*shader);
         }
