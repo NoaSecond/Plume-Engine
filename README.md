@@ -1,5 +1,11 @@
 # Plume Engine 🪶
 
+<p align="center">
+  <img src="branding/PlumeEngineIcon_500px.png" alt="Plume Engine" />
+</p>
+
+[Press kit](branding/press-kit.md)
+
 **Plume Engine 🪶 — A modern, lightweight 3D game engine written in C++ with multi-backend rendering architecture.**
 
 ---
@@ -195,26 +201,32 @@ vcpkg install glfw3 glad glm assimp spdlog stb entt
 vcpkg install imgui[glfw-binding,opengl3-binding]
 ```
 
-### 4️⃣ Configure & Build
+## 🔨 Configure & Build
+
+Use an explicit generator and architecture on Windows (Visual Studio 2022, x64) and build the PlumeEngine target directly.
 
 ```bash
-# Configure with vcpkg toolchain
-cmake -B build -S . \
+# Configure with vcpkg toolchain (cross-platform example)
+cmake -S . -B build \
   -DCMAKE_TOOLCHAIN_FILE=[path-to-vcpkg]/scripts/buildsystems/vcpkg.cmake \
   -DCMAKE_BUILD_TYPE=Release
 
-# Build
-cmake --build build --config Release
+# Build the PlumeEngine target (multi-config generators require --config)
+cmake --build build --config Release --target PlumeEngine
 
 # Run
-./build/PlumeEngine  # Linux/macOS
-.\build\Release\PlumeEngine.exe  # Windows
+./build/PlumeEngine  # Linux/macOS (or run the executable produced by your generator)
+.\build\Release\PlumeEngine.exe  # Windows (Visual Studio generated layout)
 ```
 
-**Windows Example:**
+**Windows Example (Visual Studio 2022, x64):**
 ```powershell
-cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE=C:\dev\vcpkg\scripts\buildsystems\vcpkg.cmake
-cmake --build build --config Release
+# Configure with explicit generator and architecture and vcpkg toolchain
+cmake -S . -B build -G "Visual Studio 17 2022" -A x64 \
+  -DCMAKE_TOOLCHAIN_FILE=C:\dev\vcpkg\scripts\buildsystems\vcpkg.cmake
+
+# Build the PlumeEngine target in Release configuration
+cmake --build build --config Release --target PlumeEngine
 ```
 
 ### 5️⃣ Development Build (Debug)

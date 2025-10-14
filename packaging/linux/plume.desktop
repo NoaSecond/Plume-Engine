@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Plume Engine
+Comment=A modern, lightweight 3D game engine
+Exec=/usr/bin/PlumeEngine
+Icon=/usr/share/icons/hicolor/256x256/apps/PlumeEngine.png
+Terminal=false
+Type=Application
+Categories=Development;Game;Graphics;

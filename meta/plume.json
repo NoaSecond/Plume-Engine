@@ -1,0 +1,9 @@
+{
+  "product_name": "Plume Engine",
+  "version": "0.1.0.0",
+  "description": "A modern, lightweight 3D game engine with multi-backend rendering architecture.",
+  "company": "Noa Second https://noasecond.com",
+  "copyright": "©2025 Noa Second. All rights reserved.",
+  "author": "Noa Second",
+  "comments": "Source code available at https://github.com/NoaSecond/Plume-Engine"
+}

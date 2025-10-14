@@ -18,6 +18,7 @@ public:
 private:
     void Init();
     void Shutdown();
+    void ShowAbout();
 
     SDL_Window* m_Window = nullptr;
     SDL_GLContext m_GLContext = nullptr;

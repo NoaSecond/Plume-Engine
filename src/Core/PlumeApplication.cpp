@@ -1,8 +1,13 @@
 // src/Core/PlumeApplication.cpp
 #include "PlumeApplication.h"
+#include "PlumeVersion.h"
 #include <iostream>
 #include <glad/glad.h>
 #include <SDL2/SDL.h>
+
+// Inclure stb_image pour le chargement de l'icône (implémentation définie dans Texture.cpp)
+#include <stb_image.h>
+
 #include "../Renderer/Shader.h"
 #include "../Renderer/Camera.h"
 #include "../Core/Input.h"
@@ -12,7 +17,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
-// --- SHADERS MIS À JOUR POUR L'ÉCLAIRAGE ---
+// --- SHADERS ---
 const std::string vertexShaderSource = R"(
     #version 330 core
     layout (location = 0) in vec3 a_Position;
@@ -30,8 +35,6 @@ const std::string vertexShaderSource = R"(
     void main() {
        gl_Position = u_Projection * u_View * u_Model * vec4(a_Position, 1.0);
        v_TexCoords = a_TexCoords;
-       
-       // On transforme la position du fragment et la normale dans l'espace du monde
        v_FragPos = vec3(u_Model * vec4(a_Position, 1.0));
        v_Normal = mat3(transpose(inverse(u_Model))) * a_Normal;
     }
@@ -51,17 +54,13 @@ const std::string fragmentShaderSource = R"(
     uniform vec3 u_ViewPos;
 
     void main() {
-       // Lumière ambiante
        float ambientStrength = 0.1;
        vec3 ambient = ambientStrength * u_LightColor;
 
-       // Lumière diffuse
        vec3 norm = normalize(v_Normal);
        vec3 lightDir = normalize(u_LightPos - v_FragPos);
        float diff = max(dot(norm, lightDir), 0.0);
        vec3 diffuse = diff * u_LightColor;
-
-       // (La lumière spéculaire sera ajoutée plus tard)
 
        vec4 texColor = texture(u_TextureDiffuse, v_TexCoords);
        vec3 result = (ambient + diffuse) * texColor.rgb;
@@ -76,16 +75,39 @@ PlumeApplication::PlumeApplication() { Init(); }
 PlumeApplication::~PlumeApplication() { Shutdown(); }
 
 void PlumeApplication::Init() {
-    // ... (Initialisation de SDL, Glad, etc.)
-    if (SDL_Init(SDL_INIT_VIDEO) != 0) { std::cerr << "Erreur SDL_Init: " << SDL_GetError() << std::endl; return; }
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) { std::cerr << "Erreur SDL_Init: " << SDL_GetError() << std::endl; m_IsRunning = false; return; }
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-    m_Window = SDL_CreateWindow("Plume Engine v0.1", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, WINDOW_WIDTH, WINDOW_HEIGHT, SDL_WINDOW_SHOWN | SDL_WINDOW_OPENGL);
-    if (!m_Window) { std::cerr << "Erreur SDL_CreateWindow: " << SDL_GetError() << std::endl; return; }
+    
+    std::string windowTitle = std::string(PLUME_PRODUCT_NAME) + " v" + std::string(PLUME_FILE_VERSION_STR);
+    m_Window = SDL_CreateWindow(windowTitle.c_str(), SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, WINDOW_WIDTH, WINDOW_HEIGHT, SDL_WINDOW_SHOWN | SDL_WINDOW_OPENGL);
+    if (!m_Window) { std::cerr << "Erreur SDL_CreateWindow: " << SDL_GetError() << std::endl; m_IsRunning = false; return; }
+
+    // --- DÉFINIR L'ICÔNE DE LA FENÊTRE ---
+    {
+        int width, height, channels;
+        stbi_set_flip_vertically_on_load(0); // Pas besoin d'inverser pour une icône
+        unsigned char* pixels = stbi_load("assets/icons/PlumeEngineIcon.png", &width, &height, &channels, STBI_rgb_alpha);
+
+        if (pixels) {
+            SDL_Surface* iconSurface = SDL_CreateRGBSurfaceFrom(pixels, width, height, 32, width * 4, 0x000000ff, 0x0000ff00, 0x00ff0000, 0xff000000);
+            if (iconSurface) {
+                SDL_SetWindowIcon(m_Window, iconSurface);
+                SDL_FreeSurface(iconSurface);
+            }
+            stbi_image_free(pixels);
+        } else {
+            std::cerr << "Avertissement: Impossible de charger l'icone 'assets/icons/PlumeEngineIcon.png'" << std::endl;
+        }
+        // Rétablir le paramètre pour le chargement des textures de modèles
+        stbi_set_flip_vertically_on_load(1);
+    }
+    // --- FIN DU BLOC D'ICÔNE ---
+
     m_GLContext = SDL_GL_CreateContext(m_Window);
-    if (!m_GLContext) { std::cerr << "Erreur SDL_GL_CreateContext: " << SDL_GetError() << std::endl; return; }
-    if (!gladLoadGLLoader((GLADloadproc)SDL_GL_GetProcAddress)) { std::cerr << "Erreur gladLoadGLLoader" << std::endl; return; }
+    if (!m_GLContext) { std::cerr << "Erreur SDL_GL_CreateContext: " << SDL_GetError() << std::endl; m_IsRunning = false; return; }
+    if (!gladLoadGLLoader((GLADloadproc)SDL_GL_GetProcAddress)) { std::cerr << "Erreur gladLoadGLLoader" << std::endl; m_IsRunning = false; return; }
     glEnable(GL_DEPTH_TEST);
     SDL_SetRelativeMouseMode(SDL_TRUE);
     
@@ -105,7 +127,7 @@ void PlumeApplication::Init() {
         std::cerr << "ERREUR: Le modele n'a pas pu etre charge : " << modelPath << std::endl;
     }
 
-    // NOUVEAU : Créer une entité pour la lumière
+    // Créer une entité pour la lumière
     auto lightEntity = m_ActiveScene->CreateEntity("Point Light");
     lightEntity.AddComponent<LightComponent>();
     auto& lightTransform = lightEntity.GetComponent<TransformComponent>();
@@ -113,10 +135,15 @@ void PlumeApplication::Init() {
 }
 
 void PlumeApplication::Run() {
+    if (!m_IsRunning) {
+        std::cerr << "PlumeApplication: initialization failed, exiting Run()." << std::endl;
+        return;
+    }
     std::unique_ptr<Shader> shader = std::make_unique<Shader>(vertexShaderSource, fragmentShaderSource);
     
     uint64_t lastFrameTime = SDL_GetPerformanceCounter();
     while (m_IsRunning) {
+        // ... (Gestion du deltaTime, des inputs et de la caméra)
         uint64_t now = SDL_GetPerformanceCounter();
         float deltaTime = (float)((now - lastFrameTime) * 1000 / (double)SDL_GetPerformanceFrequency()) / 1000.0f;
         lastFrameTime = now;
@@ -126,10 +153,14 @@ void PlumeApplication::Run() {
             if (event.type == SDL_QUIT) { m_IsRunning = false; }
             m_Input->Update(event);
         }
+        // Show About dialog on F1
+        if (m_Input->IsKeyPressed(SDL_SCANCODE_F1)) {
+            ShowAbout();
+        }
         m_Camera->Update(*m_Input, deltaTime);
         
         // --- Rendu de la Scène ---
-        glClearColor(0.1f, 0.1f, 0.1f, 1.0f); // Fond un peu plus sombre
+        glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         shader->Bind();
@@ -137,7 +168,6 @@ void PlumeApplication::Run() {
         shader->UploadUniformMat4("u_Projection", m_Camera->GetProjectionMatrix());
         shader->UploadUniformVec3("u_ViewPos", m_Camera->GetPosition());
 
-        // Trouver la lumière et envoyer ses infos au shader
         glm::vec3 lightPos;
         glm::vec3 lightColor;
         auto lightView = m_ActiveScene->GetRegistry().view<TransformComponent, LightComponent>();
@@ -146,12 +176,11 @@ void PlumeApplication::Run() {
             auto& light = lightView.get<LightComponent>(entity);
             lightPos = transform.Translation;
             lightColor = light.Color * light.Intensity;
-            break; // On ne gère qu'une seule lumière pour l'instant
+            break;
         }
         shader->UploadUniformVec3("u_LightPos", lightPos);
         shader->UploadUniformVec3("u_LightColor", lightColor);
 
-        // Rendu des modèles
         auto modelView = m_ActiveScene->GetRegistry().view<TransformComponent, ModelComponent>();
         for (auto entity : modelView) {
             auto& transform = modelView.get<TransformComponent>(entity);
@@ -171,4 +200,10 @@ void PlumeApplication::Shutdown() {
     SDL_DestroyWindow(m_Window);
     SDL_Quit();
     std::cout << "Fermeture de Plume Engine." << std::endl;
+}
+
+void PlumeApplication::ShowAbout() {
+    // Build about text from generated macros
+    std::string aboutText = std::string(PLUME_PRODUCT_NAME) + "\nVersion " + std::string(PLUME_FILE_VERSION_STR) + "\n" + std::string(PLUME_COMPANY_NAME) + "\n" + std::string(PLUME_LEGAL_COPYRIGHT);
+    SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION, "About", aboutText.c_str(), m_Window);
 }

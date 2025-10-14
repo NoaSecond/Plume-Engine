@@ -46,6 +46,93 @@ target_include_directories(PlumeEngine PRIVATE
     ${stb_SOURCE_DIR} # <-- AJOUTER LE CHEMIN POUR STB
 )
 
+# --- Centralized version / metadata defaults (override with -D on cmake configure) ---
+# NOTE: JSON in meta/plume.json will override these values if present
+set(PLUME_FILE_VERSION_MAJOR 0)
+set(PLUME_FILE_VERSION_MINOR 1)
+set(PLUME_FILE_VERSION_PATCH 0)
+set(PLUME_FILE_VERSION_BUILD 0)
+
+set(PLUME_FILE_DESCRIPTION "A modern, lightweight 3D game engine written in C++ with multi-backend rendering architecture.")
+set(PLUME_PRODUCT_NAME "Plume Engine")
+set(PLUME_COMPANY_NAME "Noa Second")
+set(PLUME_LEGAL_COPYRIGHT "©2025 Noa Second. All rights reserved.")
+set(PLUME_INTERNAL_NAME "PlumeEngine")
+set(PLUME_ORIGINAL_FILENAME "PlumeEngine.exe")
+set(PLUME_COMMENTS "")
+
+# --- Read meta/plume.json if present and override defaults ---
+set(PLUME_META_JSON "${CMAKE_SOURCE_DIR}/meta/plume.json")
+if(EXISTS ${PLUME_META_JSON})
+  file(READ ${PLUME_META_JSON} _plume_json_content)
+
+  function(read_json_value key outvar)
+    # Simple regex: "key"\s*:\s*"([^"]*)"
+    string(REGEX MATCH "\"${key}\"[ \\t]*:[ \\t]*\"([^\"]*)\"" _match "${_plume_json_content}")
+    if(_match)
+      # extract capture group 1
+      string(REGEX REPLACE "\"${key}\"[ \\t]*:[ \\t]*\"([^\"]*)\"" "\\1" _value "${_match}")
+      set(${outvar} "${_value}" PARENT_SCOPE)
+    endif()
+  endfunction()
+
+  read_json_value("product_name" PLUME_JSON_PRODUCT_NAME)
+  read_json_value("version" PLUME_JSON_VERSION)
+  read_json_value("description" PLUME_JSON_DESCRIPTION)
+  read_json_value("company" PLUME_JSON_COMPANY)
+  read_json_value("copyright" PLUME_JSON_COPYRIGHT)
+  read_json_value("author" PLUME_JSON_AUTHOR)
+  read_json_value("comments" PLUME_JSON_COMMENTS)
+
+  if(DEFINED PLUME_JSON_PRODUCT_NAME)
+    set(PLUME_PRODUCT_NAME "${PLUME_JSON_PRODUCT_NAME}")
+  endif()
+  if(DEFINED PLUME_JSON_DESCRIPTION)
+    set(PLUME_FILE_DESCRIPTION "${PLUME_JSON_DESCRIPTION}")
+  endif()
+  if(DEFINED PLUME_JSON_COMPANY)
+    set(PLUME_COMPANY_NAME "${PLUME_JSON_COMPANY}")
+  endif()
+  if(DEFINED PLUME_JSON_COPYRIGHT)
+    set(PLUME_LEGAL_COPYRIGHT "${PLUME_JSON_COPYRIGHT}")
+  endif()
+  if(DEFINED PLUME_JSON_COMMENTS)
+    set(PLUME_COMMENTS "${PLUME_JSON_COMMENTS}")
+  endif()
+
+  if(DEFINED PLUME_JSON_VERSION)
+    # Expect format major.minor.patch.build
+    string(REPLACE "." ";" _ver_parts "${PLUME_JSON_VERSION}")
+    list(LENGTH _ver_parts _ver_count)
+    if(_ver_count GREATER 0)
+      list(GET _ver_parts 0 PLUME_FILE_VERSION_MAJOR)
+    endif()
+    if(_ver_count GREATER 1)
+      list(GET _ver_parts 1 PLUME_FILE_VERSION_MINOR)
+    endif()
+    if(_ver_count GREATER 2)
+      list(GET _ver_parts 2 PLUME_FILE_VERSION_PATCH)
+    endif()
+    if(_ver_count GREATER 3)
+      list(GET _ver_parts 3 PLUME_FILE_VERSION_BUILD)
+    endif()
+  endif()
+endif()
+
+# Generate PlumeVersion.h from template and add generated include dir
+set(PLUME_FILE_VERSION "${PLUME_FILE_VERSION_MAJOR},${PLUME_FILE_VERSION_MINOR},${PLUME_FILE_VERSION_PATCH},${PLUME_FILE_VERSION_BUILD}")
+string(REPLACE "," "." PLUME_FILE_VERSION_STR "${PLUME_FILE_VERSION}")
+
+if(NOT DEFINED PLUME_PRODUCT_VERSION)
+  set(PLUME_PRODUCT_VERSION ${PLUME_FILE_VERSION})
+endif()
+string(REPLACE "," "." PLUME_PRODUCT_VERSION_STR "${PLUME_PRODUCT_VERSION}")
+
+# Generate PlumeVersion.h from template and add generated include dir
+configure_file(${CMAKE_SOURCE_DIR}/src/Version/PlumeVersion.h.in
+               ${CMAKE_BINARY_DIR}/generated/PlumeVersion.h @ONLY)
+target_include_directories(PlumeEngine PRIVATE ${CMAKE_BINARY_DIR}/generated)
+
 # Lier toutes les bibliothèques
 target_link_libraries(PlumeEngine PRIVATE
     SDL2::SDL2
@@ -62,3 +149,43 @@ add_custom_command(TARGET PlumeEngine POST_BUILD
     ${CMAKE_SOURCE_DIR}/assets $<TARGET_FILE_DIR:PlumeEngine>/assets
     COMMENT "Copying assets to build directory"
 )
+
+# Copy runtime DLLs from vcpkg installed tree (Windows) to output directory
+if(WIN32)
+  # Common vcpkg install root and triplet; allow override via VCPKG_ROOT or VCPKG_TARGET_TRIPLET
+  if(NOT DEFINED VCPKG_ROOT)
+    set(VCPKG_ROOT "C:/vcpkg")
+  endif()
+  if(NOT DEFINED VCPKG_TARGET_TRIPLET)
+    set(VCPKG_TARGET_TRIPLET "x64-windows")
+  endif()
+
+  set(VCPKG_BIN_DIR "${VCPKG_ROOT}/installed/${VCPKG_TARGET_TRIPLET}/bin")
+
+  if(EXISTS "${VCPKG_BIN_DIR}")
+    add_custom_command(TARGET PlumeEngine POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E echo "Copying vcpkg runtime DLLs from ${VCPKG_BIN_DIR} to output"
+      COMMAND ${CMAKE_COMMAND} -E copy_directory
+          "${VCPKG_BIN_DIR}" $<TARGET_FILE_DIR:PlumeEngine>
+      COMMENT "Copying vcpkg runtime DLLs to build output"
+    )
+  else()
+    message(STATUS "vcpkg bin dir not found: ${VCPKG_BIN_DIR}. If runtime DLLs are missing at runtime, set VCPKG_ROOT or copy required DLLs manually.")
+  endif()
+endif()
+
+# --- Windows application icon resource ---
+if(WIN32)
+  # Path to the icon in the source tree (choose a 256px ICO provided in assets)
+  set(PLUME_ICON_SRC "${CMAKE_SOURCE_DIR}/assets/icons/PlumeEngineIcon_256px.ico")
+  # Convert to a CMake-style path (forward slashes) for the .rc file
+  file(TO_CMAKE_PATH "${PLUME_ICON_SRC}" PLUME_ICON_PATH)
+
+  # --- Version / metadata variables (defaults, overrideable via -D on CMake configure) ---
+  # Generate a .rc in the build directory based on the template in src/Resources
+  configure_file(${CMAKE_SOURCE_DIR}/src/Resources/PlumeEngine.rc.in
+           ${CMAKE_BINARY_DIR}/PlumeEngine.rc @ONLY)
+
+  # Add the generated .rc to the executable target so it gets compiled and linked
+  target_sources(PlumeEngine PRIVATE ${CMAKE_BINARY_DIR}/PlumeEngine.rc)
+endif()
