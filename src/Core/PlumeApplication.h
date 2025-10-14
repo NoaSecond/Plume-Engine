@@ -2,10 +2,8 @@
 #pragma once
 
 #include <memory>
-#include "../Renderer/Shader.h"
-#include "../Renderer/VertexArray.h"
-#include "../Renderer/Camera.h"
-#include "Input.h" // <-- INCLURE INPUT
+// Nous n'avons plus besoin d'inclure les classes de rendu ici
+#include "../Scene/Scene.h"
 
 struct SDL_Window;
 typedef void* SDL_GLContext;
@@ -25,11 +23,10 @@ private:
     SDL_GLContext m_GLContext = nullptr;
     bool m_IsRunning = true;
 
-    // Objets
-    std::unique_ptr<Shader> m_Shader;
-    std::shared_ptr<VertexArray> m_CubeVA;
-    std::unique_ptr<Camera> m_Camera;
-    
-    // NOUVEAU : Un objet Input
-    std::unique_ptr<Input> m_Input;
+    // NOUVEAU : L'application possède maintenant une scène active
+    std::unique_ptr<Scene> m_ActiveScene;
+
+    // Le reste est géré par la scène et la caméra
+    class Camera* m_Camera = nullptr; // On gardera un pointeur brut pour un accès rapide
+    class Input* m_Input = nullptr;
 };
