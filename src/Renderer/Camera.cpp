@@ -10,11 +10,12 @@ Camera::Camera(float fov, float aspectRatio, float near, float far)
 }
 
 void Camera::Update(Input& input, float deltaTime) {
-    // On garde une trace si un mouvement a eu lieu pour mettre à jour la matrice
     bool moved = false;
 
-    // Traitement du clavier
+    // --- Traitement du clavier ---
     float velocity = m_MovementSpeed * deltaTime;
+
+    // Mouvement avant/arrière
     if (input.IsKeyPressed(SDL_SCANCODE_W) || input.IsKeyPressed(SDL_SCANCODE_UP)) {
         m_Position += m_Front * velocity;
         moved = true;
@@ -23,6 +24,8 @@ void Camera::Update(Input& input, float deltaTime) {
         m_Position -= m_Front * velocity;
         moved = true;
     }
+
+    // Mouvement gauche/droite
     if (input.IsKeyPressed(SDL_SCANCODE_A) || input.IsKeyPressed(SDL_SCANCODE_LEFT)) {
         m_Position -= m_Right * velocity;
         moved = true;
@@ -32,18 +35,27 @@ void Camera::Update(Input& input, float deltaTime) {
         moved = true;
     }
 
-    // Traitement de la souris
+    // NOUVEAU : Mouvement haut/bas
+    if (input.IsKeyPressed(SDL_SCANCODE_RSHIFT)) {
+        m_Position += m_WorldUp * velocity; // Utilise le vecteur "Up" du monde
+        moved = true;
+    }
+    if (input.IsKeyPressed(SDL_SCANCODE_RCTRL)) {
+        m_Position -= m_WorldUp * velocity;
+        moved = true;
+    }
+
+    // --- Traitement de la souris ---
     int mouseX, mouseY;
     input.GetMouseMotion(mouseX, mouseY);
     if (input.IsMouseButtonPressed(SDL_BUTTON_RIGHT) && (mouseX != 0 || mouseY != 0)) {
          ProcessMouseMovement(static_cast<float>(mouseX), static_cast<float>(mouseY));
-         // ProcessMouseMovement appelle déjà UpdateViewMatrix, donc pas besoin de 'moved = true'
     } else if (moved) {
-        // Si seul le clavier a bougé, on met à jour la matrice ici
+        // Mettre à jour la matrice de vue si le clavier a causé un mouvement
         UpdateViewMatrix();
     }
     
-    // Traitement du zoom
+    // Traitement du zoom (molette)
     int scrollY = input.GetMouseWheelY();
     if (scrollY != 0) {
         ProcessMouseScroll(scrollY);
@@ -67,9 +79,6 @@ void Camera::UpdateProjectionMatrix() {
     m_ProjectionMatrix = glm::perspective(glm::radians(m_Fov), m_AspectRatio, m_NearClip, m_FarClip);
 }
 
-// CETTE FONCTION EST MAINTENANT INTÉGRÉE DANS Update()
-// void Camera::ProcessKeyboard(Input& input, float deltaTime) { ... }
-
 void Camera::ProcessMouseMovement(float xoffset, float yoffset) {
     xoffset *= m_MouseSensitivity;
     yoffset *= m_MouseSensitivity;
@@ -80,7 +89,7 @@ void Camera::ProcessMouseMovement(float xoffset, float yoffset) {
     if (m_Pitch > 89.0f) m_Pitch = 89.0f;
     if (m_Pitch < -89.0f) m_Pitch = -89.0f;
 
-    UpdateViewMatrix(); // Important : on met à jour la vue après un mouvement de souris
+    UpdateViewMatrix();
 }
 
 void Camera::ProcessMouseScroll(int yoffset) {
@@ -88,5 +97,5 @@ void Camera::ProcessMouseScroll(int yoffset) {
     if (m_Fov < 1.0f) m_Fov = 1.0f;
     if (m_Fov > 45.0f) m_Fov = 45.0f;
     
-    UpdateProjectionMatrix(); // Le zoom affecte la projection, pas la vue
+    UpdateProjectionMatrix();
 }
