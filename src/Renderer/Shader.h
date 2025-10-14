@@ -2,7 +2,7 @@
 #pragma once
 
 #include <string>
-#include <glm/glm.hpp> // Inclure glm
+#include <glm/glm.hpp>
 
 class Shader {
 public:
@@ -13,6 +13,8 @@ public:
     void Unbind() const;
     
     void UploadUniformMat4(const std::string& name, const glm::mat4& matrix);
+    void UploadUniformVec3(const std::string& name, const glm::vec3& vector);
+    void SetInt(const std::string& name, int value);
 
 private:
     uint32_t m_RendererID;

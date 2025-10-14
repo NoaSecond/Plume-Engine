@@ -1,65 +1,82 @@
 // src/Core/PlumeApplication.cpp
 #include "PlumeApplication.h"
-
 #include <iostream>
 #include <glad/glad.h>
 #include <SDL2/SDL.h>
-
-// Includes de rendu
-#include "../Renderer/Buffer.h"
 #include "../Renderer/Shader.h"
-#include "../Renderer/VertexArray.h"
 #include "../Renderer/Camera.h"
 #include "../Core/Input.h"
-
-// Includes de scène (CHEMINS CORRIGÉS)
 #include "Scene/Scene.h"
 #include "Scene/Entity.h"
 #include "Scene/Components.h"
-
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
-// Les sources des shaders pour la 3D
+// --- SHADERS MIS À JOUR POUR L'ÉCLAIRAGE ---
 const std::string vertexShaderSource = R"(
     #version 330 core
     layout (location = 0) in vec3 a_Position;
-    layout (location = 1) in vec3 a_Color;
+    layout (location = 1) in vec3 a_Normal;
+    layout (location = 2) in vec2 a_TexCoords;
 
     uniform mat4 u_Model;
     uniform mat4 u_View;
     uniform mat4 u_Projection;
 
-    out vec3 v_Color;
+    out vec2 v_TexCoords;
+    out vec3 v_Normal;
+    out vec3 v_FragPos;
 
     void main() {
        gl_Position = u_Projection * u_View * u_Model * vec4(a_Position, 1.0);
-       v_Color = a_Color;
+       v_TexCoords = a_TexCoords;
+       
+       // On transforme la position du fragment et la normale dans l'espace du monde
+       v_FragPos = vec3(u_Model * vec4(a_Position, 1.0));
+       v_Normal = mat3(transpose(inverse(u_Model))) * a_Normal;
     }
 )";
 
 const std::string fragmentShaderSource = R"(
     #version 330 core
-    in vec3 v_Color;
+    in vec2 v_TexCoords;
+    in vec3 v_Normal;
+    in vec3 v_FragPos;
+    
     out vec4 FragColor;
 
+    uniform sampler2D u_TextureDiffuse;
+    uniform vec3 u_LightPos;
+    uniform vec3 u_LightColor;
+    uniform vec3 u_ViewPos;
+
     void main() {
-       FragColor = vec4(v_Color, 1.0f);
+       // Lumière ambiante
+       float ambientStrength = 0.1;
+       vec3 ambient = ambientStrength * u_LightColor;
+
+       // Lumière diffuse
+       vec3 norm = normalize(v_Normal);
+       vec3 lightDir = normalize(u_LightPos - v_FragPos);
+       float diff = max(dot(norm, lightDir), 0.0);
+       vec3 diffuse = diff * u_LightColor;
+
+       // (La lumière spéculaire sera ajoutée plus tard)
+
+       vec4 texColor = texture(u_TextureDiffuse, v_TexCoords);
+       vec3 result = (ambient + diffuse) * texColor.rgb;
+       FragColor = vec4(result, 1.0);
     }
 )";
 
 const int WINDOW_WIDTH = 1280;
 const int WINDOW_HEIGHT = 720;
 
-PlumeApplication::PlumeApplication() {
-    Init();
-}
-
-PlumeApplication::~PlumeApplication() {
-    Shutdown();
-}
+PlumeApplication::PlumeApplication() { Init(); }
+PlumeApplication::~PlumeApplication() { Shutdown(); }
 
 void PlumeApplication::Init() {
+    // ... (Initialisation de SDL, Glad, etc.)
     if (SDL_Init(SDL_INIT_VIDEO) != 0) { std::cerr << "Erreur SDL_Init: " << SDL_GetError() << std::endl; return; }
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
@@ -69,47 +86,30 @@ void PlumeApplication::Init() {
     m_GLContext = SDL_GL_CreateContext(m_Window);
     if (!m_GLContext) { std::cerr << "Erreur SDL_GL_CreateContext: " << SDL_GetError() << std::endl; return; }
     if (!gladLoadGLLoader((GLADloadproc)SDL_GL_GetProcAddress)) { std::cerr << "Erreur gladLoadGLLoader" << std::endl; return; }
-    std::cout << "OpenGL Version: " << glGetString(GL_VERSION) << std::endl;
-
     glEnable(GL_DEPTH_TEST);
     SDL_SetRelativeMouseMode(SDL_TRUE);
     
     m_Input = new Input();
     m_Camera = new Camera(45.0f, (float)WINDOW_WIDTH / (float)WINDOW_HEIGHT, 0.1f, 100.0f);
-
     m_ActiveScene = std::make_unique<Scene>();
 
-    auto cubeVA = std::make_shared<VertexArray>();
-    float vertices[] = {
-        -0.5f, -0.5f, -0.5f,  1.0f, 0.0f, 0.0f,
-         0.5f, -0.5f, -0.5f,  0.0f, 1.0f, 0.0f,
-         0.5f,  0.5f, -0.5f,  0.0f, 0.0f, 1.0f,
-        -0.5f,  0.5f, -0.5f,  1.0f, 1.0f, 0.0f,
-        -0.5f, -0.5f,  0.5f,  1.0f, 0.0f, 1.0f,
-         0.5f, -0.5f,  0.5f,  0.0f, 1.0f, 1.0f,
-         0.5f,  0.5f,  0.5f,  1.0f, 1.0f, 1.0f,
-        -0.5f,  0.5f,  0.5f,  0.0f, 0.0f, 0.0f
-    };
-    auto vb = std::make_shared<VertexBuffer>(vertices, static_cast<uint32_t>(sizeof(vertices)));
-    vb->SetLayout({
-        { ShaderDataType::Float3, "a_Position" },
-        { ShaderDataType::Float3, "a_Color" }
-    });
-    cubeVA->AddVertexBuffer(vb);
+    // --- CHARGEMENT DU MODÈLE ---
+    auto modelEntity = m_ActiveScene->CreateEntity("Backpack");
+    std::string modelPath = "assets/models/backpack/12305_backpack_v2_l3.obj";
+    auto backpackModel = std::make_shared<Model>(modelPath);
+    if (!backpackModel->GetMeshes().empty()) {
+        modelEntity.AddComponent<ModelComponent>(backpackModel);
+        auto& transform = modelEntity.GetComponent<TransformComponent>();
+        transform.Scale = glm::vec3(0.5f);
+    } else {
+        std::cerr << "ERREUR: Le modele n'a pas pu etre charge : " << modelPath << std::endl;
+    }
 
-    uint32_t indices[] = {
-        0, 1, 2, 2, 3, 0,
-        4, 5, 6, 6, 7, 4,
-        3, 2, 6, 6, 7, 3,
-        0, 1, 5, 5, 4, 0,
-        0, 3, 7, 7, 4, 0,
-        1, 2, 6, 6, 5, 1
-    };
-    auto ib = std::make_shared<IndexBuffer>(indices, static_cast<uint32_t>(sizeof(indices) / sizeof(uint32_t)));
-    cubeVA->SetIndexBuffer(ib);
-
-    auto cubeEntity = m_ActiveScene->CreateEntity("Cube Coloré");
-    cubeEntity.AddComponent<MeshComponent>(cubeVA);
+    // NOUVEAU : Créer une entité pour la lumière
+    auto lightEntity = m_ActiveScene->CreateEntity("Point Light");
+    lightEntity.AddComponent<LightComponent>();
+    auto& lightTransform = lightEntity.GetComponent<TransformComponent>();
+    lightTransform.Translation = glm::vec3(1.5f, 1.0f, 2.0f);
 }
 
 void PlumeApplication::Run() {
@@ -120,31 +120,44 @@ void PlumeApplication::Run() {
         uint64_t now = SDL_GetPerformanceCounter();
         float deltaTime = (float)((now - lastFrameTime) * 1000 / (double)SDL_GetPerformanceFrequency()) / 1000.0f;
         lastFrameTime = now;
-
         m_Input->BeginNewFrame();
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
             if (event.type == SDL_QUIT) { m_IsRunning = false; }
             m_Input->Update(event);
         }
-
         m_Camera->Update(*m_Input, deltaTime);
-
-        glClearColor(0.1f, 0.2f, 0.3f, 1.0f);
+        
+        // --- Rendu de la Scène ---
+        glClearColor(0.1f, 0.1f, 0.1f, 1.0f); // Fond un peu plus sombre
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         shader->Bind();
         shader->UploadUniformMat4("u_View", m_Camera->GetViewMatrix());
         shader->UploadUniformMat4("u_Projection", m_Camera->GetProjectionMatrix());
+        shader->UploadUniformVec3("u_ViewPos", m_Camera->GetPosition());
 
-        auto view = m_ActiveScene->GetRegistry().view<TransformComponent, MeshComponent>();
-        for (auto entity : view) {
-            auto& transform = view.get<TransformComponent>(entity);
-            auto& mesh = view.get<MeshComponent>(entity);
+        // Trouver la lumière et envoyer ses infos au shader
+        glm::vec3 lightPos;
+        glm::vec3 lightColor;
+        auto lightView = m_ActiveScene->GetRegistry().view<TransformComponent, LightComponent>();
+        for (auto entity : lightView) {
+            auto& transform = lightView.get<TransformComponent>(entity);
+            auto& light = lightView.get<LightComponent>(entity);
+            lightPos = transform.Translation;
+            lightColor = light.Color * light.Intensity;
+            break; // On ne gère qu'une seule lumière pour l'instant
+        }
+        shader->UploadUniformVec3("u_LightPos", lightPos);
+        shader->UploadUniformVec3("u_LightColor", lightColor);
 
+        // Rendu des modèles
+        auto modelView = m_ActiveScene->GetRegistry().view<TransformComponent, ModelComponent>();
+        for (auto entity : modelView) {
+            auto& transform = modelView.get<TransformComponent>(entity);
+            auto& modelComp = modelView.get<ModelComponent>(entity);
             shader->UploadUniformMat4("u_Model", transform.GetTransform());
-            mesh.MeshVA->Bind();
-            glDrawElements(GL_TRIANGLES, mesh.MeshVA->GetIndexBuffer()->GetCount(), GL_UNSIGNED_INT, nullptr);
+            modelComp.model->Draw(*shader);
         }
 
         SDL_GL_SwapWindow(m_Window);
@@ -154,7 +167,6 @@ void PlumeApplication::Run() {
 void PlumeApplication::Shutdown() {
     delete m_Camera;
     delete m_Input;
-
     SDL_GL_DeleteContext(m_GLContext);
     SDL_DestroyWindow(m_Window);
     SDL_Quit();
