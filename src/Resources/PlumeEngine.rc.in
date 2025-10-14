@@ -1,0 +1,4 @@
+// Resource file for Windows executable icon
+// This file is configured by CMake to point to the correct icon path
+
+1 ICON "@PLUME_ICON_PATH@"
