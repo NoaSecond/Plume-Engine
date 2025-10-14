@@ -1,13 +1,14 @@
 // src/Core/Input.cpp
 #include "Input.h"
 
-void Input::Update(const SDL_Event& e) {
-    // Réinitialiser le mouvement relatif de la souris
-    if (e.type != SDL_MOUSEMOTION) {
-        m_MouseXRel = 0;
-        m_MouseYRel = 0;
-    }
+void Input::BeginNewFrame() {
+    // Réinitialiser les entrées qui ne sont pas des états (comme "touche enfoncée")
+    m_MouseXRel = 0;
+    m_MouseYRel = 0;
+    m_MouseWheelY = 0;
+}
 
+void Input::Update(const SDL_Event& e) {
     if (e.type == SDL_KEYDOWN) {
         m_KeyStates[e.key.keysym.scancode] = true;
     } else if (e.type == SDL_KEYUP) {
@@ -19,6 +20,8 @@ void Input::Update(const SDL_Event& e) {
     } else if (e.type == SDL_MOUSEMOTION) {
         m_MouseXRel = e.motion.xrel;
         m_MouseYRel = e.motion.yrel;
+    } else if (e.type == SDL_MOUSEWHEEL) {
+        m_MouseWheelY = e.wheel.y;
     }
 }
 
@@ -41,4 +44,8 @@ bool Input::IsMouseButtonPressed(int button) {
 void Input::GetMouseMotion(int& x, int& y) {
     x = m_MouseXRel;
     y = m_MouseYRel;
+}
+
+int Input::GetMouseWheelY() {
+    return m_MouseWheelY;
 }

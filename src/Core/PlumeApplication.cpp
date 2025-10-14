@@ -121,6 +121,9 @@ void PlumeApplication::Run() {
         float deltaTime = (float)((now - lastFrameTime) * 1000 / (double)SDL_GetPerformanceFrequency()) / 1000.0f;
         lastFrameTime = now;
 
+        // Réinitialiser les entrées pour la nouvelle frame
+        m_Input->BeginNewFrame();
+
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
             if (event.type == SDL_QUIT) { m_IsRunning = false; }

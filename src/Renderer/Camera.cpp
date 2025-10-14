@@ -1,9 +1,11 @@
 // src/Renderer/Camera.cpp
 #include "Camera.h"
-#include "../Core/Input.h" // Inclure Input.h
+#include "../Core/Input.h"
 
-Camera::Camera(float fov, float aspectRatio, float near, float far) {
-    m_ProjectionMatrix = glm::perspective(glm::radians(fov), aspectRatio, near, far);
+Camera::Camera(float fov, float aspectRatio, float near, float far) 
+    : m_Fov(fov), m_AspectRatio(aspectRatio), m_NearClip(near), m_FarClip(far) 
+{
+    UpdateProjectionMatrix();
     UpdateViewMatrix();
 }
 
@@ -12,39 +14,42 @@ void Camera::Update(Input& input, float deltaTime) {
 
     int mouseX, mouseY;
     input.GetMouseMotion(mouseX, mouseY);
-    
-    // Pour une caméra FPS, on ne traite le mouvement de la souris
-    // que si le clic droit est maintenu, par exemple.
     if (input.IsMouseButtonPressed(SDL_BUTTON_RIGHT)) {
          ProcessMouseMovement(static_cast<float>(mouseX), static_cast<float>(mouseY));
+    }
+    
+    int scrollY = input.GetMouseWheelY();
+    if (scrollY != 0) {
+        ProcessMouseScroll(scrollY);
     }
 }
 
 void Camera::UpdateViewMatrix() {
-    // Calculer le nouveau vecteur Front basé sur le yaw et le pitch
     glm::vec3 front;
     front.x = cos(glm::radians(m_Yaw)) * cos(glm::radians(m_Pitch));
     front.y = sin(glm::radians(m_Pitch));
     front.z = sin(glm::radians(m_Yaw)) * cos(glm::radians(m_Pitch));
     m_Front = glm::normalize(front);
 
-    // Recalculer les vecteurs Right et Up
     m_Right = glm::normalize(glm::cross(m_Front, m_WorldUp));
     m_Up = glm::normalize(glm::cross(m_Right, m_Front));
 
-    // Mettre à jour la matrice de vue
     m_ViewMatrix = glm::lookAt(m_Position, m_Position + m_Front, m_Up);
+}
+
+void Camera::UpdateProjectionMatrix() {
+    m_ProjectionMatrix = glm::perspective(glm::radians(m_Fov), m_AspectRatio, m_NearClip, m_FarClip);
 }
 
 void Camera::ProcessKeyboard(Input& input, float deltaTime) {
     float velocity = m_MovementSpeed * deltaTime;
-    if (input.IsKeyPressed(SDL_SCANCODE_W))
+    if (input.IsKeyPressed(SDL_SCANCODE_W) || input.IsKeyPressed(SDL_SCANCODE_UP))
         m_Position += m_Front * velocity;
-    if (input.IsKeyPressed(SDL_SCANCODE_S))
+    if (input.IsKeyPressed(SDL_SCANCODE_S) || input.IsKeyPressed(SDL_SCANCODE_DOWN))
         m_Position -= m_Front * velocity;
-    if (input.IsKeyPressed(SDL_SCANCODE_A))
+    if (input.IsKeyPressed(SDL_SCANCODE_A) || input.IsKeyPressed(SDL_SCANCODE_LEFT))
         m_Position -= m_Right * velocity;
-    if (input.IsKeyPressed(SDL_SCANCODE_D))
+    if (input.IsKeyPressed(SDL_SCANCODE_D) || input.IsKeyPressed(SDL_SCANCODE_RIGHT))
         m_Position += m_Right * velocity;
 }
 
@@ -53,14 +58,18 @@ void Camera::ProcessMouseMovement(float xoffset, float yoffset) {
     yoffset *= m_MouseSensitivity;
 
     m_Yaw += xoffset;
-    m_Pitch -= yoffset; // Inversé car les coordonnées Y vont de bas en haut
+    m_Pitch -= yoffset;
 
-    // Contraintes pour éviter le retournement
-    if (m_Pitch > 89.0f)
-        m_Pitch = 89.0f;
-    if (m_Pitch < -89.0f)
-        m_Pitch = -89.0f;
+    if (m_Pitch > 89.0f) m_Pitch = 89.0f;
+    if (m_Pitch < -89.0f) m_Pitch = -89.0f;
 
-    // Mettre à jour les vecteurs et la matrice de vue
     UpdateViewMatrix();
+}
+
+void Camera::ProcessMouseScroll(int yoffset) {
+    m_Fov -= (float)yoffset;
+    if (m_Fov < 1.0f) m_Fov = 1.0f;
+    if (m_Fov > 45.0f) m_Fov = 45.0f;
+    
+    UpdateProjectionMatrix();
 }

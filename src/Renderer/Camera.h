@@ -17,8 +17,10 @@ public:
 
 private:
     void UpdateViewMatrix();
+    void UpdateProjectionMatrix();
     void ProcessKeyboard(Input& input, float deltaTime);
     void ProcessMouseMovement(float xoffset, float yoffset);
+    void ProcessMouseScroll(int yoffset);
 
     glm::mat4 m_ProjectionMatrix;
     glm::mat4 m_ViewMatrix;
@@ -29,9 +31,15 @@ private:
     glm::vec3 m_Right;
     glm::vec3 m_WorldUp = glm::vec3(0.0f, 1.0f, 0.0f);
 
-    float m_Yaw = -90.0f; // Rotation sur l'axe Y
-    float m_Pitch = 0.0f; // Rotation sur l'axe X
+    float m_Yaw = -90.0f;
+    float m_Pitch = 0.0f;
 
     float m_MovementSpeed = 2.5f;
     float m_MouseSensitivity = 0.1f;
+    
+    // Propriétés pour la projection
+    float m_Fov;
+    float m_AspectRatio;
+    float m_NearClip;
+    float m_FarClip;
 };
