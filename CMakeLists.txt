@@ -46,6 +46,55 @@ target_include_directories(PlumeEngine PRIVATE
     ${stb_SOURCE_DIR} # <-- AJOUTER LE CHEMIN POUR STB
 )
 
+# --- Centralized version / metadata defaults (override with -D on cmake configure) ---
+if(NOT DEFINED PLUME_FILE_VERSION_MAJOR)
+  set(PLUME_FILE_VERSION_MAJOR 0)
+endif()
+if(NOT DEFINED PLUME_FILE_VERSION_MINOR)
+  set(PLUME_FILE_VERSION_MINOR 1)
+endif()
+if(NOT DEFINED PLUME_FILE_VERSION_PATCH)
+  set(PLUME_FILE_VERSION_PATCH 0)
+endif()
+if(NOT DEFINED PLUME_FILE_VERSION_BUILD)
+  set(PLUME_FILE_VERSION_BUILD 0)
+endif()
+
+set(PLUME_FILE_VERSION "${PLUME_FILE_VERSION_MAJOR},${PLUME_FILE_VERSION_MINOR},${PLUME_FILE_VERSION_PATCH},${PLUME_FILE_VERSION_BUILD}")
+string(REPLACE "," "." PLUME_FILE_VERSION_STR "${PLUME_FILE_VERSION}")
+
+if(NOT DEFINED PLUME_PRODUCT_VERSION)
+  set(PLUME_PRODUCT_VERSION ${PLUME_FILE_VERSION})
+endif()
+string(REPLACE "," "." PLUME_PRODUCT_VERSION_STR "${PLUME_PRODUCT_VERSION}")
+
+if(NOT DEFINED PLUME_FILE_DESCRIPTION)
+  set(PLUME_FILE_DESCRIPTION "A modern, lightweight 3D game engine written in C++ with multi-backend rendering architecture.")
+endif()
+if(NOT DEFINED PLUME_PRODUCT_NAME)
+  set(PLUME_PRODUCT_NAME "Plume Engine")
+endif()
+if(NOT DEFINED PLUME_COMPANY_NAME)
+  set(PLUME_COMPANY_NAME "Noa Second")
+endif()
+if(NOT DEFINED PLUME_LEGAL_COPYRIGHT)
+  set(PLUME_LEGAL_COPYRIGHT "©2025 Noa Second. All rights reserved.")
+endif()
+if(NOT DEFINED PLUME_INTERNAL_NAME)
+  set(PLUME_INTERNAL_NAME "PlumeEngine")
+endif()
+if(NOT DEFINED PLUME_ORIGINAL_FILENAME)
+  set(PLUME_ORIGINAL_FILENAME "PlumeEngine.exe")
+endif()
+if(NOT DEFINED PLUME_COMMENTS)
+  set(PLUME_COMMENTS "")
+endif()
+
+# Generate PlumeVersion.h from template and add generated include dir
+configure_file(${CMAKE_SOURCE_DIR}/src/Version/PlumeVersion.h.in
+               ${CMAKE_BINARY_DIR}/generated/PlumeVersion.h @ONLY)
+target_include_directories(PlumeEngine PRIVATE ${CMAKE_BINARY_DIR}/generated)
+
 # Lier toutes les bibliothèques
 target_link_libraries(PlumeEngine PRIVATE
     SDL2::SDL2
@@ -94,6 +143,7 @@ if(WIN32)
   # Convert to a CMake-style path (forward slashes) for the .rc file
   file(TO_CMAKE_PATH "${PLUME_ICON_SRC}" PLUME_ICON_PATH)
 
+  # --- Version / metadata variables (defaults, overrideable via -D on CMake configure) ---
   # Generate a .rc in the build directory based on the template in src/Resources
   configure_file(${CMAKE_SOURCE_DIR}/src/Resources/PlumeEngine.rc.in
            ${CMAKE_BINARY_DIR}/PlumeEngine.rc @ONLY)

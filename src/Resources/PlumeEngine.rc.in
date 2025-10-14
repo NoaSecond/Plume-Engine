@@ -1,4 +1,33 @@
-// Resource file for Windows executable icon
-// This file is configured by CMake to point to the correct icon path
+// Resource file for Windows executable icon + VERSIONINFO
+// This file is configured by CMake. Values are substituted via configure_file()
 
 1 ICON "@PLUME_ICON_PATH@"
+
+// Version information
+#include <winver.h>
+
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION @PLUME_FILE_VERSION@
+ PRODUCTVERSION @PLUME_PRODUCT_VERSION@
+ BEGIN
+	BLOCK "StringFileInfo"
+	BEGIN
+		// Use language-codepage block 0409 (English US) / 1200 (UTF-16)
+		BLOCK "040904B0"
+		BEGIN
+			VALUE "CompanyName", "@PLUME_COMPANY_NAME@\0"
+			VALUE "FileDescription", "@PLUME_FILE_DESCRIPTION@\0"
+			VALUE "FileVersion", "@PLUME_FILE_VERSION_STR@\0"
+			VALUE "InternalName", "@PLUME_INTERNAL_NAME@\0"
+			VALUE "OriginalFilename", "@PLUME_ORIGINAL_FILENAME@\0"
+			VALUE "ProductName", "@PLUME_PRODUCT_NAME@\0"
+			VALUE "ProductVersion", "@PLUME_PRODUCT_VERSION_STR@\0"
+			VALUE "LegalCopyright", "@PLUME_LEGAL_COPYRIGHT@\0"
+			VALUE "Comments", "@PLUME_COMMENTS@\0"
+		END
+	END
+	BLOCK "VarFileInfo"
+	BEGIN
+		VALUE "Translation", 0x0409, 1200
+	END
+ END

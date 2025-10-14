@@ -1,5 +1,6 @@
 // src/Core/PlumeApplication.cpp
 #include "PlumeApplication.h"
+#include "PlumeVersion.h"
 #include <iostream>
 #include <glad/glad.h>
 #include <SDL2/SDL.h>
@@ -79,7 +80,8 @@ void PlumeApplication::Init() {
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
     
-    m_Window = SDL_CreateWindow("Plume Engine v0.1", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, WINDOW_WIDTH, WINDOW_HEIGHT, SDL_WINDOW_SHOWN | SDL_WINDOW_OPENGL);
+    std::string windowTitle = std::string(PLUME_PRODUCT_NAME) + " v" + std::string(PLUME_FILE_VERSION_STR);
+    m_Window = SDL_CreateWindow(windowTitle.c_str(), SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, WINDOW_WIDTH, WINDOW_HEIGHT, SDL_WINDOW_SHOWN | SDL_WINDOW_OPENGL);
     if (!m_Window) { std::cerr << "Erreur SDL_CreateWindow: " << SDL_GetError() << std::endl; m_IsRunning = false; return; }
 
     // --- DÉFINIR L'ICÔNE DE LA FENÊTRE ---
