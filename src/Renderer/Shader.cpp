@@ -4,6 +4,7 @@
 #include <iostream>
 #include <vector>
 #include <glad/glad.h>
+#include <glm/gtc/type_ptr.hpp> // Inclure pour glm::value_ptr
 
 Shader::Shader(const std::string& vertexSrc, const std::string& fragmentSrc) {
     const char* vertexSource = vertexSrc.c_str();
@@ -14,7 +15,6 @@ Shader::Shader(const std::string& vertexSrc, const std::string& fragmentSrc) {
     glShaderSource(vertexShader, 1, &vertexSource, NULL);
     glCompileShader(vertexShader);
 
-    // NOUVEAU : Vérifier les erreurs de compilation du vertex shader
     int success;
     char infoLog[1024];
     glGetShaderiv(vertexShader, GL_COMPILE_STATUS, &success);
@@ -28,7 +28,6 @@ Shader::Shader(const std::string& vertexSrc, const std::string& fragmentSrc) {
     glShaderSource(fragmentShader, 1, &fragmentSource, NULL);
     glCompileShader(fragmentShader);
 
-    // NOUVEAU : Vérifier les erreurs de compilation du fragment shader
     glGetShaderiv(fragmentShader, GL_COMPILE_STATUS, &success);
     if (!success) {
         glGetShaderInfoLog(fragmentShader, 1024, NULL, infoLog);
@@ -41,14 +40,12 @@ Shader::Shader(const std::string& vertexSrc, const std::string& fragmentSrc) {
     glAttachShader(m_RendererID, fragmentShader);
     glLinkProgram(m_RendererID);
 
-    // NOUVEAU : Vérifier les erreurs de linkage du programme
     glGetProgramiv(m_RendererID, GL_LINK_STATUS, &success);
     if (!success) {
         glGetProgramInfoLog(m_RendererID, 1024, NULL, infoLog);
         std::cerr << "ERREUR::SHADER::PROGRAMME::LINKAGE_ECHOUE\n" << infoLog << std::endl;
     }
 
-    // Les shaders ne sont plus nécessaires une fois liés au programme
     glDeleteShader(vertexShader);
     glDeleteShader(fragmentShader);
 }
@@ -63,4 +60,9 @@ void Shader::Bind() const {
 
 void Shader::Unbind() const {
     glUseProgram(0);
+}
+
+void Shader::UploadUniformMat4(const std::string& name, const glm::mat4& matrix) {
+    GLint location = glGetUniformLocation(m_RendererID, name.c_str());
+    glUniformMatrix4fv(location, 1, GL_FALSE, glm::value_ptr(matrix));
 }

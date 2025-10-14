@@ -3,7 +3,7 @@
 
 #include "Buffer.h"
 #include <memory>
-#include <vector> // <-- NOUVEAU
+#include <vector>
 
 class VertexArray {
 public:
@@ -14,9 +14,13 @@ public:
     void Unbind() const;
 
     void AddVertexBuffer(const std::shared_ptr<VertexBuffer>& vertexBuffer);
+    void SetIndexBuffer(const std::shared_ptr<IndexBuffer>& indexBuffer);
+
+    const std::vector<std::shared_ptr<VertexBuffer>>& GetVertexBuffers() const { return m_VertexBuffers; }
+    const std::shared_ptr<IndexBuffer>& GetIndexBuffer() const { return m_IndexBuffer; }
 
 private:
     uint32_t m_RendererID;
-    // NOUVEAU : Stocker les vertex buffers pour garantir leur durée de vie
     std::vector<std::shared_ptr<VertexBuffer>> m_VertexBuffers;
+    std::shared_ptr<IndexBuffer> m_IndexBuffer;
 };

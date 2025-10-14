@@ -2,7 +2,6 @@
 #include "VertexArray.h"
 #include <glad/glad.h>
 
-// Fonction utilitaire pour convertir notre enum en type de base OpenGL
 static GLenum ShaderDataTypeToOpenGLBaseType(ShaderDataType type) {
     switch (type) {
         case ShaderDataType::Float:    return GL_FLOAT;
@@ -46,7 +45,7 @@ void VertexArray::AddVertexBuffer(const std::shared_ptr<VertexBuffer>& vertexBuf
         glEnableVertexAttribArray(index);
         glVertexAttribPointer(
             index,
-            element.GetComponentCount(), // <-- CORRECTION APPLIQUÉE ICI
+            element.GetComponentCount(),
             ShaderDataTypeToOpenGLBaseType(element.Type),
             element.Normalized ? GL_TRUE : GL_FALSE,
             layout.GetStride(),
@@ -56,4 +55,10 @@ void VertexArray::AddVertexBuffer(const std::shared_ptr<VertexBuffer>& vertexBuf
     }
 
     m_VertexBuffers.push_back(vertexBuffer);
+}
+
+void VertexArray::SetIndexBuffer(const std::shared_ptr<IndexBuffer>& indexBuffer) {
+    glBindVertexArray(m_RendererID);
+    indexBuffer->Bind();
+    m_IndexBuffer = indexBuffer;
 }
