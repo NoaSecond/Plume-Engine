@@ -1,20 +1,21 @@
 # Plume Engine 🪶
 
-**Plume Engine 🪶 — A small, lightweight 3D game engine written in modern C++ with a multi-backend rendering architecture.**
+**Plume Engine 🪶 — A modern, lightweight 3D game engine written in C++ with multi-backend rendering architecture.**
 
 ---
 
 ## 🎯 Project Philosophy
 
-Plume Engine is designed with **extensibility** and **portability** at its core. The rendering system uses an abstraction layer (Render Hardware Interface - RHI) that allows supporting multiple graphics APIs without rewriting game code.
+Plume Engine is designed with **extensibility**, **performance**, and **portability** at its core. The rendering system uses a Render Hardware Interface (RHI) abstraction layer that allows supporting multiple graphics APIs (OpenGL, Vulkan, DirectX) without rewriting game code.
 
 ### Why This Architecture?
 
-Modern game engines like Unreal Engine, Unity, and Godot support multiple graphics APIs to maximize platform compatibility and performance. Plume Engine follows this proven pattern:
+Professional game engines like Unreal Engine, Unity, and Godot support multiple graphics APIs to maximize platform compatibility and performance.
+Plume Engine follows this proven architectural pattern:
 
 ```
 ┌─────────────────────────────────────┐
-│      Game/Engine Code               │  ← The game logic
+│      Game/Engine Code               │  ← The game logic (API-agnostic)
 └──────────────┬──────────────────────┘
                │
 ┌──────────────▼──────────────────────┐
@@ -22,24 +23,30 @@ Modern game engines like Unreal Engine, Unity, and Godot support multiple graphi
 │   (Renderer, Shader, Buffer, etc.)  │
 └──────────────┬──────────────────────┘
                │
-       ┌───────┴────────┬──────────┐
-       │                │          │
-┌──────▼──────┐  ┌─────▼─────┐  ┌─▼────────┐
-│   OpenGL    │  │  Vulkan   │  │ DirectX  │  ← Backend implementations
-│  (Current)  │  │  (Future) │  │ (Future) │
-└─────────────┘  └───────────┘  └──────────┘
+       ┌───────┴────────┬──────────┬──────────┐
+       │                │          │          │
+┌──────▼──────┐  ┌─────▼─────┐  ┌─▼────────┐ ┌─▼────────┐
+│   OpenGL    │  │  Vulkan   │  │ DirectX  │ │  Metal   │
+│  (Current)  │  │  (Future) │  │ (Future) │ │ (Future) │
+└─────────────┘  └───────────┘  └──────────┘ └──────────┘
 ```
 
-**Benefits:**
-- ✅ **Write once, run anywhere**: Game code stays the same across all backends
-- ✅ **Future-proof**: Easy to add new graphics APIs (Vulkan, DirectX 12, Metal, WebGPU)
-- ✅ **Platform optimization**: Use the best API for each platform (Vulkan on Linux, DirectX on Xbox, Metal on macOS)
+**Key Benefits:**
+- ✅ **Write once, run anywhere**: Game code remains identical across all backends
+- ✅ **Future-proof**: Easily add new graphics APIs as they emerge
+- ✅ **Platform optimization**: Automatically use the best API per platform
+  - Windows → DirectX 12 > Vulkan > OpenGL
+  - Linux → Vulkan > OpenGL
+  - macOS/iOS → Metal > Vulkan (MoltenVK)
+  - Android → Vulkan > OpenGL ES
 - ✅ **Incremental development**: Start with OpenGL, add others when needed
+- ✅ **Performance**: Backend-specific optimizations without affecting game code
 
 **Current Status:**
-- ✅ OpenGL backend (in development)
-- 🔜 Vulkan backend (planned)
+- ✅ OpenGL 4.5+ backend (in development)
+- 🔜 Vulkan 1.3 backend (planned)
 - 🔜 DirectX 12 backend (planned)
+- 🔜 Metal backend (planned)
 
 ---
 
@@ -51,202 +58,316 @@ Modern game engines like Unreal Engine, Unity, and Godot support multiple graphi
 src/
 ├── Core/
 │   ├── Application.h/cpp       # Main engine loop and lifecycle
-│   └── Window.h/cpp            # Window management (SDL2)
+│   ├── Window.h/cpp            # Platform-agnostic window (GLFW)
+│   ├── Input.h/cpp             # Input system abstraction
+│   ├── Logger.h/cpp            # Logging system (spdlog wrapper)
+│   └── Timestep.h              # Frame timing and delta time
 │
 ├── Renderer/
 │   ├── RenderAPI.h             # Abstract graphics API interface
 │   ├── Renderer.h/cpp          # High-level rendering facade
+│   ├── RenderCommand.h/cpp     # Command queue abstraction
 │   ├── Shader.h/cpp            # Shader abstraction
 │   ├── Buffer.h/cpp            # Vertex/Index buffer abstraction
+│   ├── Texture.h/cpp           # Texture abstraction
+│   ├── VertexArray.h/cpp       # Vertex array object abstraction
 │   │
-│   ├── OpenGL/                 # OpenGL implementation
+│   ├── OpenGL/                 # OpenGL 4.5+ implementation
+│   │   ├── OpenGLContext.h/cpp
 │   │   ├── OpenGLRenderAPI.h/cpp
 │   │   ├── OpenGLShader.h/cpp
-│   │   └── OpenGLBuffer.h/cpp
+│   │   ├── OpenGLBuffer.h/cpp
+│   │   └── OpenGLTexture.h/cpp
 │   │
 │   ├── Vulkan/                 # Future: Vulkan implementation
-│   └── DirectX/                # Future: DirectX implementation
+│   ├── DirectX/                # Future: DirectX 12 implementation
+│   └── Metal/                  # Future: Metal implementation
+│
+├── Scene/
+│   ├── Entity.h/cpp            # Entity wrapper (EnTT)
+│   ├── Scene.h/cpp             # Scene management
+│   ├── Components.h            # Common components
+│   └── SceneSerializer.h/cpp   # Scene save/load
+│
+├── Resources/
+│   ├── Model.h/cpp             # 3D model representation
+│   ├── ModelLoader.h/cpp       # Assimp wrapper
+│   ├── TextureLoader.h/cpp     # stb_image wrapper
+│   └── ResourceManager.h/cpp   # Asset caching and management
 │
 └── main.cpp
 ```
 
-### Key Concepts
+### Design Patterns Used
 
-**1. RenderAPI Interface**
-Abstract base class defining all graphics operations. Each backend (OpenGL, Vulkan, etc.) implements this interface.
-
-**2. Renderer**
-High-level facade that uses RenderAPI. Your game code only interacts with this layer, never directly with OpenGL/Vulkan/DirectX.
-
-**3. Backend Selection**
-The engine automatically selects the appropriate backend at runtime based on platform and availability:
-- Windows: DirectX 12 → Vulkan → OpenGL
-- Linux: Vulkan → OpenGL
-- macOS: Metal → OpenGL (deprecated on macOS)
+- **Strategy Pattern**: RenderAPI interface with multiple implementations
+- **Facade Pattern**: Renderer provides simplified interface to complex rendering
+- **Factory Pattern**: Backend creation based on platform/availability
+- **Entity-Component System**: EnTT for flexible game object composition
+- **Resource Management**: Reference counting and caching for assets
 
 ---
 
 ## 🧰 Prerequisites
 
-Before building, make sure you have the following installed:
-
 ### 🔹 Required
-- **CMake** ≥ 3.15
-  - 👉 [Download CMake](https://cmake.org/download/)
-- **C++ Toolchain** with C++17 support
-  - Windows → MSVC (Visual Studio 2022 or Build Tools)
-  - Linux/macOS → GCC ≥ 7 or Clang ≥ 5
-- **Git** → [git-scm.com](https://git-scm.com/)
+- **CMake** ≥ 3.15 — [Download](https://cmake.org/download/)
+- **C++17 Compiler**:
+  - Windows: MSVC 2019+ (Visual Studio 2022 recommended)
+  - Linux: GCC 9+ or Clang 10+
+  - macOS: Xcode 12+ (Clang)
+- **Git** — [git-scm.com](https://git-scm.com/)
+- **vcpkg** — [Microsoft's C++ Package Manager](https://github.com/microsoft/vcpkg)
 
-### 🔹 Recommended
-- **vcpkg** (C++ package manager by Microsoft)
-  - 👉 [https://github.com/microsoft/vcpkg](https://github.com/microsoft/vcpkg)
-
-### 🔹 Recommended Development Environment
+### 🔹 Optional but Recommended
+- **Vulkan SDK** — For Vulkan backend development
 - **Visual Studio Code** with extensions:
-  - CMake Tools (by Microsoft) — Auto-configures IntelliSense
-  - C/C++ (by Microsoft) — Code completion and debugging
-  - CMake Language Support — Syntax highlighting
+  - CMake Tools
+  - C/C++ Extension Pack
+  - Shader languages support (GLSL, HLSL)
 
 ---
 
 ## 📦 Dependencies
 
-Install dependencies via **vcpkg** for automatic configuration:
+All dependencies are managed via **vcpkg** for seamless cross-platform builds.
 
-### Current (OpenGL Backend)
-- **SDL2** — Cross-platform window and input management
-- **glad** — OpenGL function loader (loads modern OpenGL functions)
-- **GLM** — Mathematics library for 3D graphics (vectors, matrices, quaternions)
-- **ufbx** — Lightweight FBX model loader
+### Core Dependencies (All Platforms)
 
-### Future Dependencies
-When adding Vulkan or DirectX backends:
-- **Vulkan SDK** — For Vulkan backend
-- **DirectX 12** — Included with Windows SDK
+```bash
+vcpkg install glfw3 glad glm assimp spdlog stb entt
+```
+
+| Library | Purpose | Why This Choice |
+|---------|---------|----------------|
+| **GLFW** | Windowing, input, OpenGL/Vulkan context | Modern, lightweight, multi-API support |
+| **GLAD** | OpenGL function loader | Industry standard, easy to configure |
+| **GLM** | Math library (vectors, matrices) | OpenGL-compatible, header-only |
+| **Assimp** | 3D model loading (FBX, OBJ, GLTF, etc.) | Supports 40+ formats, well-maintained |
+| **spdlog** | Fast logging library | High-performance, thread-safe, colored output |
+| **stb** | Image loading (PNG, JPG, TGA, etc.) | Single-header, no dependencies |
+| **EnTT** | Entity Component System | Ultra-fast, modern C++, cache-friendly |
+
+### Optional Dependencies
+
+```bash
+vcpkg install imgui[glfw-binding,opengl3-binding]  # Debug UI
+vcpkg install yaml-cpp  # Scene serialization
+```
+
+### Platform-Specific (Future)
+
+- **Windows**: DirectX 12 (included with Windows SDK 10+)
+- **All platforms**: Vulkan SDK for Vulkan backend
 
 ---
 
 ## 🔨 Build Instructions
 
-### 1. Clone the Repository
+### 1️⃣ Setup vcpkg
+
+```bash
+# Clone vcpkg
+git clone https://github.com/microsoft/vcpkg.git
+cd vcpkg
+
+# Bootstrap vcpkg
+./bootstrap-vcpkg.sh  # Linux/macOS
+.\bootstrap-vcpkg.bat  # Windows
+
+# Add to PATH or remember the path for later
+```
+
+### 2️⃣ Clone Plume Engine
+
 ```bash
 git clone https://github.com/NoaSecond/Plume-Engine.git
 cd Plume-Engine
 ```
 
-### 2. Install Dependencies (vcpkg)
+### 3️⃣ Install Dependencies
+
 ```bash
-vcpkg install sdl2 glad glm ufbx
+# Core dependencies (required)
+vcpkg install glfw3 glad glm assimp spdlog stb entt
+
+# Optional: Debug UI
+vcpkg install imgui[glfw-binding,opengl3-binding]
 ```
 
-### 3. Configure and Build
-```bash
-# Configure (replace <path-to-vcpkg> with your vcpkg installation path)
-cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE=<path-to-vcpkg>/scripts/buildsystems/vcpkg.cmake
+### 4️⃣ Configure & Build
 
-# Build (Release mode)
+```bash
+# Configure with vcpkg toolchain
+cmake -B build -S . \
+  -DCMAKE_TOOLCHAIN_FILE=[path-to-vcpkg]/scripts/buildsystems/vcpkg.cmake \
+  -DCMAKE_BUILD_TYPE=Release
+
+# Build
 cmake --build build --config Release
+
+# Run
+./build/PlumeEngine  # Linux/macOS
+.\build\Release\PlumeEngine.exe  # Windows
 ```
 
-**Example on Windows:**
+**Windows Example:**
 ```powershell
 cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE=C:\dev\vcpkg\scripts\buildsystems\vcpkg.cmake
 cmake --build build --config Release
 ```
 
-### 4. Run
+### 5️⃣ Development Build (Debug)
+
 ```bash
-# Windows
-.\build\Release\PlumeEngine.exe
+cmake -B build-debug -S . \
+  -DCMAKE_TOOLCHAIN_FILE=[vcpkg-path]/scripts/buildsystems/vcpkg.cmake \
+  -DCMAKE_BUILD_TYPE=Debug
 
-# Linux/macOS
-./build/PlumeEngine
+cmake --build build-debug --config Debug
 ```
-
----
-
-## 🎮 Usage
-
-Currently, Plume Engine creates a window and sets up the rendering context. As development progresses:
-
-- **Phase 1 (Current)**: OpenGL backend with basic rendering (triangles, cubes)
-- **Phase 2**: Entity-Component System (ECS) for game objects
-- **Phase 3**: Model loading, textures, lighting
-- **Phase 4**: Additional backends (Vulkan, DirectX)
 
 ---
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please follow these guidelines:
+We welcome contributions! Please follow these guidelines:
 
-- **Language**: Write all code, documentation, and commit messages in **English**
-- **Commits**: Use [Gitmoji](https://gitmoji.dev/) for expressive commit messages
-- **Code Style**: Follow existing conventions (see `CONTRIBUTING.md`)
-- **Pull Requests**: Keep them small and focused on a single feature/fix
+### Language
+- All code, comments, documentation, and commits **must be in English**
 
-### Commit Examples
+### Code Style
+- **C++17** standard (may upgrade to C++20 later)
+- **4 spaces** for indentation (no tabs)
+- **PascalCase** for classes/structs: `RenderAPI`, `OpenGLShader`
+- **camelCase** for functions/variables: `drawTriangle()`, `vertexBuffer`
+- **UPPER_SNAKE_CASE** for constants: `MAX_TEXTURE_SLOTS`
+- Use `const` and `constexpr` whenever possible
+- Prefer smart pointers (`std::unique_ptr`, `std::shared_ptr`) over raw pointers
+
+### Commit Messages
+
+Use **Gitmoji** for expressive, visual commits:
 
 ```bash
-✨ Add OpenGL shader abstraction
-🐛 Fix vertex buffer binding issue
-📝 Update architecture documentation
-♻️ Refactor RenderAPI interface
-🎨 Improve code formatting
-⚡️ Optimize rendering loop
-✅ Add unit tests for buffer management
+✨ Add Vulkan backend initialization
+🐛 Fix OpenGL buffer binding issue
+📝 Update architecture documentation  
+♻️ Refactor shader compilation pipeline
+🎨 Improve code formatting in RenderAPI
+⚡️ Optimize vertex buffer uploads
+✅ Add unit tests for ECS
+🔥 Remove deprecated SDL2 code
+🚀 Improve rendering performance by 40%
+🔧 Update CMake configuration
 ```
 
-**Quick tip**: Install `gitmoji-cli` for interactive commits:
+**Install gitmoji-cli** (optional):
 ```bash
 npm install -g gitmoji-cli
-npx gitmoji-cli -c
+npx gitmoji-cli -c  # Interactive commit
 ```
 
-See `CONTRIBUTING.md` for detailed contribution guidelines.
+### Pull Request Process
 
----
+1. **Fork** the repository
+2. Create a **feature branch**: `git checkout -b feature/amazing-feature`
+3. **Commit** your changes with Gitmoji
+4. **Push** to your fork: `git push origin feature/amazing-feature`
+5. Open a **Pull Request** with:
+   - Clear title and description
+   - Reference to related issues
+   - Screenshots/videos if UI changes
 
-## 📚 Learning Resources
-
-Building a game engine is a complex but rewarding journey. Here are some resources:
-
-- **LearnOpenGL** ([learnopengl.com](https://learnopengl.com/)) — Excellent OpenGL tutorials
-- **Vulkan Tutorial** ([vulkan-tutorial.com](https://vulkan-tutorial.com/)) — When ready for Vulkan
-- **Game Engine Architecture** by Jason Gregory — Comprehensive book on engine design
-- **The Cherno's Game Engine Series** (YouTube) — Practical engine development
-
----
-
-## 📄 License
-
-This project is licensed under the **MIT License**. See `LICENSE` for details.
+See `CONTRIBUTING.md` for detailed guidelines.
 
 ---
 
 ## 🗺️ Roadmap
 
-### ✅ Completed
-- Basic window creation with SDL2
-- Project structure and build system
+### ✅ Phase 1: Foundation (Current)
+- [x] Project structure and build system
+- [x] Window creation (GLFW)
+- [ ] OpenGL context and rendering
+- [ ] Basic 3D rendering (cubes, lighting)
+- [ ] Shader system
+- [ ] Camera system (FPS, orbital)
 
-### 🚧 In Progress
-- OpenGL backend implementation
-- Rendering abstraction layer (RHI)
-- Basic 3D rendering (triangles, cubes)
+### 🚧 Phase 2: Core Features (In Progress)
+- [ ] Entity Component System (EnTT)
+- [ ] Model loading (Assimp)
+- [ ] Texture system (stb_image)
+- [ ] Material system
+- [ ] Scene graph
+- [ ] Input abstraction
 
-### 🔜 Planned
-- Entity-Component System (ECS)
-- Model loading with ufbx
-- Texture system
-- Lighting (Phong, PBR)
-- Camera system (FPS, orbital)
-- Vulkan backend
-- DirectX 12 backend
-- Scene management
-- Physics integration
+### 🔜 Phase 3: Advanced Rendering
+- [ ] PBR (Physically Based Rendering)
+- [ ] Shadow mapping
+- [ ] Deferred rendering
+- [ ] Post-processing effects
+- [ ] Skybox and environment mapping
+
+### 🔮 Phase 4: Multi-Backend
+- [ ] Vulkan backend
+- [ ] DirectX 12 backend
+- [ ] Metal backend (macOS/iOS)
+- [ ] Runtime backend switching
+
+### 🎯 Phase 5: Engine Features
+- [ ] Physics integration (PhysX or Bullet)
+- [ ] Audio system (OpenAL or FMOD)
+- [ ] Scripting (Lua or C#)
+- [ ] Editor (ImGui-based)
+- [ ] Serialization and scene saving
 
 ---
 
-**Built with ❤️ and modern C++**
+## 🎨 Example Projects
+
+Once stable, Plume Engine will be showcased with example projects:
+- 🎮 **Simple FPS Demo** — Basic gameplay mechanics
+- 🎮 **TPS Demo** — Third-person shooter controls and camera
+- 🛠️ **Blank Project Template** — Minimal starter for new games
+
+---
+
+## 📊 Performance Goals
+
+Target performance on mid-range hardware (GTX 1060 / RX 580):
+- **10,000+** draw calls per frame at 60 FPS
+- **1M+** triangles rendered per frame
+- **Sub-1ms** frame time for core engine systems
+- **< 100 MB** RAM for base engine (excluding game assets)
+
+---
+
+## 📄 License
+
+**MIT License** — See `LICENSE` file for details.
+
+You are free to use Plume Engine in commercial and non-commercial projects.
+
+---
+
+## 💬 Community & Support
+
+- **Issues**: [GitHub Issues](https://github.com/NoaSecond/Plume-Engine/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/NoaSecond/Plume-Engine/discussions)
+- **Wiki**: [Engine Documentation](https://github.com/NoaSecond/Plume-Engine/wiki) (coming soon)
+
+---
+
+## 🙏 Acknowledgments
+
+Plume Engine is inspired by and learns from:
+- **Godot Engine** — Open-source architecture
+- **Unreal Engine** — Multi-backend design patterns
+
+Special thanks to the open-source community for creating amazing libraries like GLFW, Assimp, EnTT, and spdlog.
+
+---
+
+**Built with ❤️ using modern C++ and best practices**
+
+*"A feather-light engine with heavyweight capabilities"* 🪶
