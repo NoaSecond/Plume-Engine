@@ -16,9 +16,8 @@ public:
     const glm::mat4& GetViewMatrix() const { return m_ViewMatrix; }
 
 private:
-    void UpdateViewMatrix();
+    void UpdateCameraVectors();
     void UpdateProjectionMatrix();
-    void ProcessKeyboard(Input& input, float deltaTime);
     void ProcessMouseMovement(float xoffset, float yoffset);
     void ProcessMouseScroll(int yoffset);
 
@@ -33,9 +32,11 @@ private:
 
     float m_Yaw = -90.0f;
     float m_Pitch = 0.0f;
+    float m_Roll = 0.0f; // NOUVEAU : Angle d'inclinaison
 
     float m_MovementSpeed = 2.5f;
     float m_MouseSensitivity = 0.1f;
+    float m_RollSpeed = 50.0f;
     
     // Propriétés pour la projection
     float m_Fov;
