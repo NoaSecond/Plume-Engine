@@ -1,7 +1,7 @@
 # Plume Engine 🪶
 
 <p align="center">
-  <img src="branding/PlumeEngineIcon_1000px.png" alt="Plume Engine" />
+  <img src="branding/PlumeEngineIcon_500px.png" alt="Plume Engine" />
 </p>
 
 [Press kit](branding/press-kit.md)
