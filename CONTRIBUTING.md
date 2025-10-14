@@ -44,3 +44,34 @@ Thanks for your interest in contributing! This file outlines the recommended wor
 If you're not sure where to start, open an issue describing what you'd like to work on or ask for guidance in the issue tracker.
 
 Thanks again — contributions are welcome!
+
+## Usage — Git, commits and style
+
+Please write commit messages and source code in English.
+
+We follow Gitmoji for expressive commits. Example:
+
+```powershell
+git add .
+git commit -m "✨ feat: add default rendering"
+```
+
+Common examples:
+
+- ✨ Add default rendering system
+- 🐛 Fix normal calculations
+- 📝 Update README
+- 💄 Fix indentation and formatting
+- ♻️ Simplify rendering pipeline
+- ⚡️ Optimize texture loading
+- ✅ Add unit tests for the ECS
+- 🔧 Update build scripts
+
+Quick tip: add a short description after the type, for example `✨ Add shadow handling (basic)`.
+
+Optional: use `gitmoji-cli` for interactive commits:
+
+```powershell
+npm install -g gitmoji-cli
+npx gitmoji-cli -c
+```

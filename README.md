@@ -61,37 +61,6 @@ It is recommended to install dependencies via **vcpkg**.
 
 ---
 
-## Usage — Git, commits and style
-
-Please write commit messages and source code in English.
-
-We follow Gitmoji for expressive commits. Example:
-
-```powershell
-git add .
-git commit -m "✨ feat: add default rendering"
-```
-
-Common examples:
-
-- ✨ Add default rendering system
-- 🐛 Fix normal calculations
-- 📝 Update README
-- 💄 Fix indentation and formatting
-- ♻️ Simplify rendering pipeline
-- ⚡️ Optimize texture loading
-- ✅ Add unit tests for the ECS
-- 🔧 Update build scripts
-
-Quick tip: add a short description after the type, for example `✨ Add shadow handling (basic)`.
-
-Optional: use `gitmoji-cli` for interactive commits:
-
-```powershell
-npm install -g gitmoji-cli
-npx gitmoji-cli -c
-```
-
 ## Contributing
 
 Contributions are welcome. A few guidelines:
@@ -100,8 +69,18 @@ Contributions are welcome. A few guidelines:
 - Use clear, focused pull requests and include a short description of the change.
 - Open an issue to discuss larger design changes before implementing them.
 
-If you'd like, I can add a `CONTRIBUTING.md` with commit examples and a pre-commit hook template.
+For more details, see the contribution guide: [`CONTRIBUTING.md`](./CONTRIBUTING.md).
+
+If you'd like, I can add a pre-commit hook template or expand the contribution guide further.
 
 ## License
 
 This project is licensed under the MIT License. See `LICENSE` for details.
+
+---
+
+## Documentation
+
+- Project specification (French): [`CAHIER_DES_CHARGES.md`](./CAHIER_DES_CHARGES.md)
+- Contribution guide: [`CONTRIBUTING.md`](./CONTRIBUTING.md)
+- License: [`LICENSE`](./LICENSE)
