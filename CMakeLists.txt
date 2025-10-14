@@ -63,6 +63,30 @@ add_custom_command(TARGET PlumeEngine POST_BUILD
     COMMENT "Copying assets to build directory"
 )
 
+# Copy runtime DLLs from vcpkg installed tree (Windows) to output directory
+if(WIN32)
+  # Common vcpkg install root and triplet; allow override via VCPKG_ROOT or VCPKG_TARGET_TRIPLET
+  if(NOT DEFINED VCPKG_ROOT)
+    set(VCPKG_ROOT "C:/vcpkg")
+  endif()
+  if(NOT DEFINED VCPKG_TARGET_TRIPLET)
+    set(VCPKG_TARGET_TRIPLET "x64-windows")
+  endif()
+
+  set(VCPKG_BIN_DIR "${VCPKG_ROOT}/installed/${VCPKG_TARGET_TRIPLET}/bin")
+
+  if(EXISTS "${VCPKG_BIN_DIR}")
+    add_custom_command(TARGET PlumeEngine POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E echo "Copying vcpkg runtime DLLs from ${VCPKG_BIN_DIR} to output"
+      COMMAND ${CMAKE_COMMAND} -E copy_directory
+          "${VCPKG_BIN_DIR}" $<TARGET_FILE_DIR:PlumeEngine>
+      COMMENT "Copying vcpkg runtime DLLs to build output"
+    )
+  else()
+    message(STATUS "vcpkg bin dir not found: ${VCPKG_BIN_DIR}. If runtime DLLs are missing at runtime, set VCPKG_ROOT or copy required DLLs manually.")
+  endif()
+endif()
+
 # --- Windows application icon resource ---
 if(WIN32)
   # Path to the icon in the source tree (choose a 256px ICO provided in assets)
