@@ -62,3 +62,18 @@ add_custom_command(TARGET PlumeEngine POST_BUILD
     ${CMAKE_SOURCE_DIR}/assets $<TARGET_FILE_DIR:PlumeEngine>/assets
     COMMENT "Copying assets to build directory"
 )
+
+# --- Windows application icon resource ---
+if(WIN32)
+  # Path to the icon in the source tree (choose a 256px ICO provided in assets)
+  set(PLUME_ICON_SRC "${CMAKE_SOURCE_DIR}/assets/icons/PlumeEngineIcon_256px.ico")
+  # Convert to a CMake-style path (forward slashes) for the .rc file
+  file(TO_CMAKE_PATH "${PLUME_ICON_SRC}" PLUME_ICON_PATH)
+
+  # Generate a .rc in the build directory based on the template in src/Resources
+  configure_file(${CMAKE_SOURCE_DIR}/src/Resources/PlumeEngine.rc.in
+           ${CMAKE_BINARY_DIR}/PlumeEngine.rc @ONLY)
+
+  # Add the generated .rc to the executable target so it gets compiled and linked
+  target_sources(PlumeEngine PRIVATE ${CMAKE_BINARY_DIR}/PlumeEngine.rc)
+endif()
