@@ -12,6 +12,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
+// --- SHADERS MIS À JOUR POUR L'ÉCLAIRAGE ---
 const std::string vertexShaderSource = R"(
     #version 330 core
     layout (location = 0) in vec3 a_Position;
@@ -23,22 +24,48 @@ const std::string vertexShaderSource = R"(
     uniform mat4 u_Projection;
 
     out vec2 v_TexCoords;
+    out vec3 v_Normal;
+    out vec3 v_FragPos;
 
     void main() {
        gl_Position = u_Projection * u_View * u_Model * vec4(a_Position, 1.0);
        v_TexCoords = a_TexCoords;
+       
+       // On transforme la position du fragment et la normale dans l'espace du monde
+       v_FragPos = vec3(u_Model * vec4(a_Position, 1.0));
+       v_Normal = mat3(transpose(inverse(u_Model))) * a_Normal;
     }
 )";
 
 const std::string fragmentShaderSource = R"(
     #version 330 core
     in vec2 v_TexCoords;
+    in vec3 v_Normal;
+    in vec3 v_FragPos;
+    
     out vec4 FragColor;
 
     uniform sampler2D u_TextureDiffuse;
+    uniform vec3 u_LightPos;
+    uniform vec3 u_LightColor;
+    uniform vec3 u_ViewPos;
 
     void main() {
-       FragColor = texture(u_TextureDiffuse, v_TexCoords);
+       // Lumière ambiante
+       float ambientStrength = 0.1;
+       vec3 ambient = ambientStrength * u_LightColor;
+
+       // Lumière diffuse
+       vec3 norm = normalize(v_Normal);
+       vec3 lightDir = normalize(u_LightPos - v_FragPos);
+       float diff = max(dot(norm, lightDir), 0.0);
+       vec3 diffuse = diff * u_LightColor;
+
+       // (La lumière spéculaire sera ajoutée plus tard)
+
+       vec4 texColor = texture(u_TextureDiffuse, v_TexCoords);
+       vec3 result = (ambient + diffuse) * texColor.rgb;
+       FragColor = vec4(result, 1.0);
     }
 )";
 
@@ -70,13 +97,19 @@ void PlumeApplication::Init() {
     auto modelEntity = m_ActiveScene->CreateEntity("Backpack");
     std::string modelPath = "assets/models/backpack/12305_backpack_v2_l3.obj";
     auto backpackModel = std::make_shared<Model>(modelPath);
-    if (backpackModel->GetMeshes().empty()) {
-        std::cerr << "ERREUR CRITIQUE: Le modele n'a pas pu etre charge depuis le chemin : " << modelPath << std::endl;
-    } else {
+    if (!backpackModel->GetMeshes().empty()) {
         modelEntity.AddComponent<ModelComponent>(backpackModel);
         auto& transform = modelEntity.GetComponent<TransformComponent>();
         transform.Scale = glm::vec3(0.5f);
+    } else {
+        std::cerr << "ERREUR: Le modele n'a pas pu etre charge : " << modelPath << std::endl;
     }
+
+    // NOUVEAU : Créer une entité pour la lumière
+    auto lightEntity = m_ActiveScene->CreateEntity("Point Light");
+    lightEntity.AddComponent<LightComponent>();
+    auto& lightTransform = lightEntity.GetComponent<TransformComponent>();
+    lightTransform.Translation = glm::vec3(1.5f, 1.0f, 2.0f);
 }
 
 void PlumeApplication::Run() {
@@ -84,7 +117,6 @@ void PlumeApplication::Run() {
     
     uint64_t lastFrameTime = SDL_GetPerformanceCounter();
     while (m_IsRunning) {
-        // ... (Gestion du deltaTime, des inputs et de la caméra)
         uint64_t now = SDL_GetPerformanceCounter();
         float deltaTime = (float)((now - lastFrameTime) * 1000 / (double)SDL_GetPerformanceFrequency()) / 1000.0f;
         lastFrameTime = now;
@@ -95,19 +127,35 @@ void PlumeApplication::Run() {
             m_Input->Update(event);
         }
         m_Camera->Update(*m_Input, deltaTime);
-
+        
         // --- Rendu de la Scène ---
-        glClearColor(0.1f, 0.2f, 0.3f, 1.0f);
+        glClearColor(0.1f, 0.1f, 0.1f, 1.0f); // Fond un peu plus sombre
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         shader->Bind();
         shader->UploadUniformMat4("u_View", m_Camera->GetViewMatrix());
         shader->UploadUniformMat4("u_Projection", m_Camera->GetProjectionMatrix());
+        shader->UploadUniformVec3("u_ViewPos", m_Camera->GetPosition());
 
-        auto view = m_ActiveScene->GetRegistry().view<TransformComponent, ModelComponent>();
-        for (auto entity : view) {
-            auto& transform = view.get<TransformComponent>(entity);
-            auto& modelComp = view.get<ModelComponent>(entity);
+        // Trouver la lumière et envoyer ses infos au shader
+        glm::vec3 lightPos;
+        glm::vec3 lightColor;
+        auto lightView = m_ActiveScene->GetRegistry().view<TransformComponent, LightComponent>();
+        for (auto entity : lightView) {
+            auto& transform = lightView.get<TransformComponent>(entity);
+            auto& light = lightView.get<LightComponent>(entity);
+            lightPos = transform.Translation;
+            lightColor = light.Color * light.Intensity;
+            break; // On ne gère qu'une seule lumière pour l'instant
+        }
+        shader->UploadUniformVec3("u_LightPos", lightPos);
+        shader->UploadUniformVec3("u_LightColor", lightColor);
+
+        // Rendu des modèles
+        auto modelView = m_ActiveScene->GetRegistry().view<TransformComponent, ModelComponent>();
+        for (auto entity : modelView) {
+            auto& transform = modelView.get<TransformComponent>(entity);
+            auto& modelComp = modelView.get<ModelComponent>(entity);
             shader->UploadUniformMat4("u_Model", transform.GetTransform());
             modelComp.model->Draw(*shader);
         }

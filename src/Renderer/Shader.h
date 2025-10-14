@@ -13,6 +13,7 @@ public:
     void Unbind() const;
     
     void UploadUniformMat4(const std::string& name, const glm::mat4& matrix);
+    void UploadUniformVec3(const std::string& name, const glm::vec3& vector);
     void SetInt(const std::string& name, int value);
 
 private:

@@ -5,7 +5,6 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <string>
 #include <memory>
-// On a besoin d'inclure Model.h maintenant
 #include "../Renderer/Model/Model.h"
 
 struct TagComponent {
@@ -32,11 +31,18 @@ struct TransformComponent {
     }
 };
 
-// RENOMMÉ et MODIFIÉ : Ce composant contient maintenant un modèle 3D complet.
 struct ModelComponent {
     std::shared_ptr<Model> model;
-
     ModelComponent() = default;
     ModelComponent(const ModelComponent&) = default;
     ModelComponent(std::shared_ptr<Model> model) : model(model) {}
+};
+
+// NOUVEAU : Composant pour une source de lumière
+struct LightComponent {
+    glm::vec3 Color = { 1.0f, 1.0f, 1.0f };
+    float Intensity = 1.0f;
+
+    LightComponent() = default;
+    LightComponent(const LightComponent&) = default;
 };
