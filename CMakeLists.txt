@@ -1,319 +1,200 @@
-# Version minimale de CMake requise
-cmake_minimum_required(VERSION 3.15)
-project(PlumeEngine)
+# ============================================================
+#  Plume Engine - CMake configuration
+# ============================================================
 
-# Définir la norme C++17 pour le projet
+cmake_minimum_required(VERSION 3.15)
+project(PlumeEngine LANGUAGES CXX)
+
+# ============================================================
+#  Configuration du compilateur
+# ============================================================
+
 set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED True)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# Option to enable ImGui-based editor
-option(PLUME_ENABLE_IMGUI "Enable ImGui-based editor" ON) # MODIFIÉ: OFF -> ON
+# ============================================================
+#  Configuration de vcpkg
+# ============================================================
+
+if(NOT DEFINED VCPKG_ROOT)
+    set(VCPKG_ROOT "C:/vcpkg" CACHE PATH "Path to vcpkg root directory")
+endif()
+
+if(NOT DEFINED VCPKG_TARGET_TRIPLET)
+    set(VCPKG_TARGET_TRIPLET "x64-windows" CACHE STRING "vcpkg target triplet")
+endif()
+
+set(CMAKE_TOOLCHAIN_FILE "${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
+    CACHE STRING "Vcpkg toolchain file")
+
+message(STATUS "Using vcpkg from: ${VCPKG_ROOT}")
+message(STATUS "Target triplet: ${VCPKG_TARGET_TRIPLET}")
+
+# ============================================================
+#  Options de compilation
+# ============================================================
+
+option(PLUME_ENABLE_IMGUI "Enable ImGui-based editor" ON)
+
 if(PLUME_ENABLE_IMGUI)
-  message(STATUS "PLUME_ENABLE_IMGUI requested; ImGui will be searched for below.")
+    message(STATUS "PLUME_ENABLE_IMGUI requested; ImGui will be searched for below.")
 else()
-  message(STATUS "PLUME_ENABLE_IMGUI disabled")
+    message(STATUS "PLUME_ENABLE_IMGUI disabled.")
 endif()
 
-# --- GESTION DES DÉPENDANCES ---
-# On utilise vcpkg pour les bibliothèques qui fonctionnent bien
-set(CMAKE_TOOLCHAIN_FILE "C:/vcpkg/scripts/buildsystems/vcpkg.cmake" CACHE STRING "Vcpkg toolchain file")
+# ============================================================
+#  Dépendances via vcpkg
+# ============================================================
+
+# SDL2
 find_package(SDL2 CONFIG REQUIRED)
+if(TARGET SDL2::SDL2)
+    message(STATUS "Found SDL2 (modern config).")
+elseif(TARGET SDL2::SDL2main)
+    message(STATUS "Found SDL2main (legacy config).")
+else()
+    message(FATAL_ERROR "SDL2 not found. Install via vcpkg: vcpkg install sdl2:x64-windows")
+endif()
+
+# GLAD
 find_package(glad CONFIG REQUIRED)
+message(STATUS "Found glad")
+
+# GLM
 find_package(glm CONFIG REQUIRED)
+message(STATUS "Found glm")
+
+# ASSIMP
 find_package(assimp CONFIG REQUIRED)
+message(STATUS "Found assimp")
 
-# Use FetchContent for vendoring dependencies (needed for auto-vendoring ImGui)
-include(FetchContent)
+# stb (header-only)
+find_path(STB_INCLUDE_DIRS "stb_c_lexer.h")
+if(STB_INCLUDE_DIRS)
+    message(STATUS "Found stb: ${STB_INCLUDE_DIRS}")
+    add_library(stb INTERFACE)
+    target_include_directories(stb INTERFACE ${STB_INCLUDE_DIRS})
+else()
+    message(WARNING "stb not found. Install via vcpkg: vcpkg install stb:x64-windows")
+endif()
 
-# Helper: function to vendor ImGui via FetchContent when find_package(imgui) fails
-function(vendor_imgui_if_needed)
-  if(NOT TARGET imgui::imgui)
-    message(STATUS "Config: imgui::imgui not found, FetchContent'ing 
-Dear ImGui...")
-    FetchContent_Declare(
-      dear_imgui
-      GIT_REPOSITORY https://github.com/ocornut/imgui.git
-      GIT_TAG        v1.92.4
-    )
-    # Populate (download + make available) Dear ImGui via FetchContent
-    FetchContent_MakeAvailable(dear_imgui)
+# EnTT (header-only)
+find_path(ENTT_INCLUDE_DIRS "entt/entt.hpp")
+if(ENTT_INCLUDE_DIRS)
+    message(STATUS "Found EnTT: ${ENTT_INCLUDE_DIRS}")
+    add_library(entt INTERFACE)
+    target_include_directories(entt INTERFACE ${ENTT_INCLUDE_DIRS})
+else()
+    message(WARNING "EnTT not found. Install via vcpkg: vcpkg install entt:x64-windows")
+endif()
 
-    add_library(imgui_static STATIC
-      ${dear_imgui_SOURCE_DIR}/imgui.cpp
-      ${dear_imgui_SOURCE_DIR}/imgui_draw.cpp
-      ${dear_imgui_SOURCE_DIR}/imgui_tables.cpp
-      ${dear_imgui_SOURCE_DIR}/imgui_widgets.cpp
-      ${dear_imgui_SOURCE_DIR}/imgui_demo.cpp
-    )
-    target_include_directories(imgui_static PUBLIC ${dear_imgui_SOURCE_DIR})
-  
-  add_library(imgui::imgui ALIAS imgui_static)
-  else()
-    message(STATUS "imgui::imgui target already available from find_package or previous vendor step")
-  endif()
-endfunction()
+# ============================================================
+#  ImGui (vcpkg ou fallback FetchContent)
+# ============================================================
+
 if(PLUME_ENABLE_IMGUI)
-  # Try to find ImGui (vcpkg port installs cmake config)
-  find_package(imgui CONFIG)
-  if(NOT imgui_FOUND)
-    # Prefer system-installed / vcpkg imgui via find_package. If not available,
-    # attempt to vendor Dear ImGui via FetchContent as a fallback. We intentionally
-    # avoid preferring a local `src/ThirdParty/imgui` folder here so projects can
-    # use the platform package manager (vcpkg) by default.
-    message(STATUS "ImGui not found via find_package(imgui). Attempting to vendor via FetchContent as a fallback...")
-    vendor_imgui_if_needed()
-    if(TARGET imgui::imgui)
-      set(imgui_FOUND TRUE)
-      message(STATUS "ImGui vendored successfully via FetchContent")
+    find_package(imgui CONFIG)
+    if(imgui_FOUND)
+        message(STATUS "Found ImGui via vcpkg.")
+        set(PLUME_IMGUI_LIB imgui::imgui)
     else()
-      # If FetchContent failed, check for a local vendored copy as a last resort
-      if(EXISTS ${CMAKE_SOURCE_DIR}/src/ThirdParty/imgui/imgui.h)
-        message(STATUS "Falling back to local vendored ImGui under src/ThirdParty/imgui.")
-        add_library(imgui_static STATIC
-          ${CMAKE_SOURCE_DIR}/src/ThirdParty/imgui/imgui.cpp
-          ${CMAKE_SOURCE_DIR}/src/ThirdParty/imgui/imgui_draw.cpp
-          ${CMAKE_SOURCE_DIR}/src/ThirdParty/imgui/imgui_tables.cpp
-          ${CMAKE_SOURCE_DIR}/src/ThirdParty/imgui/imgui_widgets.cpp
-          ${CMAKE_SOURCE_DIR}/src/ThirdParty/imgui/imgui_demo.cpp
+        message(WARNING "ImGui not found via vcpkg. Falling back to FetchContent.")
+        include(FetchContent)
+        FetchContent_Declare(
+            imgui
+            GIT_REPOSITORY https://github.com/ocornut/imgui.git
+            GIT_TAG docking
         )
-        target_include_directories(imgui_static PUBLIC ${CMAKE_SOURCE_DIR}/src/ThirdParty/imgui)
-        add_library(imgui::imgui ALIAS imgui_static)
-        set(imgui_FOUND TRUE)
-        message(STATUS "Using local vendored ImGui")
-      else()
-        message(WARNING "Failed to find or vendor ImGui automatically.")
-        message(WARNING "Install imgui via vcpkg or add a local copy to src/ThirdParty/imgui to enable the editor.")
-        message(WARNING "Disabling PLUME_ENABLE_IMGUI.")
-        set(PLUME_ENABLE_IMGUI OFF CACHE BOOL "Enable ImGui-based editor" FORCE)
-      endif()
+        FetchContent_MakeAvailable(imgui)
+        add_library(imgui_lib INTERFACE)
+        target_include_directories(imgui_lib INTERFACE ${imgui_SOURCE_DIR})
+        set(PLUME_IMGUI_LIB imgui_lib)
     endif()
-  else()
-    # Only define the compile macro if ImGui was found
-    add_compile_definitions(PLUME_ENABLE_IMGUI)
-    message(STATUS "PLUME_ENABLE_IMGUI enabled")
-  endif()
 endif()
 
-FetchContent_Declare(
-  entt
-  GIT_REPOSITORY https://github.com/skypjack/entt.git
-  GIT_TAG        v3.13.0
-)
+# ============================================================
+#  Génération automatique de PlumeVersion.h
+# ============================================================
 
-FetchContent_Declare(
-  entt
-  GIT_REPOSITORY https://github.com/skypjack/entt.git
-  GIT_TAG        v3.13.0
-)
-FetchContent_MakeAvailable(entt)
+set(PLUME_JSON_PATH "${CMAKE_SOURCE_DIR}/meta/plume.json")
 
-FetchContent_Declare( # <-- NOUVEAU BLOC POUR STB
-  stb
-  GIT_REPOSITORY https://github.com/nothings/stb.git
-  GIT_TAG    
-    master # stb n'a pas de "releases", on utilise la version principale
-)
-FetchContent_MakeAvailable(stb)
-# --- FIN DU BLOC ---
+if(EXISTS ${PLUME_JSON_PATH})
+    file(READ "${PLUME_JSON_PATH}" PLUME_JSON_RAW)
 
-# Collecter tous les fichiers sources du projet
-file(GLOB_RECURSE SOURCES "src/*.cpp")
+    # Version extraction: "0.1.0.0"
+    string(REGEX MATCH "\"version\"[ \t]*:[ \t]*\"([0-9]+)\\.([0-9]+)\\.([0-9]+)\\.([0-9]+)\"" _ ${PLUME_JSON_RAW})
+    set(PLUME_VERSION_MAJOR ${CMAKE_MATCH_1})
+    set(PLUME_VERSION_MINOR ${CMAKE_MATCH_2})
+    set(PLUME_VERSION_PATCH ${CMAKE_MATCH_3})
+    set(PLUME_VERSION_BUILD ${CMAKE_MATCH_4})
+    set(PLUME_VERSION_STRING "${PLUME_VERSION_MAJOR}.${PLUME_VERSION_MINOR}.${PLUME_VERSION_PATCH}.${PLUME_VERSION_BUILD}")
 
-# Définir l'exécutable
-add_executable(PlumeEngine ${SOURCES})
+    macro(plume_extract VAR FIELD)
+        string(REGEX MATCH "\"${FIELD}\"[ \t]*:[ \t]*\"([^\"]*)\"" _ ${PLUME_JSON_RAW})
+        set(${VAR} "${CMAKE_MATCH_1}")
+    endmacro()
 
-# Spécifier les chemins d'inclusion
-target_include_directories(PlumeEngine PRIVATE 
-    src
-    ${entt_SOURCE_DIR}/src
-    ${stb_SOURCE_DIR} # <-- AJOUTER LE CHEMIN POUR STB
-  ${CMAKE_SOURCE_DIR}/src/ThirdParty/imgui_backends
-)
+    plume_extract(PLUME_PRODUCT_NAME "product_name")
+    plume_extract(PLUME_DESCRIPTION "description")
+    plume_extract(PLUME_COMPANY "company")
+    plume_extract(PLUME_COPYRIGHT "copyright")
+    plume_extract(PLUME_AUTHOR "author")
+    plume_extract(PLUME_COMMENTS "comments")
 
-# --- Centralized version / metadata defaults (override with -D on cmake configure) ---
-# NOTE: JSON in meta/plume.json will override these values if present
-set(PLUME_FILE_VERSION_MAJOR 0)
-set(PLUME_FILE_VERSION_MINOR 1)
-set(PLUME_FILE_VERSION_PATCH 0)
-set(PLUME_FILE_VERSION_BUILD 0)
-
-set(PLUME_FILE_DESCRIPTION "A modern, lightweight 3D game engine written in C++ with multi-backend rendering architecture.")
-set(PLUME_PRODUCT_NAME 
-"Plume Engine")
-set(PLUME_COMPANY_NAME "Noa Second")
-set(PLUME_LEGAL_COPYRIGHT "©2025 Noa Second. All rights reserved.")
-set(PLUME_INTERNAL_NAME "PlumeEngine")
-set(PLUME_ORIGINAL_FILENAME "PlumeEngine.exe")
-set(PLUME_COMMENTS "")
-
-# --- Read meta/plume.json if present and override defaults ---
-set(PLUME_META_JSON "${CMAKE_SOURCE_DIR}/meta/plume.json")
-if(EXISTS ${PLUME_META_JSON})
-  file(READ ${PLUME_META_JSON} _plume_json_content)
-
-  function(read_json_value key outvar)
-    # Simple regex: "key"\s*:\s*"([^"]*)"
-    string(REGEX MATCH "\"${key}\"[ \\t]*:[ \\t]*\"([^\"]*)\"" _match "${_plume_json_content}")
-    if(_match)
-      # extract capture group 1
-      string(REGEX REPLACE "\"${key}\"[ \\t]*:[ \\t]*\"([^\"]*)\"" "\\1" _value "${_match}")
-      set(${outvar} "${_value}" PARENT_SCOPE)
-    endif()
-  endfunction()
-
-  read_json_value("product_name" PLUME_JSON_PRODUCT_NAME)
-  read_json_value("version" PLUME_JSON_VERSION)
-  read_json_value("description" PLUME_JSON_DESCRIPTION)
-  
-read_json_value("company" PLUME_JSON_COMPANY)
-  read_json_value("copyright" PLUME_JSON_COPYRIGHT)
-  read_json_value("author" PLUME_JSON_AUTHOR)
-  read_json_value("comments" PLUME_JSON_COMMENTS)
-
-  if(DEFINED PLUME_JSON_PRODUCT_NAME)
-    set(PLUME_PRODUCT_NAME "${PLUME_JSON_PRODUCT_NAME}")
-  endif()
-  if(DEFINED PLUME_JSON_DESCRIPTION)
-    set(PLUME_FILE_DESCRIPTION "${PLUME_JSON_DESCRIPTION}")
-  endif()
-  if(DEFINED PLUME_JSON_COMPANY)
-    set(PLUME_COMPANY_NAME "${PLUME_JSON_COMPANY}")
-  endif()
-  if(DEFINED PLUME_JSON_COPYRIGHT)
-    set(PLUME_LEGAL_COPYRIGHT "${PLUME_JSON_COPYRIGHT}")
-  endif()
-  if(DEFINED PLUME_JSON_COMMENTS)
-    set(PLUME_COMMENTS "${PLUME_JSON_COMMENTS}")
-  endif()
-
-  if(DEFINED PLUME_JSON_VERSION)
-    # Expect format major.minor.patch.build
-    string(REPLACE "." ";" _ver_parts "${PLUME_JSON_VERSION}")
-    list(LENGTH _ver_parts _ver_count)
-    if(_ver_count GREATER 0)
-      list(GET _ver_parts 0 PLUME_FILE_VERSION_MAJOR)
- 
-   endif()
-    if(_ver_count GREATER 1)
-      list(GET _ver_parts 1 PLUME_FILE_VERSION_MINOR)
-    endif()
-    if(_ver_count GREATER 2)
-      list(GET _ver_parts 2 PLUME_FILE_VERSION_PATCH)
-    endif()
-    if(_ver_count GREATER 3)
-      list(GET _ver_parts 3 PLUME_FILE_VERSION_BUILD)
-    endif()
-  endif()
-endif()
-
-# Generate PlumeVersion.h from template and add generated include dir
-set(PLUME_FILE_VERSION "${PLUME_FILE_VERSION_MAJOR},${PLUME_FILE_VERSION_MINOR},${PLUME_FILE_VERSION_PATCH},${PLUME_FILE_VERSION_BUILD}")
-string(REPLACE "," "." PLUME_FILE_VERSION_STR "${PLUME_FILE_VERSION}")
-
-if(NOT DEFINED PLUME_PRODUCT_VERSION)
-  set(PLUME_PRODUCT_VERSION ${PLUME_FILE_VERSION})
-endif()
-string(REPLACE "," "." PLUME_PRODUCT_VERSION_STR "${PLUME_PRODUCT_VERSION}")
-
-# Generate PlumeVersion.h from template and add generated include dir
-configure_file(${CMAKE_SOURCE_DIR}/src/Version/PlumeVersion.h.in
-      
-         ${CMAKE_BINARY_DIR}/generated/PlumeVersion.h @ONLY)
-target_include_directories(PlumeEngine PRIVATE ${CMAKE_BINARY_DIR}/generated)
-
-# Lier toutes les bibliothèques
-target_link_libraries(PlumeEngine PRIVATE
-    SDL2::SDL2
-    SDL2::SDL2main
-    glad::glad
-    glm::glm
-    assimp::assimp
-    # Pas besoin de lier entt ou stb car elles sont "header-only"
-)
-
-if(PLUME_ENABLE_IMGUI AND imgui_FOUND)
-  target_link_libraries(PlumeEngine PRIVATE imgui::imgui)
-endif()
-
-# If local ImGui backends were vendored in the tree, add their include dir and
-# compile the backend implementation files only when they actually exist. This
-# allows removing the `src/ThirdParty` folder entirely when using vcpkg.
-if(EXISTS "${CMAKE_SOURCE_DIR}/src/ThirdParty/imgui_backends")
-  target_include_directories(PlumeEngine PRIVATE ${CMAKE_SOURCE_DIR}/src/ThirdParty/imgui_backends)
-  if(PLUME_ENABLE_IMGUI)
-    set(_imgui_backend_sources "")
-    if(EXISTS "${CMAKE_SOURCE_DIR}/src/ThirdParty/imgui_backends/imgui_impl_sdl2.cpp")
-      list(APPEND _imgui_backend_sources ${CMAKE_SOURCE_DIR}/src/ThirdParty/imgui_backends/imgui_impl_sdl2.cpp)
-    endif()
-    if(EXISTS "${CMAKE_SOURCE_DIR}/src/ThirdParty/imgui_backends/imgui_impl_opengl3.cpp")
-      list(APPEND _imgui_backend_sources ${CMAKE_SOURCE_DIR}/src/ThirdParty/imgui_backends/imgui_impl_opengl3.cpp)
-    endif()
-    if(_imgui_backend_sources)
-      target_sources(PlumeEngine PRIVATE ${_imgui_backend_sources})
-    endif()
-  endif()
-endif()
-if(PLUME_ENABLE_IMGUI AND TARGET imgui::imgui)
-  # If we created/found an imgui target, propagate its include dirs to our target so headers resolve
-  get_target_property(_imgui_includes imgui::imgui INTERFACE_INCLUDE_DIRECTORIES)
-  if(_imgui_includes)
-    target_include_directories(PlumeEngine PRIVATE ${_imgui_includes})
-  endif()
-  # Link to the imgui target
-  target_link_libraries(PlumeEngine PRIVATE imgui::imgui)
-endif()
-
-# Copier les assets dans le dossier de build après la compilation
-add_custom_command(TARGET PlumeEngine POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-    ${CMAKE_SOURCE_DIR}/assets $<TARGET_FILE_DIR:PlumeEngine>/assets
-    
-COMMENT "Copying assets to build directory"
-)
-
-# Copy runtime DLLs from vcpkg installed tree (Windows) to output directory
-if(WIN32)
-  # Option to disable vcpkg applocal invocations (some systems don't have pwsh.exe)
-  option(PLUME_VCPKG_APPLOCAL "Run vcpkg applocal helper to copy runtime DLLs" OFF)
-
-  # Common vcpkg install root and triplet;
-  # allow override via VCPKG_ROOT or VCPKG_TARGET_TRIPLET # FIX DE LA SYNTAXE
-  if(NOT DEFINED VCPKG_ROOT)
-    set(VCPKG_ROOT "C:/vcpkg")
-  endif()
-  if(NOT DEFINED VCPKG_TARGET_TRIPLET)
-    set(VCPKG_TARGET_TRIPLET "x64-windows")
-  endif()
-
-  set(VCPKG_BIN_DIR "${VCPKG_ROOT}/installed/${VCPKG_TARGET_TRIPLET}/bin")
-
-  if(EXISTS "${VCPKG_BIN_DIR}")
-    add_custom_command(TARGET PlumeEngine POST_BUILD
-      COMMAND ${CMAKE_COMMAND} -E echo "Copying vcpkg runtime DLLs from ${VCPKG_BIN_DIR} to output"
-      COMMAND ${CMAKE_COMMAND} -E copy_directory
-          "${VCPKG_BIN_DIR}" $<TARGET_FILE_DIR:PlumeEngine>
-      COMMENT "Copying vcpkg runtime DLLs to build output"
+    # Génération du header
+    configure_file(
+        ${CMAKE_SOURCE_DIR}/src/Core/PlumeVersion.h.in
+        ${CMAKE_BINARY_DIR}/generated/PlumeVersion.h
+        @ONLY
     )
-  else()
-    message(STATUS 
-"vcpkg bin dir not found: ${VCPKG_BIN_DIR}. If runtime DLLs are missing at runtime, set VCPKG_ROOT or copy required DLLs manually.")
-  endif()
+
+    set(PLUME_GENERATED_INCLUDE_DIR ${CMAKE_BINARY_DIR}/generated)
+    message(STATUS "Generated PlumeVersion.h (v${PLUME_VERSION_STRING})")
+else()
+    message(WARNING "meta/plume.json not found! Skipping PlumeVersion.h generation.")
 endif()
 
-# --- Windows application icon resource ---
-if(WIN32)
-  # Path to the icon in the source tree (choose a 256px ICO provided in assets)
-  set(PLUME_ICON_SRC "${CMAKE_SOURCE_DIR}/assets/icons/PlumeEngineIcon_256px.ico")
-  # Convert to a CMake-style path (forward slashes) for the .rc file
-  file(TO_CMAKE_PATH "${PLUME_ICON_SRC}" PLUME_ICON_PATH)
+# ============================================================
+#  Sources du projet
+# ============================================================
 
-  # --- Version / metadata variables (defaults, overrideable via -D on CMake configure) ---
-  # Generate a .rc in the build directory based on the template in src/Resources
-  configure_file(${CMAKE_SOURCE_DIR}/src/Resources/PlumeEngine.rc.in
-    
-       ${CMAKE_BINARY_DIR}/PlumeEngine.rc @ONLY)
+file(GLOB_RECURSE PLUME_SOURCES "src/*.cpp" "src/*.h")
 
-  # Add the generated .rc to the executable target so it gets compiled and linked
-  target_sources(PlumeEngine PRIVATE ${CMAKE_BINARY_DIR}/PlumeEngine.rc)
+add_executable(PlumeEngine ${PLUME_SOURCES})
+
+# Inclusion des headers générés
+if(PLUME_GENERATED_INCLUDE_DIR)
+    target_include_directories(PlumeEngine BEFORE PRIVATE ${PLUME_GENERATED_INCLUDE_DIR})
 endif()
+
+# Inclusion des headers sources
+target_include_directories(PlumeEngine PRIVATE "src")
+
+# ============================================================
+#  Liens
+# ============================================================
+
+target_link_libraries(PlumeEngine
+    PRIVATE
+        SDL2::SDL2main
+        SDL2::SDL2
+        glad::glad
+        glm::glm
+        assimp::assimp
+        ${PLUME_IMGUI_LIB}
+        stb
+        entt
+)
+
+# ============================================================
+#  Informations finales
+# ============================================================
+
+message(STATUS "")
+message(STATUS "===============================================")
+message(STATUS "   Plume Engine configuration complete! ✅")
+message(STATUS "   Build dir: ${CMAKE_BINARY_DIR}")
+message(STATUS "   C++ standard: ${CMAKE_CXX_STANDARD}")
+message(STATUS "===============================================")
+message(STATUS "")

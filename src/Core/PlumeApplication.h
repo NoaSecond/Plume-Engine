@@ -5,11 +5,16 @@
 // Nous n'avons plus besoin d'inclure les classes de rendu ici
 #include "../Scene/Scene.h"
 
+// SDL forward declarations
 struct SDL_Window;
 typedef void* SDL_GLContext;
 
-// Forward declarations
-class EditorLayer; 
+// Include complet nécessaire pour unique_ptr<EditorLayer>
+#ifdef PLUME_ENABLE_IMGUI
+#include "../Editor/EditorLayer.h"
+#endif
+
+// Forward declarations pour les autres classes
 class Camera;
 class Input;
 
@@ -35,13 +40,14 @@ private:
     // NOUVEAU : L'application possède maintenant une scène active
     std::unique_ptr<Scene> m_ActiveScene;
 
-    // Editor layer (MODIFIÉ: utilise unique_ptr)
+#ifdef PLUME_ENABLE_IMGUI
+    // Editor layer (utilise unique_ptr)
     std::unique_ptr<EditorLayer> m_EditorLayer;
+#endif
 
-    // Le reste est géré par la scène et la caméra (MODIFIÉ: utilise unique_ptr)
+    // Le reste est géré par la scène et la caméra (utilise unique_ptr)
     std::unique_ptr<Camera> m_Camera;
     std::unique_ptr<Input> m_Input;
     bool m_RenderToFramebuffer = true;
     int m_LastDrawnMeshCount = 0;
-    // (no temporary ignore flag anymore)
 };
