@@ -101,7 +101,7 @@ if(PLUME_ENABLE_IMGUI)
         # Ensure backend headers (imgui_impl_sdl.h) are present; some vcpkg ports don't install backends
         find_path(IMGUI_IMPL_SDL_H imgui_impl_sdl.h HINTS "${VCPKG_ROOT}/installed/${VCPKG_TARGET_TRIPLET}/include")
         if(NOT IMGUI_IMPL_SDL_H)
-            message(WARNING "ImGui found via vcpkg but backend headers (imgui_impl_sdl.h) are missing. Fetching ImGui sources for backends (matching vcpkg version v1.91.9).")
+        message(STATUS "ImGui found via vcpkg but backend headers (imgui_impl_sdl.h) are missing. Fetching ImGui sources for backends (matching vcpkg version v1.91.9).")
                 include(FetchContent)
                 FetchContent_Declare(
                     imgui_backends
