@@ -87,7 +87,15 @@ void PlumeApplication::Init() {
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
     
     std::string windowTitle = std::string(PLUME_PRODUCT_NAME) + " v" + std::string(PLUME_FILE_VERSION_STR);
-    m_Window = SDL_CreateWindow(windowTitle.c_str(), SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, WINDOW_WIDTH, WINDOW_HEIGHT, SDL_WINDOW_SHOWN | SDL_WINDOW_OPENGL);
+    // Create a resizable window with decorations and maximize it so the app starts "fullscreen"
+    // while keeping the title bar (minimize/resize/close)
+    Uint32 windowFlags = SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE;
+    m_Window = SDL_CreateWindow(windowTitle.c_str(), SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, WINDOW_WIDTH, WINDOW_HEIGHT, windowFlags);
+    if (m_Window) {
+        // Ensure the window has borders/title bar and maximize it to cover the screen
+        SDL_MaximizeWindow(m_Window);
+        SDL_SetWindowBordered(m_Window, SDL_TRUE);
+    }
     if (!m_Window) { std::cerr << "Erreur SDL_CreateWindow: " << SDL_GetError() << std::endl; m_IsRunning = false; return; }
 
     // --- DÉFINIR L'ICÔNE DE LA FENÊTRE ---
