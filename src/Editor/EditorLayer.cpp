@@ -3,7 +3,13 @@
 
 #ifdef PLUME_ENABLE_IMGUI
 #include <imgui.h>
+#if __has_include(<imgui_impl_sdl.h>)
 #include <imgui_impl_sdl.h>
+#elif __has_include(<imgui_impl_sdl2.h>)
+#include <imgui_impl_sdl2.h>
+#else
+#error "imgui SDL backend header not found (imgui_impl_sdl.h or imgui_impl_sdl2.h)"
+#endif
 #include <imgui_impl_opengl3.h>
 #include <imgui_internal.h> // Nécessaire pour ImGui::DockBuilder
 #endif
@@ -102,19 +108,21 @@ void EditorLayer::ResetDockLayout() {
 
 void EditorLayer::DrawDockspace() {
 #ifdef PLUME_ENABLE_IMGUI
-    ImGuiWindowFlags window_flags = ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoDocking;
-    const ImGuiViewport* viewport = ImGui::GetMainViewport();
+    // Use the recommended helper to create a full-viewport dockspace.
+    ImGuiViewport* viewport = ImGui::GetMainViewport();
     ImGui::SetNextWindowPos(viewport->WorkPos);
     ImGui::SetNextWindowSize(viewport->WorkSize);
     ImGui::SetNextWindowViewport(viewport->ID);
+
+    ImGuiWindowFlags window_flags = ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoDocking;
     window_flags |= ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove;
-    window_flags |= ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus;
+    window_flags |= ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus | ImGuiWindowFlags_NoBackground;
 
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
     ImGui::Begin("DockSpaceWindow", nullptr, window_flags);
     ImGui::PopStyleVar(2);
-    
+
     // Menu bar
     if (ImGui::BeginMenuBar()) {
         if (ImGui::BeginMenu("View")) {
@@ -131,12 +139,12 @@ void EditorLayer::DrawDockspace() {
         ImGui::EndMenuBar();
     }
 
+    // Create DockSpace over the main viewport
     ImGuiID dockspace_id = ImGui::GetID("MyDockSpace");
-    
-    // Setup a default dock layout once (ou après ResetDockLayout)
+
     if (!m_DockLayoutInitialized) {
         m_DockLayoutInitialized = true;
-        ImGui::DockBuilderRemoveNode(dockspace_id); // clear any previous layout
+        ImGui::DockBuilderRemoveNode(dockspace_id);
         ImGui::DockBuilderAddNode(dockspace_id, ImGuiDockNodeFlags_DockSpace);
         ImGui::DockBuilderSetNodeSize(dockspace_id, viewport->WorkSize);
 
@@ -151,9 +159,8 @@ void EditorLayer::DrawDockspace() {
 
         ImGui::DockBuilderFinish(dockspace_id);
     }
-    
-    // Assurez-vous que le DockSpace est créé même si le layout est déjà initialisé
-    ImGui::DockSpace(dockspace_id, ImVec2(0.0f, 0.0f));
+
+    ImGui::DockSpaceOverViewport(dockspace_id, viewport, ImGuiDockNodeFlags_None);
 
     ImGui::End();
 #endif
@@ -345,6 +352,8 @@ void EditorLayer::OnImGuiRender() {
     DrawOutliner();
     DrawContentBrowser();
     DrawProperties();
+
+    // Removed temporary demo and debug logging
 
     // Debug / Info Windows (e.g. About)
     // NOTE: Input::Is... est retiré d'ici car Input n'est pas statique

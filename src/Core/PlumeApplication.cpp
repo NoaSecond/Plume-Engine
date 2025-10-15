@@ -18,7 +18,14 @@
 #include <glm/gtc/matrix_transform.hpp>
 #ifdef PLUME_ENABLE_IMGUI
 #include <imgui.h>
+// imgui backend header naming changed in some versions (imgui_impl_sdl.h -> imgui_impl_sdl2.h)
+#if __has_include(<imgui_impl_sdl.h>)
 #include <imgui_impl_sdl.h>
+#elif __has_include(<imgui_impl_sdl2.h>)
+#include <imgui_impl_sdl2.h>
+#else
+#error "imgui SDL backend header not found (imgui_impl_sdl.h or imgui_impl_sdl2.h)"
+#endif
 #include <imgui_impl_opengl3.h>
 #include "../Editor/EditorLayer.h"
 #endif
@@ -138,8 +145,18 @@ void PlumeApplication::Init() {
         IMGUI_CHECKVERSION();
         ImGui::CreateContext();
         ImGuiIO& io = ImGui::GetIO(); (void)io;
+        // Enable docking and platform viewports so the editor can create a dockspace
         io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+        io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
         ImGui::StyleColorsDark();
+        // When viewports are enabled we want windows to have no rounding so they
+        // look native when moved outside the main application window.
+        if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
+            ImGuiStyle& style = ImGui::GetStyle();
+            style.WindowRounding = 0.0f;
+        }
+        // Store ImGui settings next to the executable for easier inspection
+        io.IniFilename = "imgui.ini";
         ImGui_ImplSDL2_InitForOpenGL(m_Window, m_GLContext);
         ImGui_ImplOpenGL3_Init("#version 330");
 
@@ -259,7 +276,6 @@ void PlumeApplication::Run() {
         }
         static int lastGuaranteed = -1;
         if (guaranteedDrawn != lastGuaranteed) {
-            std::cout << "Guaranteed backbuffer draw: meshes=" << guaranteedDrawn << std::endl;
             lastGuaranteed = guaranteedDrawn;
         }
     }
@@ -299,7 +315,6 @@ void PlumeApplication::Run() {
 
             auto modelView = m_ActiveScene->GetRegistry().view<TransformComponent, ModelComponent>();
             int drawnMeshes = 0;
-            std::cout << "Rendering to framebuffer..." << std::endl;
             for (auto entity : modelView) {
                 auto& transform = m_ActiveScene->GetRegistry().get<TransformComponent>(entity);
                 auto& modelComp = m_ActiveScene->GetRegistry().get<ModelComponent>(entity);
@@ -308,7 +323,7 @@ void PlumeApplication::Run() {
                 drawnMeshes += (int)modelComp.model->GetMeshes().size();
             }
             m_LastDrawnMeshCount = drawnMeshes;
-            std::cout << "Rendered meshes to framebuffer: " << drawnMeshes << std::endl;
+            // drawn mesh count updated for overlay
 
         // Unbind framebuffer -> return to default framebuffer
     m_EditorLayer->GetFramebuffer()->Unbind();
@@ -336,6 +351,18 @@ void PlumeApplication::Run() {
         // Render ImGui
         ImGui::Render();
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
+        // Update and render additional platform windows when viewports are enabled
+        ImGuiIO& _io = ImGui::GetIO();
+        if (_io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
+            // Backup current SDL context
+            SDL_Window* backup_current_window = SDL_GL_GetCurrentWindow();
+            SDL_GLContext backup_current_context = SDL_GL_GetCurrentContext();
+            ImGui::UpdatePlatformWindows();
+            ImGui::RenderPlatformWindowsDefault();
+            // Restore context
+            SDL_GL_MakeCurrent(backup_current_window, backup_current_context);
+        }
 #endif
 
         SDL_GL_SwapWindow(m_Window);
@@ -344,9 +371,15 @@ void PlumeApplication::Run() {
 
 void PlumeApplication::Shutdown() {
     // Les unique_ptr se désallouent automatiquement, plus besoin de 'delete'
-    SDL_GL_DeleteContext(m_GLContext);
-    SDL_DestroyWindow(m_Window);
-    SDL_Quit();
+        #ifdef PLUME_ENABLE_IMGUI
+            ImGui_ImplOpenGL3_Shutdown();
+            ImGui_ImplSDL2_Shutdown();
+            ImGui::DestroyContext();
+        #endif
+
+        SDL_GL_DeleteContext(m_GLContext);
+        SDL_DestroyWindow(m_Window);
+        SDL_Quit();
     std::cout << "Fermeture de Plume Engine." << std::endl;
 }
 

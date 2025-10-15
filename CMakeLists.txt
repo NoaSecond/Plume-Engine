@@ -98,6 +98,21 @@ if(PLUME_ENABLE_IMGUI)
     if(imgui_FOUND)
         message(STATUS "Found ImGui via vcpkg.")
         set(PLUME_IMGUI_LIB imgui::imgui)
+        # Ensure backend headers (imgui_impl_sdl.h) are present; some vcpkg ports don't install backends
+        find_path(IMGUI_IMPL_SDL_H imgui_impl_sdl.h HINTS "${VCPKG_ROOT}/installed/${VCPKG_TARGET_TRIPLET}/include")
+        if(NOT IMGUI_IMPL_SDL_H)
+            message(WARNING "ImGui found via vcpkg but backend headers (imgui_impl_sdl.h) are missing. Fetching ImGui sources for backends (matching vcpkg version v1.91.9).")
+                include(FetchContent)
+                FetchContent_Declare(
+                    imgui_backends
+                    GIT_REPOSITORY https://github.com/ocornut/imgui.git
+                    GIT_TAG v1.91.9
+                )
+            FetchContent_MakeAvailable(imgui_backends)
+            # Add the imconfig and backends include directories from fetched content
+            set(PLUME_IMGUI_BACKENDS_DIR ${imgui_backends_SOURCE_DIR}/backends)
+            list(APPEND PLUME_EXTRA_INCLUDE_DIRS ${PLUME_IMGUI_BACKENDS_DIR})
+        endif()
     else()
         message(WARNING "ImGui not found via vcpkg. Falling back to FetchContent.")
         include(FetchContent)
@@ -186,6 +201,26 @@ target_link_libraries(PlumeEngine
         stb
         entt
 )
+
+if(PLUME_ENABLE_IMGUI)
+    target_compile_definitions(PlumeEngine PRIVATE PLUME_ENABLE_IMGUI=1)
+endif()
+
+# If we fetched extra include dirs for ImGui backends, add them to the target
+if(PLUME_EXTRA_INCLUDE_DIRS)
+    target_include_directories(PlumeEngine PRIVATE ${PLUME_EXTRA_INCLUDE_DIRS})
+endif()
+
+# If we fetched ImGui backends via FetchContent (imgui_backends_SOURCE_DIR set),
+# compile the SDL2 + OpenGL3 backend sources into the target so the symbols are available.
+if(DEFINED imgui_backends_SOURCE_DIR)
+    message(STATUS "Adding ImGui backend sources from ${imgui_backends_SOURCE_DIR}/backends")
+    target_sources(PlumeEngine PRIVATE
+        ${imgui_backends_SOURCE_DIR}/backends/imgui_impl_sdl2.cpp
+        ${imgui_backends_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp
+    )
+    target_include_directories(PlumeEngine PRIVATE ${imgui_backends_SOURCE_DIR}/backends)
+endif()
 
 # ============================================================
 #  Informations finales
