@@ -6,4 +6,8 @@
   "copyright": "©2025 Noa Second. All rights reserved.",
   "author": "Noa Second",
   "comments": "Source code available at https://github.com/NoaSecond/Plume-Engine"
+  ,
+  "splash_path": "assets/icons/PlumeSplash.png",
+  "splash_duration_ms": 1500,
+  "splash_fade_ms": 300
 }
