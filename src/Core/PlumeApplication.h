@@ -36,4 +36,7 @@ private:
     // Le reste est géré par la scène et la caméra
     class Camera* m_Camera = nullptr; // On gardera un pointeur brut pour un accès rapide
     class Input* m_Input = nullptr;
+    bool m_RenderToFramebuffer = true;
+    int m_LastDrawnMeshCount = 0;
+    // (no temporary ignore flag anymore)
 };

@@ -28,6 +28,7 @@ void Model::loadModel(const std::string& path) {
         return;
     }
     m_Directory = path.substr(0, path.find_last_of('/'));
+    std::cout << "Model loaded: " << path << " (meshes approx: " << (scene ? scene->mNumMeshes : 0) << ")" << std::endl;
     processNode(scene->mRootNode, scene);
 }
 

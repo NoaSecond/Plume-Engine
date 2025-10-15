@@ -32,6 +32,7 @@ private:
     void DrawOutliner();
     void DrawContentBrowser();
     void DrawProperties();
+    void SetLastModelMeshCount(int count) { m_LastModelMeshCount = count; }
 
     SDL_Window* m_Window = nullptr;
     Scene* m_Scene = nullptr;
@@ -48,4 +49,6 @@ private:
     bool m_ShowOutliner = true;
     bool m_ShowContentBrowser = true;
     bool m_ShowProperties = true;
+    bool m_DockLayoutInitialized = false;
+    int m_LastModelMeshCount = 0;
 };

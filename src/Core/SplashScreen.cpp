@@ -78,7 +78,6 @@ void SplashScreen::Show(const std::string& imagePath, int durationMs, int fadeMs
 
     if (!pixels) {
         std::cerr << "SplashScreen: failed to load image '" << imagePath << "'" << std::endl;
-        SDL_Quit();
         return;
     }
 
@@ -107,7 +106,6 @@ void SplashScreen::Show(const std::string& imagePath, int durationMs, int fadeMs
     if (!win) {
         std::cerr << "SplashScreen: SDL_CreateWindow failed: " << SDL_GetError() << std::endl;
         stbi_image_free(pixels);
-        SDL_Quit();
         return;
     }
 
@@ -116,7 +114,6 @@ void SplashScreen::Show(const std::string& imagePath, int durationMs, int fadeMs
         std::cerr << "SplashScreen: SDL_GetWindowSurface failed: " << SDL_GetError() << std::endl;
         SDL_DestroyWindow(win);
         stbi_image_free(pixels);
-        SDL_Quit();
         return;
     }
 
@@ -127,7 +124,6 @@ void SplashScreen::Show(const std::string& imagePath, int durationMs, int fadeMs
         std::cerr << "SplashScreen: SDL_CreateRGBSurfaceFrom failed: " << SDL_GetError() << std::endl;
         SDL_DestroyWindow(win);
         stbi_image_free(pixels);
-        SDL_Quit();
         return;
     }
 
@@ -219,5 +215,4 @@ void SplashScreen::Show(const std::string& imagePath, int durationMs, int fadeMs
     SDL_FreeSurface(imgSurface);
     stbi_image_free(pixels);
     SDL_DestroyWindow(win);
-    SDL_Quit();
 }

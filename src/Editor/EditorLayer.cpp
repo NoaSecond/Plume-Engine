@@ -22,6 +22,7 @@ void EditorLayer::OnAttach() {
     m_Framebuffer = std::make_unique<Framebuffer>();
     m_Framebuffer->Create(m_ViewportWidth, m_ViewportHeight);
     RefreshAssets();
+    std::cout << "EditorLayer attached: framebuffer tex=" << m_Framebuffer->GetColorAttachment() << " size=" << m_ViewportWidth << "x" << m_ViewportHeight << std::endl;
 }
 
 void EditorLayer::OnDetach() {
@@ -102,6 +103,25 @@ void EditorLayer::DrawDockspace() {
     }
 
     ImGuiID dockspace_id = ImGui::GetID("MyDockSpace");
+    // Setup a default dock layout once
+    if (!m_DockLayoutInitialized) {
+        m_DockLayoutInitialized = true;
+        ImGui::DockBuilderRemoveNode(dockspace_id); // clear any previous layout
+        ImGui::DockBuilderAddNode(dockspace_id, ImGuiDockNodeFlags_DockSpace);
+        ImGui::DockBuilderSetNodeSize(dockspace_id, viewport->WorkSize);
+
+        ImGuiID dock_main_id = dockspace_id;
+        ImGuiID dock_id_right = ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Right, 0.25f, nullptr, &dock_main_id);
+        ImGuiID dock_id_bottom = ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Down, 0.20f, nullptr, &dock_main_id);
+
+        ImGui::DockBuilderDockWindow("Viewport", dock_main_id);
+        ImGui::DockBuilderDockWindow("Outliner", dock_id_right);
+        ImGui::DockBuilderDockWindow("Properties", dock_id_right);
+        ImGui::DockBuilderDockWindow("Content Browser", dock_id_bottom);
+
+        ImGui::DockBuilderFinish(dockspace_id);
+    }
+
     ImGui::DockSpace(dockspace_id, ImVec2(0.0f, 0.0f));
 
     ImGui::End();
@@ -124,6 +144,14 @@ void EditorLayer::DrawViewport() {
 
     GLuint tex = m_Framebuffer->GetColorAttachment();
     ImGui::Image((void*)(intptr_t)tex, avail, ImVec2(0,1), ImVec2(1,0));
+    // Debug overlay: show texture id and viewport size
+    ImGui::SetCursorScreenPos(ImGui::GetWindowPos() + ImVec2(8, 8));
+    ImGui::BeginChild("ViewportDebug", ImVec2(200, 50), false, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoInputs);
+    ImGui::Text("Tex: %u", tex);
+    ImGui::Text("Size: %u x %u", m_ViewportWidth, m_ViewportHeight);
+    ImGui::Text("Meshes drawn: %d", m_LastModelMeshCount);
+    ImGui::Text("F2: toggle render->framebuffer / backbuffer");
+    ImGui::EndChild();
 #endif
 #ifdef PLUME_ENABLE_IMGUI
     ImGui::End();

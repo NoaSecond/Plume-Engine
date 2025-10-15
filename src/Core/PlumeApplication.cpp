@@ -81,7 +81,10 @@ PlumeApplication::PlumeApplication() { Init(); }
 PlumeApplication::~PlumeApplication() { Shutdown(); }
 
 void PlumeApplication::Init() {
+    std::cout << "PlumeApplication::Init() start" << std::endl;
     if (SDL_Init(SDL_INIT_VIDEO) != 0) { std::cerr << "Erreur SDL_Init: " << SDL_GetError() << std::endl; m_IsRunning = false; return; }
+    // Flush any pending events that might have been left by the splash screen
+    SDL_FlushEvents(SDL_FIRSTEVENT, SDL_LASTEVENT);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
@@ -162,6 +165,8 @@ void PlumeApplication::Init() {
     lightEntity.AddComponent<LightComponent>();
     auto& lightTransform = lightEntity.GetComponent<TransformComponent>();
     lightTransform.Translation = glm::vec3(1.5f, 1.0f, 2.0f);
+
+    std::cout << "PlumeApplication::Init() end, m_IsRunning=" << (m_IsRunning ? "true" : "false") << std::endl;
 }
 
 void PlumeApplication::Run() {
@@ -169,6 +174,10 @@ void PlumeApplication::Run() {
         std::cerr << "PlumeApplication: initialization failed, exiting Run()." << std::endl;
         return;
     }
+    std::cout << "PlumeApplication: entering main loop" << std::endl;
+    // Ensure no stray SDL events (like SDL_QUIT from splash) remain queued
+    SDL_PumpEvents();
+    SDL_FlushEvents(SDL_FIRSTEVENT, SDL_LASTEVENT);
     std::unique_ptr<Shader> shader = std::make_unique<Shader>(vertexShaderSource, fragmentShaderSource);
     
     uint64_t lastFrameTime = SDL_GetPerformanceCounter();
@@ -181,7 +190,14 @@ void PlumeApplication::Run() {
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
             if (event.type == SDL_QUIT) { m_IsRunning = false; }
+            if (event.type == SDL_KEYDOWN && event.key.keysym.scancode == SDL_SCANCODE_ESCAPE) { m_IsRunning = false; }
             m_Input->Update(event);
+            // Forward events to editor layer (ImGui integration and editor input)
+#ifdef PLUME_ENABLE_IMGUI
+            if (m_EditorLayer) {
+                m_EditorLayer->OnEvent(event);
+            }
+#endif
         }
         // Show About dialog on F1
         if (m_Input->IsKeyPressed(SDL_SCANCODE_F1)) {
@@ -199,9 +215,58 @@ void PlumeApplication::Run() {
 
         m_Camera->Update(*m_Input, deltaTime);
 
+        // Toggle render target for debugging with F2
+        if (m_Input->IsKeyPressed(SDL_SCANCODE_F2)) {
+            m_RenderToFramebuffer = !m_RenderToFramebuffer;
+        }
+
+    // Guaranteed backbuffer draw: always render a basic scene to the window framebuffer
+    {
+        int winW, winH;
+        SDL_GetWindowSize(m_Window, &winW, &winH);
+        glViewport(0, 0, winW, winH);
+        glEnable(GL_DEPTH_TEST);
+        glClearColor(0.2f, 0.2f, 0.25f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        shader->Bind();
+        shader->UploadUniformMat4("u_View", m_Camera->GetViewMatrix());
+        shader->UploadUniformMat4("u_Projection", m_Camera->GetProjectionMatrix());
+        shader->UploadUniformVec3("u_ViewPos", m_Camera->GetPosition());
+
+        glm::vec3 lightPos;
+        glm::vec3 lightColor;
+        auto lightView = m_ActiveScene->GetRegistry().view<TransformComponent, LightComponent>();
+        for (auto entity : lightView) {
+            auto& transform = lightView.get<TransformComponent>(entity);
+            auto& light = lightView.get<LightComponent>(entity);
+            lightPos = transform.Translation;
+            lightColor = light.Color * light.Intensity;
+            break;
+        }
+        shader->UploadUniformVec3("u_LightPos", lightPos);
+        shader->UploadUniformVec3("u_LightColor", lightColor);
+
+        int guaranteedDrawn = 0;
+        auto modelView2 = m_ActiveScene->GetRegistry().view<TransformComponent, ModelComponent>();
+        for (auto entity : modelView2) {
+            auto& transform = m_ActiveScene->GetRegistry().get<TransformComponent>(entity);
+            auto& modelComp = m_ActiveScene->GetRegistry().get<ModelComponent>(entity);
+            shader->UploadUniformMat4("u_Model", transform.GetTransform());
+            modelComp.model->Draw(*shader);
+            guaranteedDrawn += (int)modelComp.model->GetMeshes().size();
+        }
+        static int lastGuaranteed = -1;
+        if (guaranteedDrawn != lastGuaranteed) {
+            std::cout << "Guaranteed backbuffer draw: meshes=" << guaranteedDrawn << std::endl;
+            lastGuaranteed = guaranteedDrawn;
+        }
+    }
+
     // If editor layer exists, render the scene into its framebuffer first
 #ifdef PLUME_ENABLE_IMGUI
-    if (m_EditorLayer && m_EditorLayer->GetFramebuffer()) {
+#ifdef PLUME_ENABLE_IMGUI
+    if (m_RenderToFramebuffer && m_EditorLayer && m_EditorLayer->GetFramebuffer()) {
             // Update camera projection based on viewport size
             auto [vw, vh] = m_EditorLayer->GetViewportSize();
             if (vw > 0 && vh > 0) {
@@ -233,15 +298,22 @@ void PlumeApplication::Run() {
             shader->UploadUniformVec3("u_LightColor", lightColor);
 
             auto modelView = m_ActiveScene->GetRegistry().view<TransformComponent, ModelComponent>();
+            int drawnMeshes = 0;
+            std::cout << "Rendering to framebuffer..." << std::endl;
             for (auto entity : modelView) {
                 auto& transform = m_ActiveScene->GetRegistry().get<TransformComponent>(entity);
                 auto& modelComp = m_ActiveScene->GetRegistry().get<ModelComponent>(entity);
                 shader->UploadUniformMat4("u_Model", transform.GetTransform());
                 modelComp.model->Draw(*shader);
+                drawnMeshes += (int)modelComp.model->GetMeshes().size();
             }
+            m_LastDrawnMeshCount = drawnMeshes;
+            std::cout << "Rendered meshes to framebuffer: " << drawnMeshes << std::endl;
 
         // Unbind framebuffer -> return to default framebuffer
-        m_EditorLayer->GetFramebuffer()->Unbind();
+    m_EditorLayer->GetFramebuffer()->Unbind();
+    // report meshes drawn for overlay
+    m_EditorLayer->SetLastModelMeshCount(m_LastDrawnMeshCount);
 
         // Reset viewport to window size for ImGui rendering
         int winW, winH;
@@ -274,12 +346,33 @@ void PlumeApplication::Run() {
             shader->UploadUniformVec3("u_LightColor", lightColor);
 
             auto modelView = m_ActiveScene->GetRegistry().view<TransformComponent, ModelComponent>();
+            int drawnMeshes = 0;
+            std::cout << "Rendering to backbuffer..." << std::endl;
             for (auto entity : modelView) {
                 auto& transform = m_ActiveScene->GetRegistry().get<TransformComponent>(entity);
                 auto& modelComp = m_ActiveScene->GetRegistry().get<ModelComponent>(entity);
                 shader->UploadUniformMat4("u_Model", transform.GetTransform());
                 modelComp.model->Draw(*shader);
+                drawnMeshes += (int)modelComp.model->GetMeshes().size();
             }
+            m_LastDrawnMeshCount = drawnMeshes;
+            std::cout << "Rendered meshes to backbuffer: " << drawnMeshes << std::endl;
+            if (m_EditorLayer) m_EditorLayer->SetLastModelMeshCount(m_LastDrawnMeshCount);
+        }
+#else
+    if (true) {
+        // Editor/ImGui disabled: render to default backbuffer
+        auto modelView = m_ActiveScene->GetRegistry().view<TransformComponent, ModelComponent>();
+        int drawnMeshes = 0;
+        for (auto entity : modelView) {
+            auto& transform = m_ActiveScene->GetRegistry().get<TransformComponent>(entity);
+            auto& modelComp = m_ActiveScene->GetRegistry().get<ModelComponent>(entity);
+            shader->UploadUniformMat4("u_Model", transform.GetTransform());
+            modelComp.model->Draw(*shader);
+            drawnMeshes += (int)modelComp.model->GetMeshes().size();
+        }
+        m_LastDrawnMeshCount = drawnMeshes;
+#endif
         }
 
 
@@ -299,6 +392,7 @@ void PlumeApplication::Run() {
 #endif
 
         SDL_GL_SwapWindow(m_Window);
+    // Normal operation: SDL_QUIT is handled in the event loop
     }
 }
 

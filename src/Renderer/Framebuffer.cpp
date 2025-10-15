@@ -39,6 +39,7 @@ void Framebuffer::Create(uint32_t width, uint32_t height) {
     }
 
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    std::cout << "Framebuffer created: id=" << m_RendererID << " tex=" << m_ColorAttachment << " size=" << m_Width << "x" << m_Height << std::endl;
 }
 
 void Framebuffer::Bind() {
