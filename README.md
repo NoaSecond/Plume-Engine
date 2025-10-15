@@ -219,6 +219,15 @@ cmake --build build --config Release --target PlumeEngine
 .\build\Release\PlumeEngine.exe  # Windows (Visual Studio generated layout)
 ```
 
+### Command-line options
+
+You can pass `--no-splash` (or `-n`) to skip the splash screen when launching the engine:
+
+```powershell
+.\build\Release\PlumeEngine.exe --no-splash
+.\build\Release\PlumeEngine.exe -n
+```
+
 **Windows Example (Visual Studio 2022, x64):**
 ```powershell
 # Configure with explicit generator and architecture and vcpkg toolchain
