@@ -24,6 +24,9 @@ private:
     SDL_GLContext m_GLContext = nullptr;
     bool m_IsRunning = true;
 
+    // Cache the current relative mouse mode state to avoid redundant SDL calls
+    bool m_RelativeMouseEnabled = false;
+
     // NOUVEAU : L'application possède maintenant une scène active
     std::unique_ptr<Scene> m_ActiveScene;
 

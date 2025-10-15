@@ -7,27 +7,34 @@
 #include <fstream>
 #include <sstream>
 #include <algorithm>
+#include <regex>
 // Simple JSON parsing helper (we avoid adding a dependency on jsoncpp)
 static std::string ExtractJsonString(const std::string& src, const std::string& key) {
-    std::string pattern = "\"" + key + "\"\s*:\s*\"";
-    size_t pos = src.find(pattern);
-    if (pos == std::string::npos) return std::string();
-    pos += pattern.size();
-    size_t end = src.find('"', pos);
-    if (end == std::string::npos) return std::string();
-    return src.substr(pos, end - pos);
+    try {
+        // regex: "key"\s*:\s*"([^"]*)"
+        std::regex re(std::string("\"") + key + "\"\\s*:\\s*\"([^\"]*)\"");
+        std::smatch m;
+        if (std::regex_search(src, m, re) && m.size() >= 2) {
+            return m[1].str();
+        }
+    } catch (const std::exception&) {
+        // fall through
+    }
+    return std::string();
 }
 
 static int ExtractJsonInt(const std::string& src, const std::string& key, int defaultVal) {
-    std::string pattern = "\"" + key + "\"\s*:\s*";
-    size_t pos = src.find(pattern);
-    if (pos == std::string::npos) return defaultVal;
-    pos += pattern.size();
-    // read integer
-    int sign = 1; if (src[pos] == '-') { sign = -1; pos++; }
-    int val = 0; bool found = false;
-    while (pos < src.size() && isdigit((unsigned char)src[pos])) { found = true; val = val * 10 + (src[pos] - '0'); pos++; }
-    return found ? val * sign : defaultVal;
+    try {
+        // regex: "key"\s*:\s*(-?\d+)
+        std::regex re(std::string("\"") + key + "\"\\s*:\\s*(-?\\d+)");
+        std::smatch m;
+        if (std::regex_search(src, m, re) && m.size() >= 2) {
+            try { return std::stoi(m[1].str()); } catch (...) { }
+        }
+    } catch (const std::exception&) {
+        // fall through
+    }
+    return defaultVal;
 }
 
 static int ClampInt(int v, int lo, int hi) { return std::max(lo, std::min(hi, v)); }

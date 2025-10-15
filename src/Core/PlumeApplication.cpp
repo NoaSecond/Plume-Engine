@@ -109,7 +109,8 @@ void PlumeApplication::Init() {
     if (!m_GLContext) { std::cerr << "Erreur SDL_GL_CreateContext: " << SDL_GetError() << std::endl; m_IsRunning = false; return; }
     if (!gladLoadGLLoader((GLADloadproc)SDL_GL_GetProcAddress)) { std::cerr << "Erreur gladLoadGLLoader" << std::endl; m_IsRunning = false; return; }
     glEnable(GL_DEPTH_TEST);
-    SDL_SetRelativeMouseMode(SDL_TRUE);
+    // Do not force relative mouse mode at init. We'll toggle it each frame
+    // depending on whether the user holds the right mouse button for camera control.
     
     m_Input = new Input();
     m_Camera = new Camera(45.0f, (float)WINDOW_WIDTH / (float)WINDOW_HEIGHT, 0.1f, 100.0f);
@@ -157,6 +158,16 @@ void PlumeApplication::Run() {
         if (m_Input->IsKeyPressed(SDL_SCANCODE_F1)) {
             ShowAbout();
         }
+        // Toggle relative mouse mode (hides cursor and provides relative motion)
+        // when the right mouse button is held for camera look.
+        // If right button is pressed -> enable relative mouse mode, else disable it.
+        bool wantRelative = m_Input->IsMouseButtonPressed(SDL_BUTTON_RIGHT);
+        if (wantRelative != m_RelativeMouseEnabled) {
+            // Only call SDL when the desired state changes
+            SDL_SetRelativeMouseMode(wantRelative ? SDL_TRUE : SDL_FALSE);
+            m_RelativeMouseEnabled = wantRelative;
+        }
+
         m_Camera->Update(*m_Input, deltaTime);
         
         // --- Rendu de la Scène ---
