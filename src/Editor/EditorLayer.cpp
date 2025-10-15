@@ -129,7 +129,7 @@ void EditorLayer::DrawDockspace() {
             ImGui::MenuItem("Viewport", nullptr, &m_ShowViewport);
             ImGui::MenuItem("Outliner", nullptr, &m_ShowOutliner);
             ImGui::MenuItem("Content Browser", nullptr, &m_ShowContentBrowser);
-            ImGui::MenuItem("Properties", nullptr, &m_ShowProperties);
+            ImGui::MenuItem("Details", nullptr, &m_ShowDetails);
             // Option de réinitialisation du layout
             if (ImGui::MenuItem("Reset Layout")) {
                 ResetDockLayout();
@@ -148,14 +148,19 @@ void EditorLayer::DrawDockspace() {
         ImGui::DockBuilderAddNode(dockspace_id, ImGuiDockNodeFlags_DockSpace);
         ImGui::DockBuilderSetNodeSize(dockspace_id, viewport->WorkSize);
 
-        ImGuiID dock_main_id = dockspace_id;
-        ImGuiID dock_id_right = ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Right, 0.25f, nullptr, &dock_main_id);
-        ImGuiID dock_id_bottom = ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Down, 0.20f, nullptr, &dock_main_id);
+    ImGuiID dock_main_id = dockspace_id;
+    // Split right side from main (25% width)
+    ImGuiID dock_id_right = ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Right, 0.25f, nullptr, &dock_main_id);
+    // Split the right node vertically into top (Outliner) and bottom (Details)
+    ImGuiID dock_id_right_top = dock_id_right;
+    ImGuiID dock_id_right_bottom = ImGui::DockBuilderSplitNode(dock_id_right_top, ImGuiDir_Down, 0.5f, nullptr, &dock_id_right_top);
+    // Bottom dock for content browser (split the main area downwards)
+    ImGuiID dock_id_bottom = ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Down, 0.20f, nullptr, &dock_main_id);
 
-        ImGui::DockBuilderDockWindow("Viewport", dock_main_id);
-        ImGui::DockBuilderDockWindow("Outliner", dock_id_right);
-        ImGui::DockBuilderDockWindow("Properties", dock_id_right);
-        ImGui::DockBuilderDockWindow("Content Browser", dock_id_bottom);
+    ImGui::DockBuilderDockWindow("Viewport", dock_main_id);
+    ImGui::DockBuilderDockWindow("Outliner", dock_id_right_top);
+    ImGui::DockBuilderDockWindow("Details", dock_id_right_bottom);
+    ImGui::DockBuilderDockWindow("Content Browser", dock_id_bottom);
 
         ImGui::DockBuilderFinish(dockspace_id);
     }
@@ -212,7 +217,11 @@ void EditorLayer::DrawOutliner() {
             auto& tag = entity.GetComponent<TagComponent>().Tag;
             bool isSelected = m_SelectedEntity == entityID;
             if (ImGui::Selectable(tag.c_str(), isSelected)) {
+                // Select the entity
                 m_SelectedEntity = entityID;
+                // Ensure the Properties (Details) panel is visible and focused so details are shown immediately
+                m_ShowDetails = true;
+                ImGui::SetWindowFocus("Details");
             }
             if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) {
                 // TODO: Context Menu
@@ -285,10 +294,10 @@ void EditorLayer::DrawContentBrowser() {
 #endif
 }
 
-void EditorLayer::DrawProperties() {
+void EditorLayer::DrawDetails() {
 #ifdef PLUME_ENABLE_IMGUI
-    if (!m_ShowProperties) return;
-    ImGui::Begin("Properties");
+    if (!m_ShowDetails) return;
+    ImGui::Begin("Details");
     
     // FIX C2065/C2079: Composants maintenant inclus
     if (m_SelectedEntity != entt::null) {
@@ -351,7 +360,7 @@ void EditorLayer::OnImGuiRender() {
     DrawViewport();
     DrawOutliner();
     DrawContentBrowser();
-    DrawProperties();
+    DrawDetails();
 
     // Removed temporary demo and debug logging
 

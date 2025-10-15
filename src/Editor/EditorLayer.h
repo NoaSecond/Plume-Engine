@@ -38,7 +38,7 @@ private:
     void DrawViewport();
     void DrawOutliner();
     void DrawContentBrowser();
-    void DrawProperties();
+    void DrawDetails();
     void RefreshAssets();
     // La fonction SetLastModelMeshCount a été déplacée en public.
 
@@ -53,7 +53,7 @@ private:
     bool m_ShowViewport = true;
     bool m_ShowOutliner = true;
     bool m_ShowContentBrowser = true;
-    bool m_ShowProperties = true;
+    bool m_ShowDetails = true;
     bool m_DockLayoutInitialized = false;
     int m_LastModelMeshCount = 0;
 };
