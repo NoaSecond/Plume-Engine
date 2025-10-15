@@ -4,7 +4,7 @@
 int main(int argc, char* argv[]) {
     // Simple CLI parsing for splash control
     // By default disable the splash to avoid platform-specific window teardown issues.
-    bool noSplash = true;
+    bool noSplash = false;
     for (int i = 1; i < argc; ++i) {
         std::string a(argv[i]);
         if (a == "--no-splash" || a == "-n") { noSplash = true; }

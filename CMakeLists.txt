@@ -8,7 +8,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 # Option to enable ImGui-based editor
-option(PLUME_ENABLE_IMGUI "Enable ImGui-based editor" OFF)
+option(PLUME_ENABLE_IMGUI "Enable ImGui-based editor" ON) # MODIFIÉ: OFF -> ON
 if(PLUME_ENABLE_IMGUI)
   message(STATUS "PLUME_ENABLE_IMGUI requested; ImGui will be searched for below.")
 else()
@@ -29,7 +29,8 @@ include(FetchContent)
 # Helper: function to vendor ImGui via FetchContent when find_package(imgui) fails
 function(vendor_imgui_if_needed)
   if(NOT TARGET imgui::imgui)
-    message(STATUS "Config: imgui::imgui not found, FetchContent'ing Dear ImGui...")
+    message(STATUS "Config: imgui::imgui not found, FetchContent'ing 
+Dear ImGui...")
     FetchContent_Declare(
       dear_imgui
       GIT_REPOSITORY https://github.com/ocornut/imgui.git
@@ -46,7 +47,8 @@ function(vendor_imgui_if_needed)
       ${dear_imgui_SOURCE_DIR}/imgui_demo.cpp
     )
     target_include_directories(imgui_static PUBLIC ${dear_imgui_SOURCE_DIR})
-    add_library(imgui::imgui ALIAS imgui_static)
+  
+  add_library(imgui::imgui ALIAS imgui_static)
   else()
     message(STATUS "imgui::imgui target already available from find_package or previous vendor step")
   endif()
@@ -56,7 +58,7 @@ if(PLUME_ENABLE_IMGUI)
   find_package(imgui CONFIG)
   if(NOT imgui_FOUND)
     # Prefer a local vendored copy inside src/ThirdParty/imgui/ if present.
-    if(EXISTS ${CMAKE_SOURCE_DIR}/src/ThirdParty/imgui/imgui.h)
+if(EXISTS ${CMAKE_SOURCE_DIR}/src/ThirdParty/imgui/imgui.h)
       message(STATUS "Found local vendored ImGui under src/ThirdParty/imgui. Creating imgui::imgui target from local sources.")
       add_library(imgui_static STATIC
         ${CMAKE_SOURCE_DIR}/src/ThirdParty/imgui/imgui.cpp
@@ -68,7 +70,8 @@ if(PLUME_ENABLE_IMGUI)
       target_include_directories(imgui_static PUBLIC ${CMAKE_SOURCE_DIR}/src/ThirdParty/imgui)
       add_library(imgui::imgui ALIAS imgui_static)
       set(imgui_FOUND TRUE)
-      message(STATUS "Using local vendored ImGui")
+     
+ message(STATUS "Using local vendored ImGui")
     else()
       message(STATUS "ImGui not found via find_package(imgui). Attempting to vendor via FetchContent...")
       vendor_imgui_if_needed()
@@ -76,7 +79,9 @@ if(PLUME_ENABLE_IMGUI)
         set(imgui_FOUND TRUE)
         message(STATUS "ImGui vendored successfully via FetchContent")
       else()
-        message(WARNING "Failed to vendor ImGui automatically. Ensure imgui is installed via vcpkg or vendor a local copy at src/ThirdParty/imgui. Disabling PLUME_ENABLE_IMGUI.")
+        message(WARNING "Failed to vendor ImGui automatically.
+Ensure imgui is installed via vcpkg or vendor a local copy at src/ThirdParty/imgui.
+Disabling PLUME_ENABLE_IMGUI.")
         set(PLUME_ENABLE_IMGUI OFF CACHE BOOL "Enable ImGui-based editor" FORCE)
       endif()
     endif()
@@ -103,7 +108,8 @@ FetchContent_MakeAvailable(entt)
 FetchContent_Declare( # <-- NOUVEAU BLOC POUR STB
   stb
   GIT_REPOSITORY https://github.com/nothings/stb.git
-  GIT_TAG        master # stb n'a pas de "releases", on utilise la version principale
+  GIT_TAG    
+    master # stb n'a pas de "releases", on utilise la version principale
 )
 FetchContent_MakeAvailable(stb)
 # --- FIN DU BLOC ---
@@ -130,7 +136,8 @@ set(PLUME_FILE_VERSION_PATCH 0)
 set(PLUME_FILE_VERSION_BUILD 0)
 
 set(PLUME_FILE_DESCRIPTION "A modern, lightweight 3D game engine written in C++ with multi-backend rendering architecture.")
-set(PLUME_PRODUCT_NAME "Plume Engine")
+set(PLUME_PRODUCT_NAME 
+"Plume Engine")
 set(PLUME_COMPANY_NAME "Noa Second")
 set(PLUME_LEGAL_COPYRIGHT "©2025 Noa Second. All rights reserved.")
 set(PLUME_INTERNAL_NAME "PlumeEngine")
@@ -155,7 +162,8 @@ if(EXISTS ${PLUME_META_JSON})
   read_json_value("product_name" PLUME_JSON_PRODUCT_NAME)
   read_json_value("version" PLUME_JSON_VERSION)
   read_json_value("description" PLUME_JSON_DESCRIPTION)
-  read_json_value("company" PLUME_JSON_COMPANY)
+  
+read_json_value("company" PLUME_JSON_COMPANY)
   read_json_value("copyright" PLUME_JSON_COPYRIGHT)
   read_json_value("author" PLUME_JSON_AUTHOR)
   read_json_value("comments" PLUME_JSON_COMMENTS)
@@ -182,7 +190,8 @@ if(EXISTS ${PLUME_META_JSON})
     list(LENGTH _ver_parts _ver_count)
     if(_ver_count GREATER 0)
       list(GET _ver_parts 0 PLUME_FILE_VERSION_MAJOR)
-    endif()
+ 
+   endif()
     if(_ver_count GREATER 1)
       list(GET _ver_parts 1 PLUME_FILE_VERSION_MINOR)
     endif()
@@ -206,7 +215,8 @@ string(REPLACE "," "." PLUME_PRODUCT_VERSION_STR "${PLUME_PRODUCT_VERSION}")
 
 # Generate PlumeVersion.h from template and add generated include dir
 configure_file(${CMAKE_SOURCE_DIR}/src/Version/PlumeVersion.h.in
-               ${CMAKE_BINARY_DIR}/generated/PlumeVersion.h @ONLY)
+      
+         ${CMAKE_BINARY_DIR}/generated/PlumeVersion.h @ONLY)
 target_include_directories(PlumeEngine PRIVATE ${CMAKE_BINARY_DIR}/generated)
 
 # Lier toutes les bibliothèques
@@ -229,7 +239,7 @@ target_include_directories(PlumeEngine PRIVATE ${CMAKE_SOURCE_DIR}/src/ThirdPart
 
 if(PLUME_ENABLE_IMGUI)
   # Vendored backends (SDL2 + OpenGL3) - compile them into the executable.
-  target_sources(PlumeEngine PRIVATE
+target_sources(PlumeEngine PRIVATE
     ${CMAKE_SOURCE_DIR}/src/ThirdParty/imgui_backends/imgui_impl_sdl2.cpp
     ${CMAKE_SOURCE_DIR}/src/ThirdParty/imgui_backends/imgui_impl_opengl3.cpp
   )
@@ -248,7 +258,8 @@ endif()
 add_custom_command(TARGET PlumeEngine POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
     ${CMAKE_SOURCE_DIR}/assets $<TARGET_FILE_DIR:PlumeEngine>/assets
-    COMMENT "Copying assets to build directory"
+    
+COMMENT "Copying assets to build directory"
 )
 
 # Copy runtime DLLs from vcpkg installed tree (Windows) to output directory
@@ -256,7 +267,8 @@ if(WIN32)
   # Option to disable vcpkg applocal invocations (some systems don't have pwsh.exe)
   option(PLUME_VCPKG_APPLOCAL "Run vcpkg applocal helper to copy runtime DLLs" OFF)
 
-  # Common vcpkg install root and triplet; allow override via VCPKG_ROOT or VCPKG_TARGET_TRIPLET
+  # Common vcpkg install root and triplet;
+  # allow override via VCPKG_ROOT or VCPKG_TARGET_TRIPLET # FIX DE LA SYNTAXE
   if(NOT DEFINED VCPKG_ROOT)
     set(VCPKG_ROOT "C:/vcpkg")
   endif()
@@ -274,7 +286,8 @@ if(WIN32)
       COMMENT "Copying vcpkg runtime DLLs to build output"
     )
   else()
-    message(STATUS "vcpkg bin dir not found: ${VCPKG_BIN_DIR}. If runtime DLLs are missing at runtime, set VCPKG_ROOT or copy required DLLs manually.")
+    message(STATUS 
+"vcpkg bin dir not found: ${VCPKG_BIN_DIR}. If runtime DLLs are missing at runtime, set VCPKG_ROOT or copy required DLLs manually.")
   endif()
 endif()
 
@@ -288,7 +301,8 @@ if(WIN32)
   # --- Version / metadata variables (defaults, overrideable via -D on CMake configure) ---
   # Generate a .rc in the build directory based on the template in src/Resources
   configure_file(${CMAKE_SOURCE_DIR}/src/Resources/PlumeEngine.rc.in
-           ${CMAKE_BINARY_DIR}/PlumeEngine.rc @ONLY)
+    
+       ${CMAKE_BINARY_DIR}/PlumeEngine.rc @ONLY)
 
   # Add the generated .rc to the executable target so it gets compiled and linked
   target_sources(PlumeEngine PRIVATE ${CMAKE_BINARY_DIR}/PlumeEngine.rc)
