@@ -227,6 +227,20 @@ void PlumeApplication::Run() {
         bool wantRelative = m_Input->IsMouseButtonPressed(SDL_BUTTON_RIGHT);
         if (wantRelative != m_RelativeMouseEnabled) {
             // Only call SDL when the desired state changes
+            if (wantRelative) {
+                // Save current mouse position so we can restore it when leaving relative mode
+                int mx, my;
+                SDL_GetMouseState(&mx, &my);
+                m_SavedMouseX = mx;
+                m_SavedMouseY = my;
+                m_HasSavedMousePos = true;
+            } else {
+                // We're leaving relative mode: restore the cursor to the saved position
+                if (m_HasSavedMousePos) {
+                    SDL_WarpMouseInWindow(m_Window, m_SavedMouseX, m_SavedMouseY);
+                    m_HasSavedMousePos = false;
+                }
+            }
             SDL_SetRelativeMouseMode(wantRelative ? SDL_TRUE : SDL_FALSE);
             m_RelativeMouseEnabled = wantRelative;
         }

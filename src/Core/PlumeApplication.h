@@ -37,6 +37,12 @@ private:
     // Cache the current relative mouse mode state to avoid redundant SDL calls
     bool m_RelativeMouseEnabled = false;
 
+    // Sauvegarde de la position du curseur avant d'activer le mode relatif
+    // pour pouvoir la restaurer au relâchement du bouton droit.
+    int m_SavedMouseX = 0;
+    int m_SavedMouseY = 0;
+    bool m_HasSavedMousePos = false;
+
     // NOUVEAU : L'application possède maintenant une scène active
     std::unique_ptr<Scene> m_ActiveScene;
 
