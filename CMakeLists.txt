@@ -57,31 +57,34 @@ if(PLUME_ENABLE_IMGUI)
   # Try to find ImGui (vcpkg port installs cmake config)
   find_package(imgui CONFIG)
   if(NOT imgui_FOUND)
-    # Prefer a local vendored copy inside src/ThirdParty/imgui/ if present.
-if(EXISTS ${CMAKE_SOURCE_DIR}/src/ThirdParty/imgui/imgui.h)
-      message(STATUS "Found local vendored ImGui under src/ThirdParty/imgui. Creating imgui::imgui target from local sources.")
-      add_library(imgui_static STATIC
-        ${CMAKE_SOURCE_DIR}/src/ThirdParty/imgui/imgui.cpp
-        ${CMAKE_SOURCE_DIR}/src/ThirdParty/imgui/imgui_draw.cpp
-        ${CMAKE_SOURCE_DIR}/src/ThirdParty/imgui/imgui_tables.cpp
-        ${CMAKE_SOURCE_DIR}/src/ThirdParty/imgui/imgui_widgets.cpp
-        ${CMAKE_SOURCE_DIR}/src/ThirdParty/imgui/imgui_demo.cpp
-      )
-      target_include_directories(imgui_static PUBLIC ${CMAKE_SOURCE_DIR}/src/ThirdParty/imgui)
-      add_library(imgui::imgui ALIAS imgui_static)
+    # Prefer system-installed / vcpkg imgui via find_package. If not available,
+    # attempt to vendor Dear ImGui via FetchContent as a fallback. We intentionally
+    # avoid preferring a local `src/ThirdParty/imgui` folder here so projects can
+    # use the platform package manager (vcpkg) by default.
+    message(STATUS "ImGui not found via find_package(imgui). Attempting to vendor via FetchContent as a fallback...")
+    vendor_imgui_if_needed()
+    if(TARGET imgui::imgui)
       set(imgui_FOUND TRUE)
-     
- message(STATUS "Using local vendored ImGui")
+      message(STATUS "ImGui vendored successfully via FetchContent")
     else()
-      message(STATUS "ImGui not found via find_package(imgui). Attempting to vendor via FetchContent...")
-      vendor_imgui_if_needed()
-      if(TARGET imgui::imgui)
+      # If FetchContent failed, check for a local vendored copy as a last resort
+      if(EXISTS ${CMAKE_SOURCE_DIR}/src/ThirdParty/imgui/imgui.h)
+        message(STATUS "Falling back to local vendored ImGui under src/ThirdParty/imgui.")
+        add_library(imgui_static STATIC
+          ${CMAKE_SOURCE_DIR}/src/ThirdParty/imgui/imgui.cpp
+          ${CMAKE_SOURCE_DIR}/src/ThirdParty/imgui/imgui_draw.cpp
+          ${CMAKE_SOURCE_DIR}/src/ThirdParty/imgui/imgui_tables.cpp
+          ${CMAKE_SOURCE_DIR}/src/ThirdParty/imgui/imgui_widgets.cpp
+          ${CMAKE_SOURCE_DIR}/src/ThirdParty/imgui/imgui_demo.cpp
+        )
+        target_include_directories(imgui_static PUBLIC ${CMAKE_SOURCE_DIR}/src/ThirdParty/imgui)
+        add_library(imgui::imgui ALIAS imgui_static)
         set(imgui_FOUND TRUE)
-        message(STATUS "ImGui vendored successfully via FetchContent")
+        message(STATUS "Using local vendored ImGui")
       else()
-        message(WARNING "Failed to vendor ImGui automatically.
-Ensure imgui is installed via vcpkg or vendor a local copy at src/ThirdParty/imgui.
-Disabling PLUME_ENABLE_IMGUI.")
+        message(WARNING "Failed to find or vendor ImGui automatically.")
+        message(WARNING "Install imgui via vcpkg or add a local copy to src/ThirdParty/imgui to enable the editor.")
+        message(WARNING "Disabling PLUME_ENABLE_IMGUI.")
         set(PLUME_ENABLE_IMGUI OFF CACHE BOOL "Enable ImGui-based editor" FORCE)
       endif()
     endif()
@@ -233,25 +236,32 @@ if(PLUME_ENABLE_IMGUI AND imgui_FOUND)
   target_link_libraries(PlumeEngine PRIVATE imgui::imgui)
 endif()
 
-# If ImGui backends were vendored in the tree, add their include dir and
-# compile the backend implementation files when the editor is enabled.
-target_include_directories(PlumeEngine PRIVATE ${CMAKE_SOURCE_DIR}/src/ThirdParty/imgui_backends)
-
-if(PLUME_ENABLE_IMGUI)
-  # Vendored backends (SDL2 + OpenGL3) - compile them into the executable.
-target_sources(PlumeEngine PRIVATE
-    ${CMAKE_SOURCE_DIR}/src/ThirdParty/imgui_backends/imgui_impl_sdl2.cpp
-    ${CMAKE_SOURCE_DIR}/src/ThirdParty/imgui_backends/imgui_impl_opengl3.cpp
-  )
-  # If we created/found an imgui target, propagate its include dirs to our target so headers resolve
-  if(TARGET imgui::imgui)
-    get_target_property(_imgui_includes imgui::imgui INTERFACE_INCLUDE_DIRECTORIES)
-    if(_imgui_includes)
-      target_include_directories(PlumeEngine PRIVATE ${_imgui_includes})
+# If local ImGui backends were vendored in the tree, add their include dir and
+# compile the backend implementation files only when they actually exist. This
+# allows removing the `src/ThirdParty` folder entirely when using vcpkg.
+if(EXISTS "${CMAKE_SOURCE_DIR}/src/ThirdParty/imgui_backends")
+  target_include_directories(PlumeEngine PRIVATE ${CMAKE_SOURCE_DIR}/src/ThirdParty/imgui_backends)
+  if(PLUME_ENABLE_IMGUI)
+    set(_imgui_backend_sources "")
+    if(EXISTS "${CMAKE_SOURCE_DIR}/src/ThirdParty/imgui_backends/imgui_impl_sdl2.cpp")
+      list(APPEND _imgui_backend_sources ${CMAKE_SOURCE_DIR}/src/ThirdParty/imgui_backends/imgui_impl_sdl2.cpp)
     endif()
-    # Link to the imgui target
-    target_link_libraries(PlumeEngine PRIVATE imgui::imgui)
+    if(EXISTS "${CMAKE_SOURCE_DIR}/src/ThirdParty/imgui_backends/imgui_impl_opengl3.cpp")
+      list(APPEND _imgui_backend_sources ${CMAKE_SOURCE_DIR}/src/ThirdParty/imgui_backends/imgui_impl_opengl3.cpp)
+    endif()
+    if(_imgui_backend_sources)
+      target_sources(PlumeEngine PRIVATE ${_imgui_backend_sources})
+    endif()
   endif()
+endif()
+if(PLUME_ENABLE_IMGUI AND TARGET imgui::imgui)
+  # If we created/found an imgui target, propagate its include dirs to our target so headers resolve
+  get_target_property(_imgui_includes imgui::imgui INTERFACE_INCLUDE_DIRECTORIES)
+  if(_imgui_includes)
+    target_include_directories(PlumeEngine PRIVATE ${_imgui_includes})
+  endif()
+  # Link to the imgui target
+  target_link_libraries(PlumeEngine PRIVATE imgui::imgui)
 endif()
 
 # Copier les assets dans le dossier de build après la compilation

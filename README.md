@@ -157,7 +157,10 @@ vcpkg install glfw3 glad glm assimp spdlog stb entt
 ### Optional Dependencies
 
 ```bash
-vcpkg install imgui[glfw-binding,opengl3-binding]  # Debug UI
+# Debug UI (ImGui)
+vcpkg install imgui[glfw-binding,opengl3-binding]  # Debug UI (legacy name)
+vcpkg install imgui[core,opengl3-binding,docking-experimental]:x64-windows  # recommended explicit features/triplet
+
 vcpkg install yaml-cpp  # Scene serialization
 ```
 
@@ -197,7 +200,17 @@ cd Plume-Engine
 # Core dependencies (required)
 vcpkg install glfw3 glad glm assimp spdlog stb entt
 
-# Optional: Debug UI
+# Optional: Debug UI (recommended to install explicit features and triplet on Windows)
+# Example (Windows powershell):
+#
+# git clone https://github.com/microsoft/vcpkg.git C:\vcpkg
+# C:\vcpkg\bootstrap-vcpkg.bat
+# C:\vcpkg\vcpkg.exe install imgui[core,opengl3-binding,docking-experimental]:x64-windows
+#
+# Configure CMake with the vcpkg toolchain file when generating the build:
+#
+# cmake -S . -B build -DCMAKE_TOOLCHAIN_FILE=C:\vcpkg\scripts\buildsystems\vcpkg.cmake -DPLUME_ENABLE_IMGUI=ON
+
 vcpkg install imgui[glfw-binding,opengl3-binding]
 ```
 

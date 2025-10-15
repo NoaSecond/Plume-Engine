@@ -8,6 +8,11 @@
 struct SDL_Window;
 typedef void* SDL_GLContext;
 
+// Forward declarations
+class EditorLayer; 
+class Camera;
+class Input;
+
 class PlumeApplication {
 public:
     PlumeApplication();
@@ -30,12 +35,12 @@ private:
     // NOUVEAU : L'application possède maintenant une scène active
     std::unique_ptr<Scene> m_ActiveScene;
 
-    // Editor layer for ImGui-based editor UI
-    class EditorLayer* m_EditorLayer = nullptr;
+    // Editor layer (MODIFIÉ: utilise unique_ptr)
+    std::unique_ptr<EditorLayer> m_EditorLayer;
 
-    // Le reste est géré par la scène et la caméra
-    class Camera* m_Camera = nullptr; // On gardera un pointeur brut pour un accès rapide
-    class Input* m_Input = nullptr;
+    // Le reste est géré par la scène et la caméra (MODIFIÉ: utilise unique_ptr)
+    std::unique_ptr<Camera> m_Camera;
+    std::unique_ptr<Input> m_Input;
     bool m_RenderToFramebuffer = true;
     int m_LastDrawnMeshCount = 0;
     // (no temporary ignore flag anymore)

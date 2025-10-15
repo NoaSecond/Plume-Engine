@@ -1,6 +1,6 @@
 // src/Core/PlumeApplication.cpp
 #include "PlumeApplication.h"
-#include "PlumeVersion.h"
+#include "PlumeVersion.h" // FIX C2065
 #include <iostream>
 #include <glad/glad.h>
 #include <SDL2/SDL.h>
@@ -129,8 +129,9 @@ void PlumeApplication::Init() {
     // Do not force relative mouse mode at init. We'll toggle it each frame
     // depending on whether the user holds the right mouse button for camera control.
     
-    m_Input = new Input();
-    m_Camera = new Camera(45.0f, (float)WINDOW_WIDTH / (float)WINDOW_HEIGHT, 0.1f, 100.0f);
+    // FIX C2440: Utilisation de std::make_unique pour les unique_ptr
+    m_Input = std::make_unique<Input>();
+    m_Camera = std::make_unique<Camera>(45.0f, (float)WINDOW_WIDTH / (float)WINDOW_HEIGHT, 0.1f, 100.0f);
     m_ActiveScene = std::make_unique<Scene>();
     #ifdef PLUME_ENABLE_IMGUI
         // --- IMGUI INITIALIZATION ---
@@ -143,7 +144,7 @@ void PlumeApplication::Init() {
         ImGui_ImplOpenGL3_Init("#version 330");
 
         // Editor layer
-        m_EditorLayer = std::make_unique<EditorLayer>(m_Window);
+        m_EditorLayer = std::make_unique<EditorLayer>(m_Window); // FIX C2440
         m_EditorLayer->SetScene(m_ActiveScene.get());
         m_EditorLayer->OnAttach();
     #endif
@@ -265,7 +266,6 @@ void PlumeApplication::Run() {
 
     // If editor layer exists, render the scene into its framebuffer first
 #ifdef PLUME_ENABLE_IMGUI
-#ifdef PLUME_ENABLE_IMGUI
     if (m_RenderToFramebuffer && m_EditorLayer && m_EditorLayer->GetFramebuffer()) {
             // Update camera projection based on viewport size
             auto [vw, vh] = m_EditorLayer->GetViewportSize();
@@ -319,67 +319,14 @@ void PlumeApplication::Run() {
         int winW, winH;
         SDL_GetWindowSize(m_Window, &winW, &winH);
         glViewport(0, 0, winW, winH);
-    } else {
-#else
-    if (false) {
+    } 
 #endif
-            // No editor framebuffer: render to default backbuffer as before
-            glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
-            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-            shader->Bind();
-            shader->UploadUniformMat4("u_View", m_Camera->GetViewMatrix());
-            shader->UploadUniformMat4("u_Projection", m_Camera->GetProjectionMatrix());
-            shader->UploadUniformVec3("u_ViewPos", m_Camera->GetPosition());
-
-            glm::vec3 lightPos;
-            glm::vec3 lightColor;
-            auto lightView = m_ActiveScene->GetRegistry().view<TransformComponent, LightComponent>();
-            for (auto entity : lightView) {
-                auto& transform = lightView.get<TransformComponent>(entity);
-                auto& light = lightView.get<LightComponent>(entity);
-                lightPos = transform.Translation;
-                lightColor = light.Color * light.Intensity;
-                break;
-            }
-            shader->UploadUniformVec3("u_LightPos", lightPos);
-            shader->UploadUniformVec3("u_LightColor", lightColor);
-
-            auto modelView = m_ActiveScene->GetRegistry().view<TransformComponent, ModelComponent>();
-            int drawnMeshes = 0;
-            std::cout << "Rendering to backbuffer..." << std::endl;
-            for (auto entity : modelView) {
-                auto& transform = m_ActiveScene->GetRegistry().get<TransformComponent>(entity);
-                auto& modelComp = m_ActiveScene->GetRegistry().get<ModelComponent>(entity);
-                shader->UploadUniformMat4("u_Model", transform.GetTransform());
-                modelComp.model->Draw(*shader);
-                drawnMeshes += (int)modelComp.model->GetMeshes().size();
-            }
-            m_LastDrawnMeshCount = drawnMeshes;
-            std::cout << "Rendered meshes to backbuffer: " << drawnMeshes << std::endl;
-            if (m_EditorLayer) m_EditorLayer->SetLastModelMeshCount(m_LastDrawnMeshCount);
-        }
-#else
-    if (true) {
-        // Editor/ImGui disabled: render to default backbuffer
-        auto modelView = m_ActiveScene->GetRegistry().view<TransformComponent, ModelComponent>();
-        int drawnMeshes = 0;
-        for (auto entity : modelView) {
-            auto& transform = m_ActiveScene->GetRegistry().get<TransformComponent>(entity);
-            auto& modelComp = m_ActiveScene->GetRegistry().get<ModelComponent>(entity);
-            shader->UploadUniformMat4("u_Model", transform.GetTransform());
-            modelComp.model->Draw(*shader);
-            drawnMeshes += (int)modelComp.model->GetMeshes().size();
-        }
-        m_LastDrawnMeshCount = drawnMeshes;
-#endif
-        }
-
+    
 
 #ifdef PLUME_ENABLE_IMGUI
         // Start ImGui frame
         ImGui_ImplOpenGL3_NewFrame();
-        ImGui_ImplSDL2_NewFrame(m_Window);
+        ImGui_ImplSDL2_NewFrame(); // FIX C2660: Ne prend plus d'argument SDL_Window
         ImGui::NewFrame();
 
         if (m_EditorLayer) {
@@ -392,13 +339,11 @@ void PlumeApplication::Run() {
 #endif
 
         SDL_GL_SwapWindow(m_Window);
-    // Normal operation: SDL_QUIT is handled in the event loop
     }
 }
 
 void PlumeApplication::Shutdown() {
-    delete m_Camera;
-    delete m_Input;
+    // Les unique_ptr se désallouent automatiquement, plus besoin de 'delete'
     SDL_GL_DeleteContext(m_GLContext);
     SDL_DestroyWindow(m_Window);
     SDL_Quit();
