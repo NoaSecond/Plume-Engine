@@ -73,3 +73,9 @@ void Camera::ProcessMouseScroll(int yoffset) {
     
     UpdateProjectionMatrix();
 }
+
+void Camera::SetViewportSize(float width, float height) {
+    if (height == 0.0f) return;
+    m_AspectRatio = width / height;
+    UpdateProjectionMatrix();
+}

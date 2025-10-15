@@ -30,6 +30,9 @@ private:
     // NOUVEAU : L'application possède maintenant une scène active
     std::unique_ptr<Scene> m_ActiveScene;
 
+    // Editor layer for ImGui-based editor UI
+    class EditorLayer* m_EditorLayer = nullptr;
+
     // Le reste est géré par la scène et la caméra
     class Camera* m_Camera = nullptr; // On gardera un pointeur brut pour un accès rapide
     class Input* m_Input = nullptr;

@@ -7,6 +7,14 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# Option to enable ImGui-based editor
+option(PLUME_ENABLE_IMGUI "Enable ImGui-based editor" OFF)
+if(PLUME_ENABLE_IMGUI)
+  message(STATUS "PLUME_ENABLE_IMGUI requested; ImGui will be searched for below.")
+else()
+  message(STATUS "PLUME_ENABLE_IMGUI disabled")
+endif()
+
 # --- GESTION DES DÉPENDANCES ---
 # On utilise vcpkg pour les bibliothèques qui fonctionnent bien
 set(CMAKE_TOOLCHAIN_FILE "C:/vcpkg/scripts/buildsystems/vcpkg.cmake" CACHE STRING "Vcpkg toolchain file")
@@ -15,8 +23,75 @@ find_package(glad CONFIG REQUIRED)
 find_package(glm CONFIG REQUIRED)
 find_package(assimp CONFIG REQUIRED)
 
-# On utilise FetchContent pour les bibliothèques "header-only" pour plus de robustesse
+# Use FetchContent for vendoring dependencies (needed for auto-vendoring ImGui)
 include(FetchContent)
+
+# Helper: function to vendor ImGui via FetchContent when find_package(imgui) fails
+function(vendor_imgui_if_needed)
+  if(NOT TARGET imgui::imgui)
+    message(STATUS "Config: imgui::imgui not found, FetchContent'ing Dear ImGui...")
+    FetchContent_Declare(
+      dear_imgui
+      GIT_REPOSITORY https://github.com/ocornut/imgui.git
+      GIT_TAG        v1.92.4
+    )
+    # Populate (download + make available) Dear ImGui via FetchContent
+    FetchContent_MakeAvailable(dear_imgui)
+
+    add_library(imgui_static STATIC
+      ${dear_imgui_SOURCE_DIR}/imgui.cpp
+      ${dear_imgui_SOURCE_DIR}/imgui_draw.cpp
+      ${dear_imgui_SOURCE_DIR}/imgui_tables.cpp
+      ${dear_imgui_SOURCE_DIR}/imgui_widgets.cpp
+      ${dear_imgui_SOURCE_DIR}/imgui_demo.cpp
+    )
+    target_include_directories(imgui_static PUBLIC ${dear_imgui_SOURCE_DIR})
+    add_library(imgui::imgui ALIAS imgui_static)
+  else()
+    message(STATUS "imgui::imgui target already available from find_package or previous vendor step")
+  endif()
+endfunction()
+if(PLUME_ENABLE_IMGUI)
+  # Try to find ImGui (vcpkg port installs cmake config)
+  find_package(imgui CONFIG)
+  if(NOT imgui_FOUND)
+    # Prefer a local vendored copy inside src/ThirdParty/imgui/ if present.
+    if(EXISTS ${CMAKE_SOURCE_DIR}/src/ThirdParty/imgui/imgui.h)
+      message(STATUS "Found local vendored ImGui under src/ThirdParty/imgui. Creating imgui::imgui target from local sources.")
+      add_library(imgui_static STATIC
+        ${CMAKE_SOURCE_DIR}/src/ThirdParty/imgui/imgui.cpp
+        ${CMAKE_SOURCE_DIR}/src/ThirdParty/imgui/imgui_draw.cpp
+        ${CMAKE_SOURCE_DIR}/src/ThirdParty/imgui/imgui_tables.cpp
+        ${CMAKE_SOURCE_DIR}/src/ThirdParty/imgui/imgui_widgets.cpp
+        ${CMAKE_SOURCE_DIR}/src/ThirdParty/imgui/imgui_demo.cpp
+      )
+      target_include_directories(imgui_static PUBLIC ${CMAKE_SOURCE_DIR}/src/ThirdParty/imgui)
+      add_library(imgui::imgui ALIAS imgui_static)
+      set(imgui_FOUND TRUE)
+      message(STATUS "Using local vendored ImGui")
+    else()
+      message(STATUS "ImGui not found via find_package(imgui). Attempting to vendor via FetchContent...")
+      vendor_imgui_if_needed()
+      if(TARGET imgui::imgui)
+        set(imgui_FOUND TRUE)
+        message(STATUS "ImGui vendored successfully via FetchContent")
+      else()
+        message(WARNING "Failed to vendor ImGui automatically. Ensure imgui is installed via vcpkg or vendor a local copy at src/ThirdParty/imgui. Disabling PLUME_ENABLE_IMGUI.")
+        set(PLUME_ENABLE_IMGUI OFF CACHE BOOL "Enable ImGui-based editor" FORCE)
+      endif()
+    endif()
+  else()
+    # Only define the compile macro if ImGui was found
+    add_compile_definitions(PLUME_ENABLE_IMGUI)
+    message(STATUS "PLUME_ENABLE_IMGUI enabled")
+  endif()
+endif()
+
+FetchContent_Declare(
+  entt
+  GIT_REPOSITORY https://github.com/skypjack/entt.git
+  GIT_TAG        v3.13.0
+)
 
 FetchContent_Declare(
   entt
@@ -44,6 +119,7 @@ target_include_directories(PlumeEngine PRIVATE
     src
     ${entt_SOURCE_DIR}/src
     ${stb_SOURCE_DIR} # <-- AJOUTER LE CHEMIN POUR STB
+  ${CMAKE_SOURCE_DIR}/src/ThirdParty/imgui_backends
 )
 
 # --- Centralized version / metadata defaults (override with -D on cmake configure) ---
@@ -143,6 +219,31 @@ target_link_libraries(PlumeEngine PRIVATE
     # Pas besoin de lier entt ou stb car elles sont "header-only"
 )
 
+if(PLUME_ENABLE_IMGUI AND imgui_FOUND)
+  target_link_libraries(PlumeEngine PRIVATE imgui::imgui)
+endif()
+
+# If ImGui backends were vendored in the tree, add their include dir and
+# compile the backend implementation files when the editor is enabled.
+target_include_directories(PlumeEngine PRIVATE ${CMAKE_SOURCE_DIR}/src/ThirdParty/imgui_backends)
+
+if(PLUME_ENABLE_IMGUI)
+  # Vendored backends (SDL2 + OpenGL3) - compile them into the executable.
+  target_sources(PlumeEngine PRIVATE
+    ${CMAKE_SOURCE_DIR}/src/ThirdParty/imgui_backends/imgui_impl_sdl2.cpp
+    ${CMAKE_SOURCE_DIR}/src/ThirdParty/imgui_backends/imgui_impl_opengl3.cpp
+  )
+  # If we created/found an imgui target, propagate its include dirs to our target so headers resolve
+  if(TARGET imgui::imgui)
+    get_target_property(_imgui_includes imgui::imgui INTERFACE_INCLUDE_DIRECTORIES)
+    if(_imgui_includes)
+      target_include_directories(PlumeEngine PRIVATE ${_imgui_includes})
+    endif()
+    # Link to the imgui target
+    target_link_libraries(PlumeEngine PRIVATE imgui::imgui)
+  endif()
+endif()
+
 # Copier les assets dans le dossier de build après la compilation
 add_custom_command(TARGET PlumeEngine POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
@@ -152,6 +253,9 @@ add_custom_command(TARGET PlumeEngine POST_BUILD
 
 # Copy runtime DLLs from vcpkg installed tree (Windows) to output directory
 if(WIN32)
+  # Option to disable vcpkg applocal invocations (some systems don't have pwsh.exe)
+  option(PLUME_VCPKG_APPLOCAL "Run vcpkg applocal helper to copy runtime DLLs" OFF)
+
   # Common vcpkg install root and triplet; allow override via VCPKG_ROOT or VCPKG_TARGET_TRIPLET
   if(NOT DEFINED VCPKG_ROOT)
     set(VCPKG_ROOT "C:/vcpkg")

@@ -16,6 +16,12 @@
 #include "Scene/Components.h"
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#ifdef PLUME_ENABLE_IMGUI
+#include <imgui.h>
+#include <imgui_impl_sdl.h>
+#include <imgui_impl_opengl3.h>
+#include "../Editor/EditorLayer.h"
+#endif
 
 // --- SHADERS ---
 const std::string vertexShaderSource = R"(
@@ -115,6 +121,21 @@ void PlumeApplication::Init() {
     m_Input = new Input();
     m_Camera = new Camera(45.0f, (float)WINDOW_WIDTH / (float)WINDOW_HEIGHT, 0.1f, 100.0f);
     m_ActiveScene = std::make_unique<Scene>();
+    #ifdef PLUME_ENABLE_IMGUI
+        // --- IMGUI INITIALIZATION ---
+        IMGUI_CHECKVERSION();
+        ImGui::CreateContext();
+        ImGuiIO& io = ImGui::GetIO(); (void)io;
+        io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+        ImGui::StyleColorsDark();
+        ImGui_ImplSDL2_InitForOpenGL(m_Window, m_GLContext);
+        ImGui_ImplOpenGL3_Init("#version 330");
+
+        // Editor layer
+        m_EditorLayer = std::make_unique<EditorLayer>(m_Window);
+        m_EditorLayer->SetScene(m_ActiveScene.get());
+        m_EditorLayer->OnAttach();
+    #endif
 
     // --- CHARGEMENT DU MODÈLE ---
     auto modelEntity = m_ActiveScene->CreateEntity("Backpack");
@@ -169,36 +190,105 @@ void PlumeApplication::Run() {
         }
 
         m_Camera->Update(*m_Input, deltaTime);
-        
-        // --- Rendu de la Scène ---
-        glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        shader->Bind();
-        shader->UploadUniformMat4("u_View", m_Camera->GetViewMatrix());
-        shader->UploadUniformMat4("u_Projection", m_Camera->GetProjectionMatrix());
-        shader->UploadUniformVec3("u_ViewPos", m_Camera->GetPosition());
+    // If editor layer exists, render the scene into its framebuffer first
+#ifdef PLUME_ENABLE_IMGUI
+    if (m_EditorLayer && m_EditorLayer->GetFramebuffer()) {
+            // Update camera projection based on viewport size
+            auto [vw, vh] = m_EditorLayer->GetViewportSize();
+            if (vw > 0 && vh > 0) {
+                m_Camera->SetViewportSize((float)vw, (float)vh);
+            }
 
-        glm::vec3 lightPos;
-        glm::vec3 lightColor;
-        auto lightView = m_ActiveScene->GetRegistry().view<TransformComponent, LightComponent>();
-        for (auto entity : lightView) {
-            auto& transform = lightView.get<TransformComponent>(entity);
-            auto& light = lightView.get<LightComponent>(entity);
-            lightPos = transform.Translation;
-            lightColor = light.Color * light.Intensity;
-            break;
+            // Bind editor framebuffer
+            m_EditorLayer->GetFramebuffer()->Bind();
+            glEnable(GL_DEPTH_TEST);
+            glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+            shader->Bind();
+            shader->UploadUniformMat4("u_View", m_Camera->GetViewMatrix());
+            shader->UploadUniformMat4("u_Projection", m_Camera->GetProjectionMatrix());
+            shader->UploadUniformVec3("u_ViewPos", m_Camera->GetPosition());
+
+            glm::vec3 lightPos;
+            glm::vec3 lightColor;
+            auto lightView = m_ActiveScene->GetRegistry().view<TransformComponent, LightComponent>();
+            for (auto entity : lightView) {
+                auto& transform = lightView.get<TransformComponent>(entity);
+                auto& light = lightView.get<LightComponent>(entity);
+                lightPos = transform.Translation;
+                lightColor = light.Color * light.Intensity;
+                break;
+            }
+            shader->UploadUniformVec3("u_LightPos", lightPos);
+            shader->UploadUniformVec3("u_LightColor", lightColor);
+
+            auto modelView = m_ActiveScene->GetRegistry().view<TransformComponent, ModelComponent>();
+            for (auto entity : modelView) {
+                auto& transform = m_ActiveScene->GetRegistry().get<TransformComponent>(entity);
+                auto& modelComp = m_ActiveScene->GetRegistry().get<ModelComponent>(entity);
+                shader->UploadUniformMat4("u_Model", transform.GetTransform());
+                modelComp.model->Draw(*shader);
+            }
+
+        // Unbind framebuffer -> return to default framebuffer
+        m_EditorLayer->GetFramebuffer()->Unbind();
+
+        // Reset viewport to window size for ImGui rendering
+        int winW, winH;
+        SDL_GetWindowSize(m_Window, &winW, &winH);
+        glViewport(0, 0, winW, winH);
+    } else {
+#else
+    if (false) {
+#endif
+            // No editor framebuffer: render to default backbuffer as before
+            glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+            shader->Bind();
+            shader->UploadUniformMat4("u_View", m_Camera->GetViewMatrix());
+            shader->UploadUniformMat4("u_Projection", m_Camera->GetProjectionMatrix());
+            shader->UploadUniformVec3("u_ViewPos", m_Camera->GetPosition());
+
+            glm::vec3 lightPos;
+            glm::vec3 lightColor;
+            auto lightView = m_ActiveScene->GetRegistry().view<TransformComponent, LightComponent>();
+            for (auto entity : lightView) {
+                auto& transform = lightView.get<TransformComponent>(entity);
+                auto& light = lightView.get<LightComponent>(entity);
+                lightPos = transform.Translation;
+                lightColor = light.Color * light.Intensity;
+                break;
+            }
+            shader->UploadUniformVec3("u_LightPos", lightPos);
+            shader->UploadUniformVec3("u_LightColor", lightColor);
+
+            auto modelView = m_ActiveScene->GetRegistry().view<TransformComponent, ModelComponent>();
+            for (auto entity : modelView) {
+                auto& transform = m_ActiveScene->GetRegistry().get<TransformComponent>(entity);
+                auto& modelComp = m_ActiveScene->GetRegistry().get<ModelComponent>(entity);
+                shader->UploadUniformMat4("u_Model", transform.GetTransform());
+                modelComp.model->Draw(*shader);
+            }
         }
-        shader->UploadUniformVec3("u_LightPos", lightPos);
-        shader->UploadUniformVec3("u_LightColor", lightColor);
 
-        auto modelView = m_ActiveScene->GetRegistry().view<TransformComponent, ModelComponent>();
-        for (auto entity : modelView) {
-            auto& transform = modelView.get<TransformComponent>(entity);
-            auto& modelComp = modelView.get<ModelComponent>(entity);
-            shader->UploadUniformMat4("u_Model", transform.GetTransform());
-            modelComp.model->Draw(*shader);
+
+#ifdef PLUME_ENABLE_IMGUI
+        // Start ImGui frame
+        ImGui_ImplOpenGL3_NewFrame();
+        ImGui_ImplSDL2_NewFrame(m_Window);
+        ImGui::NewFrame();
+
+        if (m_EditorLayer) {
+            m_EditorLayer->OnImGuiRender();
         }
+
+        // Render ImGui
+        ImGui::Render();
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+#endif
 
         SDL_GL_SwapWindow(m_Window);
     }

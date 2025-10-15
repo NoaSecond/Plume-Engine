@@ -12,6 +12,9 @@ public:
 
     void Update(Input& input, float deltaTime);
 
+    // Allow external code to update projection parameters when viewport size changes
+    void SetViewportSize(float width, float height);
+
     const glm::mat4& GetProjectionMatrix() const { return m_ProjectionMatrix; }
     const glm::mat4& GetViewMatrix() const { return m_ViewMatrix; }
     const glm::vec3& GetPosition() const { return m_Position; }
