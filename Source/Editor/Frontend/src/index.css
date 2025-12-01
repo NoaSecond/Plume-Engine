@@ -1,0 +1,42 @@
+﻿@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* CSS variables are set dynamically by ThemeContext */
+  /* Thème system allows hot-reloading without page refresh */
+}
+
+body {
+  font-family: "Inter", "Segoe UI", -apple-system, BlinkMacSystemFont, "Roboto", "Oxygen", "Ubuntu", sans-serif;
+  user-select: none;
+  background-color: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  margin: 0;
+  padding: 0;
+}
+
+/* Custom scrollbar styling that adapts to theme */
+::-webkit-scrollbar { 
+  width: 6px; 
+  height: 6px; 
+}
+
+::-webkit-scrollbar-track { 
+  background: var(--color-bg-secondary); 
+}
+
+::-webkit-scrollbar-thumb { 
+  background: var(--color-border-default); 
+  border-radius: var(--radius-sm); 
+}
+
+::-webkit-scrollbar-thumb:hover { 
+  background: var(--color-accent-secondary); 
+}
+
+/* Smooth transitions for theme changes */
+* {
+  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
