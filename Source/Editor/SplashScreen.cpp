@@ -1,5 +1,6 @@
 #include "SplashScreen.h"
 #include "Version.h"
+#include "resource.h"
 
 #ifdef _WIN32
 #include <dwmapi.h>
@@ -106,6 +107,8 @@ bool SplashScreen::Create(const std::wstring& imagePath, int width, int height) 
     wc.hCursor = LoadCursor(NULL, IDC_ARROW);
     wc.hbrBackground = (HBRUSH)GetStockObject(BLACK_BRUSH);
     wc.lpszClassName = L"PlumeSplashScreen";
+    wc.hIcon = LoadIcon(GetModuleHandle(NULL), MAKEINTRESOURCE(IDI_ICON1));
+    wc.hIconSm = LoadIcon(GetModuleHandle(NULL), MAKEINTRESOURCE(IDI_ICON1));
     
     RegisterClassExW(&wc);
     
