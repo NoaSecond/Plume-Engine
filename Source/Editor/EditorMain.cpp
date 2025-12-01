@@ -1,4 +1,5 @@
 #include <Core/Engine.h>
+#include <Core/DiscordPresence.h>
 #include <string>
 #include <filesystem>
 #include <fstream>
@@ -270,6 +271,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     g_app.engine = &engine;
     splash.UpdateProgress(0.33f, "Loading scene...");
     
+    // Initialiser Discord Rich Presence
+    Plume::DiscordPresence::Get().Init();
+    Plume::DiscordPresence::Get().SetState("In Editor");
+    Plume::DiscordPresence::Get().SetDetails("Editing a Scene");
+    Plume::DiscordPresence::Get().SetLargeImage("plume_logo", "Plume Engine");
+    Plume::DiscordPresence::Get().Update();
+    
     // Localiser les fichiers UI
     fs::path uiEntryPath = exePath / ".." / "UI" / "index.html";
     if (!fs::exists(uiEntryPath)) {
@@ -325,9 +333,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
             lastExport = now;
         }
         
+        // Mettre à jour Discord Rich Presence
+        Plume::DiscordPresence::Get().Update();
+        
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
     
+    Plume::DiscordPresence::Get().Shutdown();
     engine.Shutdown();
     return 0;
 }
