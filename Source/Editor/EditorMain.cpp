@@ -1,11 +1,13 @@
 #include <Core/Engine.h>
-#include <Core/DiscordPresence.h>
+#include <Core/PluginManager.h>
+#include <Plugins/DiscordRichPresence/DiscordPresence.h>
 #include <string>
 #include <filesystem>
 #include <fstream>
 #include <thread>
 #include <chrono>
 #include <atomic>
+#include <memory>
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -46,6 +48,37 @@ void ExportSceneData() {
     if (file.is_open()) {
         file << "window.PLUME_SCENE_DATA = " << sceneJson << ";";
         file << "window.PLUME_LAST_UPDATE = " << std::chrono::system_clock::now().time_since_epoch().count() << ";";
+        file.close();
+        try {
+            if (fs::exists(dataPath)) fs::remove(dataPath);
+            fs::rename(tempPath, dataPath);
+        } catch(...) {}
+    }
+}
+
+void ExportPluginData() {
+    auto plugins = Plume::PluginManager::Get().GetAllPlugins();
+    std::string dataPath = g_app.uiFolder + "/plugin_data.js";
+    std::string tempPath = dataPath + ".tmp";
+    
+    std::ofstream file(tempPath);
+    if (file.is_open()) {
+        file << "window.PLUME_PLUGIN_DATA = [";
+        for (size_t i = 0; i < plugins.size(); i++) {
+            const auto& plugin = plugins[i];
+            file << "{";
+            file << "\"id\":\"" << plugin.id << "\",";
+            file << "\"name\":\"" << plugin.name << "\",";
+            file << "\"description\":\"" << plugin.description << "\",";
+            file << "\"version\":\"" << plugin.version << "\",";
+            file << "\"author\":\"" << plugin.author << "\",";
+            file << "\"category\":\"" << (plugin.category == Plume::PluginCategory::Official ? "Official" : 
+                                         plugin.category == Plume::PluginCategory::Community ? "Community" : "System") << "\",";
+            file << "\"enabled\":" << (Plume::PluginManager::Get().IsPluginEnabled(plugin.id) ? "true" : "false");
+            file << "}";
+            if (i < plugins.size() - 1) file << ",";
+        }
+        file << "];";
         file.close();
         try {
             if (fs::exists(dataPath)) fs::remove(dataPath);
@@ -271,12 +304,31 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     g_app.engine = &engine;
     splash.UpdateProgress(0.33f, "Loading scene...");
     
-    // Initialiser Discord Rich Presence
-    Plume::DiscordPresence::Get().Init();
-    Plume::DiscordPresence::Get().SetState("In Editor");
-    Plume::DiscordPresence::Get().SetDetails("Editing a Scene");
-    Plume::DiscordPresence::Get().SetLargeImage("plume_logo", "Plume Engine");
-    Plume::DiscordPresence::Get().Update();
+    // Initialiser le système de plugins
+    splash.UpdateProgress(0.3f, "Loading plugins...");
+    auto& pluginManager = Plume::PluginManager::Get();
+    
+    // Enregistrer le plugin Discord Rich Presence (wrapper en tant que shared_ptr)
+    splash.UpdateProgress(0.35f, "Registering Discord Rich Presence...");
+    auto discordPlugin = std::shared_ptr<Plume::IPlugin>(&Plume::DiscordPresence::Get(), [](Plume::IPlugin*){});
+    pluginManager.RegisterPlugin(discordPlugin);
+    
+    // Initialiser tous les plugins activés
+    splash.UpdateProgress(0.4f, "Initializing plugins...");
+    auto plugins = pluginManager.GetAllPlugins();
+    float pluginProgress = 0.4f;
+    float pluginCount = (float)plugins.size();
+    float pluginProgressStep = 0.1f / (pluginCount > 0 ? pluginCount : 1.0f);
+    
+    for (const auto& plugin : plugins) {
+        if (pluginManager.IsPluginEnabled(plugin.id)) {
+            splash.UpdateProgress(pluginProgress, "Loading " + plugin.name + "...");
+            pluginProgress += pluginProgressStep;
+        }
+    }
+    
+    pluginManager.InitializeAll();
+    splash.UpdateProgress(0.5f, "Plugins loaded!");
     
     // Localiser les fichiers UI
     fs::path uiEntryPath = exePath / ".." / "UI" / "index.html";
@@ -290,15 +342,17 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     }
     
     g_app.uiFolder = uiEntryPath.parent_path().string();
+    splash.UpdateProgress(0.55f, "Exporting data...");
     ExportSceneData();
-    splash.UpdateProgress(0.5f, "Creating window...");
+    ExportPluginData();
+    splash.UpdateProgress(0.6f, "Creating window...");
     
     // Créer la fenêtre principale (mais ne pas l'afficher encore)
     if (!CreateAppWindow()) {
         splash.Hide();
         return 1;
     }
-    splash.UpdateProgress(0.66f, "Initializing WebView2...");
+    splash.UpdateProgress(0.7f, "Initializing WebView2...");
     
     // Initialiser WebView2
     std::string url = "file:///" + fs::absolute(uiEntryPath).string();
@@ -333,13 +387,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
             lastExport = now;
         }
         
-        // Mettre à jour Discord Rich Presence
-        Plume::DiscordPresence::Get().Update();
+        // Mettre à jour tous les plugins
+        Plume::PluginManager::Get().UpdateAll();
         
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
     
-    Plume::DiscordPresence::Get().Shutdown();
+    Plume::PluginManager::Get().ShutdownAll();
     engine.Shutdown();
     return 0;
 }

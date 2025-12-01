@@ -18,8 +18,19 @@ DiscordPresence& DiscordPresence::Get() {
     return instance;
 }
 
-void DiscordPresence::Init() {
-    if (m_initialized) return;
+PluginInfo DiscordPresence::GetInfo() const {
+    PluginInfo info;
+    info.id = "discord_rich_presence";
+    info.name = "Discord Rich Presence";
+    info.description = "Affiche votre activité Plume Engine sur Discord";
+    info.version = "1.0.0";
+    info.author = "Plume Engine Team";
+    info.category = PluginCategory::Official;
+    return info;
+}
+
+bool DiscordPresence::Initialize() {
+    if (m_initialized || !m_enabled) return false;
     
 #ifdef _WIN32
     // Discord Application ID pour Plume Engine
@@ -28,7 +39,7 @@ void DiscordPresence::Init() {
     auto result = discord::Core::Create(clientId, DiscordCreateFlags_Default, &g_discordCore);
     if (result != discord::Result::Ok || !g_discordCore) {
         // Échec de l'initialisation Discord - l'application continuera sans Rich Presence
-        return;
+        return false;
     }
     
     m_startTimestamp = std::chrono::duration_cast<std::chrono::seconds>(
@@ -43,10 +54,11 @@ void DiscordPresence::Init() {
     SetLargeImage("plume_logo", "Plume Engine");
     UpdatePresence();
 #endif
+    return true;
 }
 
 void DiscordPresence::Shutdown() {
-    if (!m_initialized) return;
+    if (!m_initialized || !m_enabled) return;
     
 #ifdef _WIN32
     if (g_discordCore) {
@@ -58,7 +70,7 @@ void DiscordPresence::Shutdown() {
 }
 
 void DiscordPresence::Update() {
-    if (!m_initialized) return;
+    if (!m_initialized || !m_enabled) return;
     
 #ifdef _WIN32
     if (g_discordCore) {

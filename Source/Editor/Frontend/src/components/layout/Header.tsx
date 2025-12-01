@@ -9,9 +9,10 @@ interface HeaderProps {
   onSave: () => void; 
   onAbout: () => void;
   onPreferences: () => void;
+  onPlugins: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ isPlaying, onSave, onAbout, onPreferences }) => {
+export const Header: React.FC<HeaderProps> = ({ isPlaying, onSave, onAbout, onPreferences, onPlugins }) => {
   const { theme } = useTheme();
   
   const handleHeaderMouseDown = (e: React.MouseEvent) => {
@@ -70,7 +71,7 @@ export const Header: React.FC<HeaderProps> = ({ isPlaying, onSave, onAbout, onPr
         <MenuBarItem label="File" items={['New Level', 'Open Level', 'Save', 'Save As', 'Import Asset', 'Export Project', 'Exit']} onAction={(a) => a === 'Save' && onSave()} />
         <MenuBarItem label="Edit" items={['Undo', 'Redo', 'Editor Preferences', 'Project Settings']} onAction={(a) => a === 'Editor Preferences' && onPreferences()} />
         <MenuBarItem label="Window" items={['Viewport', 'Outliner', 'Details', 'Content Browser', 'Console']} />
-        <MenuBarItem label="Tools" items={['Plugins', 'Build All']} />
+        <MenuBarItem label="Tools" items={['Plugins', 'Build All']} onAction={(a) => a === 'Plugins' && onPlugins()} />
         <MenuBarItem label="Help" items={['Website', 'Documentation', 'Repository', 'About']} onAction={(a) => a === 'About' && onAbout()}/>
       </div>
       <div className="ml-auto flex items-center gap-2">
