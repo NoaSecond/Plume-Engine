@@ -47,14 +47,15 @@ export function ConsolePanel({ logs, onClear, onExecuteCommand, isOpen, setIsOpe
 
   return (
     <div
-      className={`fixed left-0 right-0 h-48 border-t flex flex-col transition-transform duration-300 ease-out ${isOpen ? '' : ''}`}
+      className="fixed left-0 right-0 h-48 shadow-2xl transition-transform duration-300 ease-out flex flex-col"
       style={{
-        backgroundColor: theme.colors.bg.secondary,
-        borderColor: theme.colors.border.default,
-        zIndex: 1000,
+        backgroundColor: theme.colors.bg.primary,
+        borderTop: `1px solid ${theme.colors.accent.primary}`,
+        zIndex: 40,
         bottom: '24px',
         transform: isOpen ? 'translateY(0)' : 'translateY(calc(100% + 24px))',
         pointerEvents: isOpen ? 'auto' : 'none',
+        willChange: 'transform'
       }}
     >
       {/* Header */}

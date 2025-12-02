@@ -46,7 +46,7 @@ body {
 }
 
 /* Smooth transitions for theme changes - exclude animated elements */
-*:not(.modal-content):not(.modal-backdrop):not(.modal-content-exit):not(.modal-backdrop-exit) {
+*:not(.modal-content):not(.modal-backdrop):not(.modal-content-exit):not(.modal-backdrop-exit):not(.transition-transform) {
   transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
 }
 

@@ -10,14 +10,16 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
   
   return (
     <div 
-      className="fixed left-0 right-0 shadow-2xl transition-transform duration-300 ease-out z-40 flex flex-col"
+      className="fixed left-0 right-0 shadow-2xl transition-transform duration-300 ease-out flex flex-col"
       style={{ 
         backgroundColor: theme.colors.bg.primary,
         borderTop: `1px solid ${theme.colors.accent.primary}`,
         height: '35vh', 
         bottom: '24px', 
+        zIndex: 40,
         transform: show ? 'translateY(0)' : 'translateY(calc(100% + 24px))', 
-        pointerEvents: show ? 'auto' : 'none' 
+        pointerEvents: show ? 'auto' : 'none',
+        willChange: 'transform'
       }}
     >
       <div 

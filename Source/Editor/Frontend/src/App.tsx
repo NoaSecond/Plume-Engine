@@ -113,6 +113,11 @@ export default function App() {
         setShowContentBrowser(p => !p);
         setShowConsole(false); // Fermer la console si on ouvre le content browser
       }
+      if(e.ctrlKey && e.code === 'KeyI') {
+        e.preventDefault();
+        setShowConsole(p => !p);
+        setShowContentBrowser(false); // Fermer le content browser si on ouvre la console
+      }
     };
     const handleKeyUp = (e: KeyboardEvent) => { keysPressed.current[e.code] = false; };
     window.addEventListener('keydown', handleKeyDown); window.addEventListener('keyup', handleKeyUp);
@@ -183,7 +188,7 @@ export default function App() {
             }}
             className="hover:underline cursor-pointer"
           >
-            Console
+            Console (Ctrl+I)
           </button>
           <span style={{ color: theme.colors.border.default }}>|</span>
           <span>{entities.length} entities</span>

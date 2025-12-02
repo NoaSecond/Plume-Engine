@@ -20,13 +20,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({ activeTool, setActiveTool, onS
       }}
     >
       <div className="flex space-x-4 items-center">
-        <div 
-          className="flex rounded p-0.5 space-x-0.5 border"
-          style={{
-            backgroundColor: theme.colors.bg.secondary,
-            borderColor: theme.colors.border.default
-          }}
-        >
+        <div className="flex space-x-0.5">
           <IconButton icon={Save} title="Save (Ctrl+S)" onClick={onSave} />
           <IconButton icon={Trash2} title="Delete Selection (Delete)" onClick={onDelete} />
         </div>
@@ -65,13 +59,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({ activeTool, setActiveTool, onS
         <IconButton icon={Square} onClick={onStop} fill="currentColor" className="text-red-400 hover:bg-red-900/50 hover:text-red-200 px-3"/>
         <IconButton icon={MoreVertical} />
       </div>
-      <div 
-        className="flex space-x-2 items-center p-1 rounded border"
-        style={{
-          backgroundColor: theme.colors.bg.secondary,
-          borderColor: theme.colors.border.default
-        }}
-      >
+      <div className="flex space-x-2 items-center">
         <span 
           className="text-xs font-bold px-2 border-r"
           style={{
