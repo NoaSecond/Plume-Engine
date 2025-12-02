@@ -8,6 +8,7 @@ import { ContentBrowserPanel } from './components/panels/ContentBrowserPanel';
 import { ConsolePanel } from './components/panels/ConsolePanel';
 import { EditorPreferences } from './components/panels/EditorPreferences';
 import { PluginManager } from './components/panels/PluginManager';
+import { ProjectSettings } from './components/modals/ProjectSettings';
 import { PlumeLogo } from './components/ui/PlumeLogo';
 import { DEFAULT_SCENE } from './data/constants';
 import { Entity, LogEntry, ToolType } from './types';
@@ -24,13 +25,23 @@ export default function App() {
   const [activeTool, setActiveTool] = useState<ToolType>('select');
   const [searchQuery, setSearchQuery] = useState('');
   const [showAboutModal, setShowAboutModal] = useState(false);
+  const [isAboutClosing, setIsAboutClosing] = useState(false);
   const [showPreferences, setShowPreferences] = useState(false);
   const [showPluginManager, setShowPluginManager] = useState(false);
+  const [showProjectSettings, setShowProjectSettings] = useState(false);
   const [cameraTransform, setCameraTransform] = useState({ position: {x:0, y:-50, z:-150}, rotation: {x:20, y:0, z:0} });
   const [viewMode, setViewMode] = useState<'Lit' | 'Unlit' | 'Wireframe'>('Lit');
   const requestRef = useRef<number>();
   const previousTimeRef = useRef<number>();
   const keysPressed = useRef<{ [key: string]: boolean }>({});
+
+  const handleAboutClose = () => {
+    setIsAboutClosing(true);
+    setTimeout(() => {
+      setIsAboutClosing(false);
+      setShowAboutModal(false);
+    }, 180);
+  };
 
   const addLog = useCallback((msg: string, level: 'INFO' | 'WARN' | 'ERROR') => {
     const time = new Date().toLocaleTimeString('en-US', { hour12: false });
@@ -86,6 +97,10 @@ export default function App() {
           setShowPluginManager(false);
           return;
         }
+        if (showProjectSettings) {
+          setShowProjectSettings(false);
+          return;
+        }
         // Close content browser drawer
         if (showContentBrowser) {
           setShowContentBrowser(false);
@@ -102,7 +117,7 @@ export default function App() {
     const handleKeyUp = (e: KeyboardEvent) => { keysPressed.current[e.code] = false; };
     window.addEventListener('keydown', handleKeyDown); window.addEventListener('keyup', handleKeyUp);
     return () => { window.removeEventListener('keydown', handleKeyDown); window.removeEventListener('keyup', handleKeyUp); };
-  }, [showPreferences, showPluginManager, showContentBrowser]);
+  }, [showPreferences, showPluginManager, showProjectSettings, showContentBrowser]);
 
   const selectedEntity = entities.find(e => e.id === selectedId);
 
@@ -114,7 +129,7 @@ export default function App() {
         color: theme.colors.text.primary 
       }}
     >
-      <Header isPlaying={isPlaying} onSave={() => {}} onAbout={() => setShowAboutModal(true)} onPreferences={() => setShowPreferences(true)} onPlugins={() => setShowPluginManager(true)} />
+      <Header isPlaying={isPlaying} onSave={() => {}} onAbout={() => setShowAboutModal(true)} onPreferences={() => setShowPreferences(true)} onPlugins={() => setShowPluginManager(true)} onProjectSettings={() => setShowProjectSettings(true)} />
       <Toolbar activeTool={activeTool} setActiveTool={setActiveTool} onSave={() => {}} onDelete={() => {}} isPlaying={isPlaying} onPlay={() => setIsPlaying(true)} onPause={() => setIsPlaying(false)} onStop={() => setIsPlaying(false)} />
       <div className="flex-1 flex overflow-hidden">
         <Viewport entities={entities} selectedId={selectedId} setSelectedId={setSelectedId} cameraTransform={cameraTransform} setCameraTransform={setCameraTransform} activeTool={activeTool} viewMode={viewMode} setViewMode={setViewMode} onAddEntity={(type) => setEntities([...entities, {id: Date.now().toString(), name: type, type, visible: true, transform: {position:{x:0,y:0,z:0}, rotation:{x:0,y:0,z:0}, scale:{x:1,y:1,z:1}}}])} />
@@ -139,6 +154,7 @@ export default function App() {
       />
       <EditorPreferences isOpen={showPreferences} onClose={() => setShowPreferences(false)} />
       <PluginManager isOpen={showPluginManager} onClose={() => setShowPluginManager(false)} />
+      <ProjectSettings isOpen={showProjectSettings} onClose={() => setShowProjectSettings(false)} />
       <div 
         className="h-6 border-t flex items-center justify-between px-2 text-[10px]"
         style={{ 
@@ -179,13 +195,17 @@ export default function App() {
 
         </div>
       </div>
-      {showAboutModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      {(showAboutModal || isAboutClosing) && (
+        <div className={`fixed inset-0 bg-black/50 flex items-center justify-center z-50 ${isAboutClosing ? 'modal-backdrop-exit' : 'modal-backdrop'}`}>
           <div 
-            className="border rounded p-6"
+            className={`border rounded p-6 ${isAboutClosing ? 'modal-content-exit' : 'modal-content'}`}
             style={{ 
               backgroundColor: theme.colors.bg.secondary, 
-              borderColor: theme.colors.border.default 
+              borderColor: theme.colors.border.default,
+              position: 'absolute',
+              left: '50%',
+              top: '50%',
+              transform: 'translate(-50%, -50%)'
             }}
           >
             <PlumeLogo/>
@@ -194,7 +214,7 @@ export default function App() {
             <p className="text-xs mt-2" style={{ color: theme.colors.text.muted }}>Created by Noa Second</p>
             <p className="text-xs mt-4" style={{ color: theme.colors.text.muted }}>Thème actuel: {theme.displayName}</p>
             <button 
-              onClick={() => setShowAboutModal(false)}
+              onClick={handleAboutClose}
               className="mt-4 px-4 py-2 rounded"
               style={{ 
                 backgroundColor: theme.colors.accent.primary, 

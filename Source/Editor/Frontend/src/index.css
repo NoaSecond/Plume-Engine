@@ -7,13 +7,23 @@
   /* Thème system allows hot-reloading without page refresh */
 }
 
+html, body {
+  height: 100%;
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
+}
+
 body {
   font-family: "Inter", "Segoe UI", -apple-system, BlinkMacSystemFont, "Roboto", "Oxygen", "Ubuntu", sans-serif;
   user-select: none;
   background-color: var(--color-bg-primary);
   color: var(--color-text-primary);
-  margin: 0;
-  padding: 0;
+}
+
+#root {
+  height: 100vh;
+  overflow: hidden;
 }
 
 /* Custom scrollbar styling that adapts to theme */
@@ -35,8 +45,8 @@ body {
   background: var(--color-accent-secondary); 
 }
 
-/* Smooth transitions for theme changes */
-* {
+/* Smooth transitions for theme changes - exclude animated elements */
+*:not(.modal-content):not(.modal-backdrop):not(.modal-content-exit):not(.modal-backdrop-exit) {
   transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
 }
 
@@ -69,6 +79,69 @@ body {
   to {
     opacity: 0;
     transform: translateY(-4px) scale(0.98);
+  }
+}
+
+/* Modal animations - Optimized to prevent flickering */
+.modal-backdrop {
+  animation: modalBackdropFadeIn 0.2s ease-out forwards;
+  animation-fill-mode: both;
+}
+
+.modal-backdrop-exit {
+  animation: modalBackdropFadeOut 0.15s ease-in forwards;
+  animation-fill-mode: both;
+}
+
+@keyframes modalBackdropFadeIn {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes modalBackdropFadeOut {
+  0% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.modal-content {
+  animation: modalSlideIn 0.22s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+  animation-fill-mode: both;
+  will-change: transform, opacity;
+}
+
+.modal-content-exit {
+  animation: modalSlideOut 0.18s cubic-bezier(0.55, 0.055, 0.675, 0.19) forwards;
+  animation-fill-mode: both;
+  will-change: transform, opacity;
+}
+
+@keyframes modalSlideIn {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.92) translateY(15px);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1) translateY(0);
+  }
+}
+
+@keyframes modalSlideOut {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1) translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.96) translateY(-8px);
   }
 }
 

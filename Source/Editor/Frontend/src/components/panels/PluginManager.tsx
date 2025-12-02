@@ -22,6 +22,15 @@ export const PluginManager: React.FC<PluginManagerProps> = ({ isOpen, onClose })
   const [plugins, setPlugins] = useState<PluginInfo[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<'all' | 'enabled' | 'Official' | 'Community'>('all');
+  const [isClosing, setIsClosing] = useState(false);
+
+  const handleClose = () => {
+    setIsClosing(true);
+    setTimeout(() => {
+      setIsClosing(false);
+      onClose();
+    }, 180);
+  };
 
   useEffect(() => {
     if (isOpen) {
@@ -82,22 +91,26 @@ export const PluginManager: React.FC<PluginManagerProps> = ({ isOpen, onClose })
     return plugins.filter(p => p.category === category).length;
   };
 
-  if (!isOpen) return null;
+  if (!isOpen && !isClosing) return null;
 
   return (
-    <div className="fixed inset-0 z-[4100] flex items-center justify-center">
+    <div className={`fixed inset-0 z-[4100] flex items-center justify-center ${isClosing ? 'modal-backdrop-exit' : 'modal-backdrop'}`}>
       {/* Backdrop */}
       <div 
         className="absolute inset-0 bg-black/80 backdrop-blur-sm"
-        onClick={onClose}
+        onClick={handleClose}
       />
       
       {/* Panel */}
       <div 
-        className="relative border rounded-lg shadow-2xl w-[900px] h-[600px] flex flex-col"
+        className={`relative border rounded-lg shadow-2xl w-[900px] h-[600px] flex flex-col ${isClosing ? 'modal-content-exit' : 'modal-content'}`}
         style={{
           backgroundColor: theme.colors.bg.primary,
-          borderColor: theme.colors.border.default
+          borderColor: theme.colors.border.default,
+          position: 'absolute',
+          left: '50%',
+          top: '50%',
+          transform: 'translate(-50%, -50%)'
         }}
       >
         {/* Header */}
@@ -114,7 +127,7 @@ export const PluginManager: React.FC<PluginManagerProps> = ({ isOpen, onClose })
             </p>
           </div>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="p-2 rounded transition-colors hover:bg-opacity-10 hover:bg-white"
             style={{ color: theme.colors.text.secondary }}
           >

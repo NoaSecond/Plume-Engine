@@ -12,16 +12,29 @@ type PreferenceTab = 'theme' | 'shortcuts';
 export function EditorPreferences({ isOpen, onClose }: EditorPreferencesProps) {
   const { theme, currentTheme, setTheme } = useTheme();
   const [activeTab, setActiveTab] = useState<PreferenceTab>('theme');
+  const [isClosing, setIsClosing] = useState(false);
 
-  if (!isOpen) return null;
+  const handleClose = () => {
+    setIsClosing(true);
+    setTimeout(() => {
+      setIsClosing(false);
+      onClose();
+    }, 180);
+  };
+
+  if (!isOpen && !isClosing) return null;
 
   return (
-    <div className="fixed inset-0 z-[4000] flex items-center justify-center" style={{ backgroundColor: 'rgba(0, 0, 0, 0.8)' }}>
+    <div className={`fixed inset-0 z-[4000] flex items-center justify-center ${isClosing ? 'modal-backdrop-exit' : 'modal-backdrop'}`} style={{ backgroundColor: 'rgba(0, 0, 0, 0.8)' }}>
       <div 
-        className="w-[900px] h-[600px] flex flex-col rounded-lg shadow-2xl overflow-hidden"
+        className={`w-[900px] h-[600px] flex flex-col rounded-lg shadow-2xl overflow-hidden ${isClosing ? 'modal-content-exit' : 'modal-content'}`}
         style={{ 
           backgroundColor: theme.colors.bg.primary,
-          border: `1px solid ${theme.colors.border.default}`
+          border: `1px solid ${theme.colors.border.default}`,
+          position: 'absolute',
+          left: '50%',
+          top: '50%',
+          transform: 'translate(-50%, -50%)'
         }}
       >
         {/* Header */}
@@ -36,7 +49,7 @@ export function EditorPreferences({ isOpen, onClose }: EditorPreferencesProps) {
             Editor Preferences
           </h2>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="w-8 h-8 flex items-center justify-center rounded hover:bg-opacity-80 transition-colors"
             style={{ backgroundColor: theme.colors.bg.elevated }}
           >
@@ -114,7 +127,7 @@ export function EditorPreferences({ isOpen, onClose }: EditorPreferencesProps) {
           }}
         >
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="px-4 py-1.5 rounded text-sm transition-colors"
             style={{
               backgroundColor: theme.colors.accent.primary,

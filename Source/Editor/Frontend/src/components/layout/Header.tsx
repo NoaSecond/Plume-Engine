@@ -10,9 +10,10 @@ interface HeaderProps {
   onAbout: () => void;
   onPreferences: () => void;
   onPlugins: () => void;
+  onProjectSettings: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ isPlaying, onSave, onAbout, onPreferences, onPlugins }) => {
+export const Header: React.FC<HeaderProps> = ({ isPlaying, onSave, onAbout, onPreferences, onPlugins, onProjectSettings }) => {
   const { theme } = useTheme();
   
   const handleHeaderMouseDown = (e: React.MouseEvent) => {
@@ -73,7 +74,10 @@ export const Header: React.FC<HeaderProps> = ({ isPlaying, onSave, onAbout, onPr
       </div>
       <div className="flex space-x-1 h-full items-center">
         <MenuBarItem label="File" items={['New Level', 'Open Level', 'Save', 'Save As', 'Import Asset', 'Export Project', 'Exit']} onAction={(a) => a === 'Save' && onSave()} />
-        <MenuBarItem label="Edit" items={['Undo', 'Redo', 'Editor Preferences', 'Project Settings']} onAction={(a) => a === 'Editor Preferences' && onPreferences()} />
+        <MenuBarItem label="Edit" items={['Undo', 'Redo', 'Editor Preferences', 'Project Settings']} onAction={(a) => { 
+          if (a === 'Editor Preferences') onPreferences();
+          if (a === 'Project Settings') onProjectSettings();
+        }} />
         <MenuBarItem label="Window" items={['Viewport', 'Outliner', 'Details', 'Content Browser', 'Console']} />
         <MenuBarItem label="Tools" items={['Plugins', 'Build All']} onAction={(a) => a === 'Plugins' && onPlugins()} />
         <MenuBarItem label="Help" items={['Website', 'Documentation', 'Repository', 'About']} onAction={(a) => a === 'About' && onAbout()}/>
