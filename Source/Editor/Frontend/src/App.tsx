@@ -157,6 +157,7 @@ export default function App() {
           <span style={{ color: theme.colors.accent.primary }}>Plume Engine v0.1 Alpha</span>
           <span style={{ color: theme.colors.border.default }}>|</span>
           <span>{theme.displayName}</span>
+
         </div>
       </div>
       {showAboutModal && (

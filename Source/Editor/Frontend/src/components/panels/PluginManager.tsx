@@ -85,10 +85,10 @@ export const PluginManager: React.FC<PluginManagerProps> = ({ isOpen, onClose })
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[3000] flex items-center justify-center">
+    <div className="fixed inset-0 z-[4100] flex items-center justify-center">
       {/* Backdrop */}
       <div 
-        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+        className="absolute inset-0 bg-black/80 backdrop-blur-sm"
         onClick={onClose}
       />
       
@@ -154,7 +154,7 @@ export const PluginManager: React.FC<PluginManagerProps> = ({ isOpen, onClose })
             <div className="space-y-1">
               <button
                 onClick={() => setSelectedCategory('all')}
-                className={`w-full text-left px-3 py-2 rounded transition-colors ${
+                className={`w-full text-left px-3 py-2 rounded transition-colors hover:bg-opacity-10 hover:bg-white ${
                   selectedCategory === 'all' ? 'bg-opacity-10 bg-white' : ''
                 }`}
                 style={{ 
@@ -174,7 +174,7 @@ export const PluginManager: React.FC<PluginManagerProps> = ({ isOpen, onClose })
 
               <button
                 onClick={() => setSelectedCategory('enabled')}
-                className={`w-full text-left px-3 py-2 rounded transition-colors ${
+                className={`w-full text-left px-3 py-2 rounded transition-colors hover:bg-opacity-10 hover:bg-white ${
                   selectedCategory === 'enabled' ? 'bg-opacity-10 bg-white' : ''
                 }`}
                 style={{ 
@@ -203,7 +203,7 @@ export const PluginManager: React.FC<PluginManagerProps> = ({ isOpen, onClose })
 
               <button
                 onClick={() => setSelectedCategory('Official')}
-                className={`w-full text-left px-3 py-2 rounded transition-colors ${
+                className={`w-full text-left px-3 py-2 rounded transition-colors hover:bg-opacity-10 hover:bg-white ${
                   selectedCategory === 'Official' ? 'bg-opacity-10 bg-white' : ''
                 }`}
                 style={{ 
@@ -223,7 +223,7 @@ export const PluginManager: React.FC<PluginManagerProps> = ({ isOpen, onClose })
 
               <button
                 onClick={() => setSelectedCategory('Community')}
-                className={`w-full text-left px-3 py-2 rounded transition-colors ${
+                className={`w-full text-left px-3 py-2 rounded transition-colors hover:bg-opacity-10 hover:bg-white ${
                   selectedCategory === 'Community' ? 'bg-opacity-10 bg-white' : ''
                 }`}
                 style={{ 

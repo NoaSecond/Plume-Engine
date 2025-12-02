@@ -224,7 +224,7 @@ void InitWebView(const std::string& htmlPath) {
                                 settings->put_IsStatusBarEnabled(FALSE);
                             }
                             
-                            // Désactiver la capture de la souris par défaut pour permettre le drag
+                            // Configure WebView2 for high DPI displays
                             ComPtr<ICoreWebView2Controller3> controller3;
                             controller->QueryInterface(IID_PPV_ARGS(&controller3));
                             if (controller3) {
@@ -279,6 +279,9 @@ void InitWebView(const std::string& htmlPath) {
 #endif
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
+    // Enable high DPI support
+    SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+    
     // Créer et afficher le splash screen
     fs::path exePath = fs::current_path();
     
@@ -308,10 +311,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     splash.UpdateProgress(0.3f, "Loading plugins...");
     auto& pluginManager = Plume::PluginManager::Get();
     
-    // Enregistrer le plugin Discord Rich Presence (wrapper en tant que shared_ptr)
-    splash.UpdateProgress(0.35f, "Registering Discord Rich Presence...");
-    auto discordPlugin = std::shared_ptr<Plume::IPlugin>(&Plume::DiscordPresence::Get(), [](Plume::IPlugin*){});
-    pluginManager.RegisterPlugin(discordPlugin);
+    // Plugin system initialization (Discord Rich Presence disabled by default)
+    splash.UpdateProgress(0.35f, "Initializing plugin system...");
     
     // Initialiser tous les plugins activés
     splash.UpdateProgress(0.4f, "Initializing plugins...");
