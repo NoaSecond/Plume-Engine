@@ -9,14 +9,19 @@ interface HeaderProps {
   onSave: () => void; 
   onAbout: () => void;
   onPreferences: () => void;
+  onPlugins: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ isPlaying, onSave, onAbout, onPreferences }) => {
+export const Header: React.FC<HeaderProps> = ({ isPlaying, onSave, onAbout, onPreferences, onPlugins }) => {
   const { theme } = useTheme();
   
   const handleHeaderMouseDown = (e: React.MouseEvent) => {
-    // Permettre le drag uniquement si on clique sur le header (pas sur les boutons)
-    if ((e.target as HTMLElement).closest('button') || (e.target as HTMLElement).closest('[role="button"]')) {
+    // Allow drag only on header background, not on interactive elements
+    const target = e.target as HTMLElement;
+    if (target.closest('button') || 
+        target.closest('[role="button"]') ||
+        target.closest('.menu-item-container') ||
+        target.classList.contains('menu-label')) {
       return;
     }
     
@@ -70,7 +75,7 @@ export const Header: React.FC<HeaderProps> = ({ isPlaying, onSave, onAbout, onPr
         <MenuBarItem label="File" items={['New Level', 'Open Level', 'Save', 'Save As', 'Import Asset', 'Export Project', 'Exit']} onAction={(a) => a === 'Save' && onSave()} />
         <MenuBarItem label="Edit" items={['Undo', 'Redo', 'Editor Preferences', 'Project Settings']} onAction={(a) => a === 'Editor Preferences' && onPreferences()} />
         <MenuBarItem label="Window" items={['Viewport', 'Outliner', 'Details', 'Content Browser', 'Console']} />
-        <MenuBarItem label="Tools" items={['Plugins', 'Build All']} />
+        <MenuBarItem label="Tools" items={['Plugins', 'Build All']} onAction={(a) => a === 'Plugins' && onPlugins()} />
         <MenuBarItem label="Help" items={['Website', 'Documentation', 'Repository', 'About']} onAction={(a) => a === 'About' && onAbout()}/>
       </div>
       <div className="ml-auto flex items-center gap-2">
@@ -84,16 +89,28 @@ export const Header: React.FC<HeaderProps> = ({ isPlaying, onSave, onAbout, onPr
         <div className="flex items-center gap-1">
           <button
             onClick={handleMinimize}
-            className="p-1 hover:bg-slate-600 rounded transition-colors"
+            className="p-1 rounded transition-colors"
             style={{ color: theme.colors.text.muted }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = theme.colors.bg.elevated;
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'transparent';
+            }}
             title="Minimize"
           >
             <Minus size={16} />
           </button>
           <button
             onClick={handleMaximize}
-            className="p-1 hover:bg-slate-600 rounded transition-colors"
+            className="p-1 rounded transition-colors"
             style={{ color: theme.colors.text.muted }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = theme.colors.bg.elevated;
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'transparent';
+            }}
             title="Maximize/Restore"
           >
             <Square size={14} />

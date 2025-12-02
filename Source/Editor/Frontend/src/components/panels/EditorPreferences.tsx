@@ -16,7 +16,7 @@ export function EditorPreferences({ isOpen, onClose }: EditorPreferencesProps) {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'rgba(0, 0, 0, 0.7)' }}>
+    <div className="fixed inset-0 z-[4000] flex items-center justify-center" style={{ backgroundColor: 'rgba(0, 0, 0, 0.8)' }}>
       <div 
         className="w-[900px] h-[600px] flex flex-col rounded-lg shadow-2xl overflow-hidden"
         style={{ 
@@ -57,20 +57,40 @@ export function EditorPreferences({ isOpen, onClose }: EditorPreferencesProps) {
             <div className="p-2 space-y-1">
               <button
                 onClick={() => setActiveTab('theme')}
-                className="w-full text-left px-3 py-2 rounded text-sm transition-colors"
+                className="w-full text-left px-3 py-2 rounded text-sm transition-colors hover:bg-opacity-70"
                 style={{
                   backgroundColor: activeTab === 'theme' ? theme.colors.bg.elevated : 'transparent',
                   color: activeTab === 'theme' ? theme.colors.text.primary : theme.colors.text.secondary
+                }}
+                onMouseEnter={(e) => {
+                  if (activeTab !== 'theme') {
+                    e.currentTarget.style.backgroundColor = `${theme.colors.bg.elevated}50`;
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (activeTab !== 'theme') {
+                    e.currentTarget.style.backgroundColor = 'transparent';
+                  }
                 }}
               >
                 Thèmes
               </button>
               <button
                 onClick={() => setActiveTab('shortcuts')}
-                className="w-full text-left px-3 py-2 rounded text-sm transition-colors"
+                className="w-full text-left px-3 py-2 rounded text-sm transition-colors hover:bg-opacity-70"
                 style={{
                   backgroundColor: activeTab === 'shortcuts' ? theme.colors.bg.elevated : 'transparent',
                   color: activeTab === 'shortcuts' ? theme.colors.text.primary : theme.colors.text.secondary
+                }}
+                onMouseEnter={(e) => {
+                  if (activeTab !== 'shortcuts') {
+                    e.currentTarget.style.backgroundColor = `${theme.colors.bg.elevated}50`;
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (activeTab !== 'shortcuts') {
+                    e.currentTarget.style.backgroundColor = 'transparent';
+                  }
                 }}
               >
                 Raccourcis

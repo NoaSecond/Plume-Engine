@@ -7,6 +7,7 @@ import { DetailsPanel } from './components/panels/DetailsPanel';
 import { ContentBrowserPanel } from './components/panels/ContentBrowserPanel';
 import { ConsolePanel } from './components/panels/ConsolePanel';
 import { EditorPreferences } from './components/panels/EditorPreferences';
+import { PluginManager } from './components/panels/PluginManager';
 import { PlumeLogo } from './components/ui/PlumeLogo';
 import { DEFAULT_SCENE } from './data/constants';
 import { Entity, LogEntry, ToolType } from './types';
@@ -24,6 +25,7 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showAboutModal, setShowAboutModal] = useState(false);
   const [showPreferences, setShowPreferences] = useState(false);
+  const [showPluginManager, setShowPluginManager] = useState(false);
   const [cameraTransform, setCameraTransform] = useState({ position: {x:0, y:-50, z:-150}, rotation: {x:20, y:0, z:0} });
   const [viewMode, setViewMode] = useState<'Lit' | 'Unlit' | 'Wireframe'>('Lit');
   const requestRef = useRef<number>();
@@ -93,7 +95,7 @@ export default function App() {
         color: theme.colors.text.primary 
       }}
     >
-      <Header isPlaying={isPlaying} onSave={() => {}} onAbout={() => setShowAboutModal(true)} onPreferences={() => setShowPreferences(true)} />
+      <Header isPlaying={isPlaying} onSave={() => {}} onAbout={() => setShowAboutModal(true)} onPreferences={() => setShowPreferences(true)} onPlugins={() => setShowPluginManager(true)} />
       <Toolbar activeTool={activeTool} setActiveTool={setActiveTool} onSave={() => {}} onDelete={() => {}} isPlaying={isPlaying} onPlay={() => setIsPlaying(true)} onPause={() => setIsPlaying(false)} onStop={() => setIsPlaying(false)} />
       <div className="flex-1 flex overflow-hidden">
         <Viewport entities={entities} selectedId={selectedId} setSelectedId={setSelectedId} cameraTransform={cameraTransform} setCameraTransform={setCameraTransform} activeTool={activeTool} viewMode={viewMode} setViewMode={setViewMode} onAddEntity={(type) => setEntities([...entities, {id: Date.now().toString(), name: type, type, visible: true, transform: {position:{x:0,y:0,z:0}, rotation:{x:0,y:0,z:0}, scale:{x:1,y:1,z:1}}}])} />
@@ -117,6 +119,7 @@ export default function App() {
         setIsOpen={setShowConsole}
       />
       <EditorPreferences isOpen={showPreferences} onClose={() => setShowPreferences(false)} />
+      <PluginManager isOpen={showPluginManager} onClose={() => setShowPluginManager(false)} />
       <div 
         className="h-6 border-t flex items-center justify-between px-2 text-[10px]"
         style={{ 
@@ -154,6 +157,7 @@ export default function App() {
           <span style={{ color: theme.colors.accent.primary }}>Plume Engine v0.1 Alpha</span>
           <span style={{ color: theme.colors.border.default }}>|</span>
           <span>{theme.displayName}</span>
+
         </div>
       </div>
       {showAboutModal && (

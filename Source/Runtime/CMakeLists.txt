@@ -4,11 +4,18 @@
     "Core/Scene.cpp"
     "Core/Scene.h"
     "Core/Components.h"
-    "Core/DiscordPresence.cpp"
-    "Core/DiscordPresence.h"
+    "Core/Plugin.h"
+    "Core/PluginManager.cpp"
+    "Core/PluginManager.h"
 )
 
-# Sources du Discord Game SDK
+# Plugins
+set(PLUGIN_DISCORD_SOURCES
+    "Plugins/DiscordRichPresence/DiscordPresence.cpp"
+    "Plugins/DiscordRichPresence/DiscordPresence.h"
+)
+
+# Discord Game SDK
 set(DISCORD_SDK_SOURCES
     ${discord_game_sdk_SOURCE_DIR}/cpp/achievement_manager.cpp
     ${discord_game_sdk_SOURCE_DIR}/cpp/activity_manager.cpp
@@ -26,7 +33,7 @@ set(DISCORD_SDK_SOURCES
     ${discord_game_sdk_SOURCE_DIR}/cpp/voice_manager.cpp
 )
 
-add_library(PlumeRuntime SHARED ${RUNTIME_SOURCES} ${DISCORD_SDK_SOURCES})
+add_library(PlumeRuntime SHARED ${RUNTIME_SOURCES} ${PLUGIN_DISCORD_SOURCES} ${DISCORD_SDK_SOURCES})
 target_include_directories(PlumeRuntime PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
 # Inclure les headers du Discord Game SDK

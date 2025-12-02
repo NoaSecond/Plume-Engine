@@ -42,6 +42,8 @@ PlumeEngine/
 
 ## Build Instructions
 
+**Important:** You must build the Web Interface before building the C++ Engine, as the editor requires the UI files.
+
 ### 1. Build Web Interface
 
 ```bash
@@ -50,7 +52,12 @@ npm install
 npm run build
 ```
 
-This generates the final HTML file in `Bin/UI`.
+This generates the final HTML file in `Bin/UI/index.html`. The build process:
+1. Compiles TypeScript and React code
+2. Bundles assets with Vite
+3. Inlines CSS and JavaScript into a single HTML file
+
+**Verify the build:** Check that `Bin/UI/index.html` exists before proceeding.
 
 ### 2. Build C++ Engine
 
@@ -65,6 +72,10 @@ cmake --build . --config Release
 ### 3. Run
 
 Navigate to `Bin/Release` and launch `PlumeEditor.exe`.
+
+**Troubleshooting:**
+- If you get "Cannot find UI/index.html" error, rebuild the Web Interface (step 1)
+- The editor looks for `UI/index.html` relative to the executable location
 
 ## Requirements
 

@@ -1,31 +1,22 @@
 #pragma once
 
+#include "../../Core/Plugin.h"
 #include <string>
 #include <cstdint>
 
-#if defined(_WIN32)
-    #ifndef PLUME_API
-        #ifdef PLUME_EXPORT
-            #define PLUME_API __declspec(dllexport)
-        #else
-            #define PLUME_API __declspec(dllimport)
-        #endif
-    #endif
-#else
-    #ifndef PLUME_API
-        #define PLUME_API
-    #endif
-#endif
-
 namespace Plume {
 
-class PLUME_API DiscordPresence {
+class PLUME_API DiscordPresence : public IPlugin {
 public:
     static DiscordPresence& Get();
     
-    void Init();
-    void Shutdown();
-    void Update();
+    // IPlugin interface
+    PluginInfo GetInfo() const override;
+    bool Initialize() override;
+    void Shutdown() override;
+    void Update() override;
+    bool IsEnabled() const override { return m_enabled; }
+    void SetEnabled(bool enabled) override { m_enabled = enabled; }
     
     void SetState(const std::string& state);
     void SetDetails(const std::string& details);
@@ -38,6 +29,7 @@ private:
     ~DiscordPresence() = default;
     
     bool m_initialized = false;
+    bool m_enabled = true;
     std::string m_state;
     std::string m_details;
     std::string m_largeImageKey;
