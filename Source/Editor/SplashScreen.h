@@ -13,7 +13,8 @@ public:
     bool Create(const std::wstring& imagePath, int width, int height);
     void Show();
     void Hide();
-    void UpdateProgress(float progress, const std::string& statusText = "");
+    void UpdateProgress(float progress, const std::string& statusText);
+    void SetAccentColor(const std::string& hexColor);
     void Close();
     bool IsVisible() const { return m_hwnd != nullptr && IsWindowVisible(m_hwnd); }
     
@@ -24,6 +25,7 @@ private:
     HWND m_hwnd;
     float m_progress;
     std::string m_statusText;
+    std::string m_accentColorHex;
     HFONT m_fontTitle;
     HFONT m_fontStatus;
     Gdiplus::Image* m_image;

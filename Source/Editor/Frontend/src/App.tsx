@@ -74,6 +74,25 @@ export default function App() {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => { 
       keysPressed.current[e.code] = true; 
+      
+      // Handle Escape key to close modals and drawers
+      if (e.key === 'Escape') {
+        // Close modals first (highest priority)
+        if (showPreferences) {
+          setShowPreferences(false);
+          return;
+        }
+        if (showPluginManager) {
+          setShowPluginManager(false);
+          return;
+        }
+        // Close content browser drawer
+        if (showContentBrowser) {
+          setShowContentBrowser(false);
+          return;
+        }
+      }
+      
       if(e.ctrlKey && e.code === 'Space') {
         e.preventDefault();
         setShowContentBrowser(p => !p);
@@ -83,7 +102,7 @@ export default function App() {
     const handleKeyUp = (e: KeyboardEvent) => { keysPressed.current[e.code] = false; };
     window.addEventListener('keydown', handleKeyDown); window.addEventListener('keyup', handleKeyUp);
     return () => { window.removeEventListener('keydown', handleKeyDown); window.removeEventListener('keyup', handleKeyUp); };
-  }, []);
+  }, [showPreferences, showPluginManager, showContentBrowser]);
 
   const selectedEntity = entities.find(e => e.id === selectedId);
 

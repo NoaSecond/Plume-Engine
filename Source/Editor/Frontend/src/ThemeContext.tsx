@@ -20,7 +20,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   const theme = themes[currentTheme];
 
-  // Apply theme to CSS variables for global access
+  // Apply theme to CSS variables for global access and export to C++
   useEffect(() => {
     const root = document.documentElement;
     const t = theme.colors;
@@ -47,6 +47,19 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     root.style.setProperty('--color-border-default', t.border.default);
     root.style.setProperty('--color-border-subtle', t.border.subtle);
     root.style.setProperty('--color-border-focus', t.border.focus);
+    
+    // Export theme data for C++ (splash screen)
+    const themeData = {
+      name: currentTheme,
+      colors: {
+        accent: {
+          primary: t.accent.primary
+        }
+      }
+    };
+    
+    // Make it available globally for C++ to access
+    (window as any).PLUME_THEME_DATA = themeData;
     
     // Status colors
     root.style.setProperty('--color-status-success', t.status.success);

@@ -56,6 +56,53 @@ void ExportSceneData() {
     }
 }
 
+void ExportThemeData() {
+    // Créer un fichier de thème par défaut pour le splash screen
+    std::string dataPath = g_app.uiFolder + "/theme_data.js";
+    std::string tempPath = dataPath + ".tmp";
+    
+    std::ofstream file(tempPath);
+    if (file.is_open()) {
+        file << "window.PLUME_THEME_DATA = {";
+        file << "\"name\": \"nebula-midnight\","; // Thème par défaut
+        file << "\"colors\": {";
+        file << "\"accent\": {";
+        file << "\"primary\": \"#9C27B0\""; // Nebula Midnight accent color
+        file << "}";
+        file << "}";
+        file << "};";
+        file.close();
+        try {
+            if (fs::exists(dataPath)) fs::remove(dataPath);
+            fs::rename(tempPath, dataPath);
+        } catch(...) {}
+    }
+}
+
+std::string GetCurrentThemeAccentColor() {
+    // Lire le fichier theme_data.js pour obtenir la couleur d'accent du thème actuel
+    std::string themePath = g_app.uiFolder + "/theme_data.js";
+    if (fs::exists(themePath)) {
+        std::ifstream themeFile(themePath);
+        if (themeFile.is_open()) {
+            std::string content((std::istreambuf_iterator<char>(themeFile)), std::istreambuf_iterator<char>());
+            // Chercher la couleur d'accent primaire
+            size_t primaryPos = content.find("\"primary\":");
+            if (primaryPos != std::string::npos) {
+                size_t start = content.find("#", primaryPos);
+                if (start != std::string::npos) {
+                    size_t end = content.find("\"", start);
+                    if (end != std::string::npos) {
+                        return content.substr(start + 1, end - start - 1);
+                    }
+                }
+            }
+        }
+    }
+    // Couleur par défaut Nebula Midnight
+    return "9C27B0";
+}
+
 void ExportPluginData() {
     auto plugins = Plume::PluginManager::Get().GetAllPlugins();
     std::string dataPath = g_app.uiFolder + "/plugin_data.js";
@@ -298,6 +345,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     
     SplashScreen splash;
     splash.Create(wSplashPath, 600, 400);
+    
+    // Configurer la couleur du thème pour le splash screen
+    std::string themeColor = GetCurrentThemeAccentColor();
+    splash.SetAccentColor(themeColor);
+    
     splash.Show();
     splash.UpdateProgress(0.0f, "Initializing Plume Engine...");
     
@@ -346,6 +398,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     splash.UpdateProgress(0.55f, "Exporting data...");
     ExportSceneData();
     ExportPluginData();
+    ExportThemeData();
     splash.UpdateProgress(0.6f, "Creating window...");
     
     // Créer la fenêtre principale (mais ne pas l'afficher encore)

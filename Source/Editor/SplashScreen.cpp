@@ -9,6 +9,7 @@
 SplashScreen::SplashScreen() 
     : m_hwnd(nullptr)
     , m_progress(0.0f)
+    , m_accentColorHex("")
     , m_fontTitle(nullptr)
     , m_fontStatus(nullptr)
     , m_image(nullptr)
@@ -172,6 +173,10 @@ void SplashScreen::UpdateProgress(float progress, const std::string& statusText)
     }
 }
 
+void SplashScreen::SetAccentColor(const std::string& hexColor) {
+    m_accentColorHex = hexColor;
+}
+
 void SplashScreen::Paint(HDC hdc) {
     RECT rect;
     GetClientRect(m_hwnd, &rect);
@@ -181,19 +186,10 @@ void SplashScreen::Paint(HDC hdc) {
     HBITMAP memBitmap = CreateCompatibleBitmap(hdc, rect.right, rect.bottom);
     HBITMAP oldBitmap = (HBITMAP)SelectObject(memDC, memBitmap);
     
-    // Fond dégradé (simulé avec rectangles)
+    // Fond uniforme (sans gradient)
     HBRUSH bgBrush = CreateSolidBrush(RGB(30, 30, 30)); // #1E1E1E
     FillRect(memDC, &rect, bgBrush);
     DeleteObject(bgBrush);
-    
-    // Gradient subtil en haut
-    for (int i = 0; i < 100; i++) {
-        int gray = 30 + (15 * i / 100);
-        HBRUSH brush = CreateSolidBrush(RGB(gray, gray, gray));
-        RECT gradRect = {0, i, rect.right, i + 1};
-        FillRect(memDC, &gradRect, brush);
-        DeleteObject(brush);
-    }
     
     // Dessiner l'image PNG si disponible (centrée verticalement)
     SetBkMode(memDC, TRANSPARENT);
@@ -226,21 +222,28 @@ void SplashScreen::Paint(HDC hdc) {
     FillRect(memDC, &barBgRect, barBgBrush);
     DeleteObject(barBgBrush);
     
-    // Progression avec gradient
+    // Progression avec couleur de thème dynamique
     int progressWidth = static_cast<int>(barWidth * m_progress);
     if (progressWidth > 0) {
-        // Gradient de la barre de progression
-        for (int i = 0; i < progressWidth; i++) {
-            float ratio = static_cast<float>(i) / barWidth;
-            int r = 79 + static_cast<int>((2 - 79) * ratio);
-            int g = 195 + static_cast<int>((136 - 195) * ratio);
-            int b = 247 + static_cast<int>((209 - 247) * ratio);
-            
-            HBRUSH progressBrush = CreateSolidBrush(RGB(r, g, b));
-            RECT progressRect = {barX + i, barY, barX + i + 1, barY + barHeight};
-            FillRect(memDC, &progressRect, progressBrush);
-            DeleteObject(progressBrush);
+        // Obtenir la couleur d'accent du thème actuel
+        COLORREF accentColor = RGB(79, 195, 247); // Couleur par défaut
+        
+        // Essayer de lire la couleur depuis les données du thème
+        if (!m_accentColorHex.empty()) {
+            // Convertir hex en RGB
+            std::string hex = m_accentColorHex;
+            if (hex.length() == 6) {
+                int r = std::stoi(hex.substr(0, 2), nullptr, 16);
+                int g = std::stoi(hex.substr(2, 2), nullptr, 16);
+                int b = std::stoi(hex.substr(4, 2), nullptr, 16);
+                accentColor = RGB(r, g, b);
+            }
         }
+        
+        HBRUSH progressBrush = CreateSolidBrush(accentColor);
+        RECT progressRect = {barX, barY, barX + progressWidth, barY + barHeight};
+        FillRect(memDC, &progressRect, progressBrush);
+        DeleteObject(progressBrush);
     }
     
     // Titre "PLUME ENGINE" sous la barre

@@ -46,13 +46,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({ activeTool, setActiveTool, onS
         ></div>
         <IconButton icon={Settings} title="Editor Settings" />
       </div>
-      <div 
-        className="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 flex space-x-1 items-center p-1 rounded border shadow-sm"
-        style={{
-          backgroundColor: theme.colors.bg.secondary,
-          borderColor: theme.colors.border.default
-        }}
-      >
+      <div className="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 flex space-x-1 items-center">
         {!isPlaying ? (
           <button 
             onClick={onPlay} 
