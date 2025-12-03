@@ -24,9 +24,11 @@ public:
     void SetSmallImage(const std::string& key, const std::string& text);
     void SetStartTimestamp(int64_t timestamp);
     
-private:
+public:
     DiscordPresence() = default;
     ~DiscordPresence() = default;
+
+private:
     
     bool m_initialized = false;
     bool m_enabled = true;

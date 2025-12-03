@@ -36,7 +36,7 @@ bool DiscordPresence::Initialize() {
     // Discord Application ID pour Plume Engine
     discord::ClientId clientId = 1445163901581787236LL;
     
-    auto result = discord::Core::Create(clientId, DiscordCreateFlags_Default, &g_discordCore);
+    auto result = discord::Core::Create(clientId, DiscordCreateFlags_NoRequireDiscord, &g_discordCore);
     if (result != discord::Result::Ok || !g_discordCore) {
         // Échec de l'initialisation Discord - l'application continuera sans Rich Presence
         return false;

@@ -363,8 +363,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     splash.UpdateProgress(0.3f, "Loading plugins...");
     auto& pluginManager = Plume::PluginManager::Get();
     
-    // Plugin system initialization (Discord Rich Presence disabled by default)
-    splash.UpdateProgress(0.35f, "Initializing plugin system...");
+    // Enregistrer les plugins disponibles
+    splash.UpdateProgress(0.35f, "Registering plugins...");
+    auto discordPlugin = std::make_shared<Plume::DiscordPresence>();
+    pluginManager.RegisterPlugin(discordPlugin);
     
     // Initialiser tous les plugins activés
     splash.UpdateProgress(0.4f, "Initializing plugins...");
