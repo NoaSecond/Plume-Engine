@@ -267,7 +267,9 @@ void InitWebView(const std::string& htmlPath) {
                             ComPtr<ICoreWebView2Settings> settings;
                             g_app.webview->get_Settings(&settings);
                             if (settings) {
-                                settings->put_AreDefaultContextMenusEnabled(TRUE);
+                                // Désactiver le menu contextuel par défaut de WebView2
+                                // afin que le frontend (React) puisse gérer `onContextMenu`
+                                settings->put_AreDefaultContextMenusEnabled(FALSE);
                                 settings->put_IsStatusBarEnabled(FALSE);
                             }
                             

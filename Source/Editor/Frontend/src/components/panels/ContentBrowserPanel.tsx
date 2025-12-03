@@ -1,16 +1,93 @@
-﻿import React, { useRef, useEffect } from 'react';
+﻿import React, { useRef, useEffect, useState } from 'react';
 import { ChevronRight, Search, Folder, X, ChevronDown } from 'lucide-react';
 import { AssetTile } from '../ui/Shared';
+import { ContextMenu, ContextMenuItem } from '../ui/ContextMenu';
 import { useTheme } from '../../ThemeContext';
 interface ContentBrowserProps { show: boolean; onClose: () => void; onLog: (msg: string, type: 'WARN' | 'INFO' | 'ERROR') => void; searchQuery: string; setSearchQuery: (q: string) => void; }
 export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClose, onLog, searchQuery, setSearchQuery }) => {
   const { theme } = useTheme();
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const [ctxVisible, setCtxVisible] = useState(false);
+  const [ctxX, setCtxX] = useState(0);
+  const [ctxY, setCtxY] = useState(0);
+  const [ctxType, setCtxType] = useState<'empty'|'asset'|'folder'|null>(null);
+  const [ctxTarget, setCtxTarget] = useState<{id:string,name:string,type:string}|null>(null);
+  const [assets, setAssets] = useState<Array<{id:string,name:string,type:string}>>([
+    { id: 'maps', name: 'Maps', type: 'folder' },
+    { id: 'scripts', name: 'Scripts', type: 'folder' }
+  ]);
+  const [clipboard, setClipboard] = useState<{id:string,name:string,type:string}|null>(null);
   useEffect(() => { if (show && searchInputRef.current) setTimeout(() => searchInputRef.current?.focus(), 50); }, [show]);
+  
+  const createFolder = (name?: string) => {
+    const folderName = name ?? window.prompt('Folder name', 'New Folder') ?? 'New Folder';
+    const id = `${folderName.toLowerCase().replace(/[^a-z0-9]+/g,'_')}_${Date.now()}`;
+    const item = { id, name: folderName, type: 'folder' };
+    setAssets(prev => [item, ...prev]);
+    onLog(`Created folder ${folderName}`, 'INFO');
+    // Inform backend
+    // @ts-ignore
+    if (window.chrome?.webview) window.chrome.webview.postMessage({ action: 'create-folder', name: folderName });
+  };
+
+  const renameItem = (item: {id:string,name:string,type:string}) => {
+    const newName = window.prompt('Rename item', item.name);
+    if (!newName || newName === item.name) return;
+    setAssets(prev => prev.map(a => a.id === item.id ? { ...a, name: newName } : a));
+    onLog(`Renamed ${item.name} -> ${newName}`, 'INFO');
+    // @ts-ignore
+    if (window.chrome?.webview) window.chrome.webview.postMessage({ action: 'rename', id: item.id, name: newName });
+  };
+
+  const deleteItem = (item: {id:string,name:string,type:string}) => {
+    if (!window.confirm(`Delete ${item.name}?`)) return;
+    setAssets(prev => prev.filter(a => a.id !== item.id));
+    onLog(`Deleted ${item.name}`, 'INFO');
+    // @ts-ignore
+    if (window.chrome?.webview) window.chrome.webview.postMessage({ action: 'delete', id: item.id });
+  };
+
+  const duplicateItem = (item: {id:string,name:string,type:string}) => {
+    const newName = `${item.name}_copy`;
+    const id = `${item.id}_copy_${Date.now()}`;
+    const copy = { id, name: newName, type: item.type };
+    setAssets(prev => [copy, ...prev]);
+    onLog(`Duplicated ${item.name} -> ${newName}`, 'INFO');
+    // @ts-ignore
+    if (window.chrome?.webview) window.chrome.webview.postMessage({ action: 'duplicate', id: item.id, newId: id });
+  };
+
+  const copyItem = (item: {id:string,name:string,type:string}) => {
+    setClipboard(item);
+    onLog(`Copied ${item.name} to clipboard`, 'INFO');
+    // Inform backend clipboard if needed
+    // @ts-ignore
+    if (window.chrome?.webview) window.chrome.webview.postMessage({ action: 'copy', id: item.id });
+  };
+
+  const pasteClipboard = () => {
+    if (!clipboard) return;
+    const id = `${clipboard.id}_paste_${Date.now()}`;
+    const pasted = { id, name: `${clipboard.name}_pasted`, type: clipboard.type };
+    setAssets(prev => [pasted, ...prev]);
+    onLog(`Pasted ${clipboard.name}`, 'INFO');
+    // @ts-ignore
+    if (window.chrome?.webview) window.chrome.webview.postMessage({ action: 'paste', id: clipboard.id });
+  };
+
+  const openInExplorer = (item?: {id:string,name:string,type:string}) => {
+    onLog(`Open in Explorer${item ? ' : ' + item.name : ''}`, 'INFO');
+    // @ts-ignore
+    if (window.chrome?.webview) window.chrome.webview.postMessage({ action: 'open-in-explorer', name: item ? item.name : undefined });
+  };
   
   return (
     <div 
       className="fixed left-0 right-0 shadow-2xl transition-transform duration-300 ease-out flex flex-col"
+      onMouseDown={(e) => {
+        // Close context menu on left-click only (button 0). Ignore right-clicks (button 2)
+        if ((e as React.MouseEvent).button === 0) setCtxVisible(false);
+      }}
       style={{ 
         backgroundColor: theme.colors.bg.primary,
         borderTop: `1px solid ${theme.colors.accent.primary}`,
@@ -112,10 +189,18 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
             </div>
             <div className="pl-4 space-y-1">
               <div 
-                className="flex items-center text-xs rounded px-1 py-0.5"
+                className="flex items-center text-xs rounded px-1 py-0.5 cursor-pointer"
                 style={{
                   color: theme.colors.accent.primary,
                   backgroundColor: theme.colors.bg.secondary
+                }}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  setCtxX(e.clientX);
+                  setCtxY(e.clientY);
+                  setCtxType('folder');
+                  setCtxTarget({ id: 'root_game', name: 'Game', type: 'folder' });
+                  setCtxVisible(true);
                 }}
               >
                 <Folder size={12} className="mr-2 fill-current"/> Game
@@ -125,12 +210,84 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
          <div 
            className="flex-1 p-2 overflow-y-auto"
            style={{ backgroundColor: theme.colors.bg.secondary }}
+           onContextMenu={(e) => {
+             // Right click on empty area
+             e.preventDefault();
+            console.log('ContentBrowser: right-click empty at', e.clientX, e.clientY);
+            // @ts-ignore
+            if (window.chrome?.webview) window.chrome.webview.postMessage({ action: 'debug-context', context: 'empty', x: e.clientX, y: e.clientY });
+             setCtxX(e.clientX);
+             setCtxY(e.clientY);
+             setCtxType('empty');
+             setCtxTarget(null);
+             setCtxVisible(true);
+           }}
          >
            <div className="flex flex-wrap gap-2 content-start">
-             <AssetTile name="Maps" type="folder" />
-             <AssetTile name="Scripts" type="folder" />
+             {assets.map(a => (
+               <AssetTile key={a.id} name={a.name} type={a.type} onContextMenu={(_e, info) => {
+                console.log('ContentBrowser: right-click asset', info, 'at', _e.clientX, _e.clientY);
+                // @ts-ignore
+                if (window.chrome?.webview) window.chrome.webview.postMessage({ action: 'debug-context', context: 'asset', info, x: _e.clientX, y: _e.clientY });
+                setCtxX(_e.clientX);
+                setCtxY(_e.clientY);
+                setCtxType(info.type === 'folder' ? 'folder' : 'asset');
+                setCtxTarget(a);
+                setCtxVisible(true);
+               }} />
+             ))}
            </div>
          </div>
+         {ctxVisible && ctxType && (
+           <ContextMenu
+             x={ctxX}
+             y={ctxY}
+             items={(ctxType === 'empty' ? [
+               { id: 'create_folder', label: 'Create Folder' },
+               { id: 'open_in_explorer', label: 'Open In Explorer' },
+               { id: 'paste', label: 'Paste', disabled: clipboard == null },
+               { id: 'import', label: 'Import' },
+               { id: 'create_asset', label: 'Create Asset...' }
+             ] : ctxType === 'folder' ? [
+               { id: 'change_color', label: 'Change Color' },
+               { id: 'rename', label: 'Rename' },
+               { id: 'delete', label: 'Delete' },
+               { id: 'duplicate', label: 'Duplicate' },
+               { id: 'copy', label: 'Copy' }
+             ] : [
+               { id: 'delete', label: 'Delete' },
+               { id: 'rename', label: 'Rename' },
+               { id: 'duplicate', label: 'Duplicate' },
+               { id: 'copy', label: 'Copy' }
+             ]) as ContextMenuItem[]}
+            onSelect={(id) => {
+               // Handle built-in actions
+               if (id === 'create_folder') createFolder();
+               else if (id === 'paste') pasteClipboard();
+               else if (id === 'open_in_explorer') openInExplorer(ctxTarget ?? undefined);
+               else if (id === 'rename' && ctxTarget) renameItem(ctxTarget as any);
+               else if (id === 'delete' && ctxTarget) deleteItem(ctxTarget as any);
+               else if (id === 'duplicate' && ctxTarget) duplicateItem(ctxTarget as any);
+               else if (id === 'copy' && ctxTarget) copyItem(ctxTarget as any);
+               else if (id === 'change_color' && ctxTarget) {
+                 const color = window.prompt('Hex color (without #)', 'ffffff');
+                 if (color) {
+                   onLog(`Changed color of ${ctxTarget.name} to #${color}`, 'INFO');
+                   // send to backend
+                   // @ts-ignore
+                   if (window.chrome?.webview) window.chrome.webview.postMessage({ action: 'change-color', id: ctxTarget.id, color: `#${color}` });
+                 }
+               }
+
+               const payload = { action: id, target: ctxTarget };
+               document.dispatchEvent(new CustomEvent('contentBrowserAction', { detail: payload }));
+               const targetStr = ctxTarget ? ` on ${ctxTarget.name}` : '';
+               onLog(`Context action: ${id}${targetStr}`, 'INFO');
+               setCtxVisible(false);
+             }}
+             onClose={() => setCtxVisible(false)}
+           />
+         )}
       </div>
     </div>
   );

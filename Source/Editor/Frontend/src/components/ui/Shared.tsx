@@ -138,7 +138,7 @@ export const MenuBarItem: React.FC<MenuBarItemProps> = ({ label, items, onAction
   );
 };
 
-export const AssetTile = ({ name, type }: { name: string, type: string }) => {
+export const AssetTile = ({ name, type, onContextMenu }: { name: string, type: string, onContextMenu?: (e: React.MouseEvent, info: { name: string, type: string }) => void }) => {
   const { theme } = useTheme();
   let Icon = FileCode;
   let color = theme.colors.text.muted;
@@ -168,6 +168,11 @@ export const AssetTile = ({ name, type }: { name: string, type: string }) => {
       }}
       onMouseLeave={(e) => {
         e.currentTarget.style.backgroundColor = 'transparent';
+      }}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        onContextMenu?.(e, { name, type });
       }}
     >
       <div 
