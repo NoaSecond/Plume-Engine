@@ -138,7 +138,7 @@ export const MenuBarItem: React.FC<MenuBarItemProps> = ({ label, items, onAction
   );
 };
 
-export const AssetTile = ({ name, type, onContextMenu }: { name: string, type: string, onContextMenu?: (e: React.MouseEvent, info: { name: string, type: string }) => void }) => {
+export const AssetTile = ({ id, name, type, selected = false, onClick, onDoubleClick, onContextMenu, meta }: { id?: string, name: string, type: string, selected?: boolean, onClick?: (e: React.MouseEvent) => void, onDoubleClick?: (e: React.MouseEvent) => void, onContextMenu?: (e: React.MouseEvent, info: { name: string, type: string }) => void, meta?: any }) => {
   const { theme } = useTheme();
   let Icon = FileCode;
   let color = theme.colors.text.muted;
@@ -159,20 +159,38 @@ export const AssetTile = ({ name, type, onContextMenu }: { name: string, type: s
     Icon = Box; 
     color = "#60a5fa"; // blue-400
   }
+  // meta color overrides handled below
   
+  // if meta.color provided, prefer it (strip leading '#')
+  let finalColor = color;
+  try {
+    // @ts-ignore
+    if (meta && meta.color) {
+      // ensure string and remove leading '#'
+      const mcol: string = typeof meta.color === 'string' ? (meta.color as string) : '';
+      if (mcol.length > 0) finalColor = mcol.startsWith('#') ? mcol : ('#' + mcol);
+    }
+  } catch (e) {}
+
   return (
     <div 
       className="flex flex-col items-center p-2 rounded cursor-pointer group w-24 transition-colors"
+      onClick={(e) => onClick?.(e)}
+      onDoubleClick={(e) => onDoubleClick?.(e)}
       onMouseEnter={(e) => {
         e.currentTarget.style.backgroundColor = theme.colors.bg.elevated;
       }}
       onMouseLeave={(e) => {
-        e.currentTarget.style.backgroundColor = 'transparent';
+        if (!selected) e.currentTarget.style.backgroundColor = 'transparent';
       }}
       onContextMenu={(e) => {
         e.preventDefault();
         e.stopPropagation();
         onContextMenu?.(e, { name, type });
+      }}
+      style={{
+        backgroundColor: selected ? theme.colors.bg.elevated : undefined,
+        border: selected ? `1px solid ${theme.colors.accent.primary}` : undefined
       }}
     >
       <div 
@@ -188,14 +206,14 @@ export const AssetTile = ({ name, type, onContextMenu }: { name: string, type: s
           e.currentTarget.style.borderColor = theme.colors.border.default;
         }}
       >
-         <Icon size={32} style={{ color }} />
+         <Icon size={32} style={{ color: finalColor }} />
          <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-white/10 to-transparent"></div>
       </div>
       <span 
         className="text-[10px] text-center break-words w-full truncate px-1 rounded"
         style={{
-          color: theme.colors.text.secondary,
-          backgroundColor: `${theme.colors.bg.secondary}80` // 50% opacity
+          color: selected ? theme.colors.text.primary : theme.colors.text.secondary,
+          backgroundColor: 'transparent'
         }}
       >
         {name}

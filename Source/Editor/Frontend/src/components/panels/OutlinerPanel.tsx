@@ -11,6 +11,7 @@ export const OutlinerPanel: React.FC<OutlinerPanelProps> = ({ entities, selected
   const { theme } = useTheme();
   const [renameId, setRenameId] = useState<string | null>(null);
   const [draggedItem, setDraggedItem] = useState<number | null>(null);
+  const [deletePending, setDeletePending] = useState<{id:string,name:string}|null>(null);
   const handleDragStart = (e: React.DragEvent, index: number) => { setDraggedItem(index); e.dataTransfer.effectAllowed = "move"; };
   const handleDrop = (_e: React.DragEvent, index: number) => {
      if (draggedItem === null) return;
@@ -95,14 +96,23 @@ export const OutlinerPanel: React.FC<OutlinerPanelProps> = ({ entities, selected
             ) : (
               <span className="flex-1 truncate">{ent.name}</span>
             )}
-            <div className={`flex space-x-1 opacity-0 group-hover:opacity-100 ${selectedId === ent.id ? 'opacity-100' : ''}`}>
+              <div className={`flex space-x-1 opacity-0 group-hover:opacity-100 ${selectedId === ent.id ? 'opacity-100' : ''}`}>
               <button onClick={(e) => { e.stopPropagation(); setRenameId(ent.id); }}><Edit2 size={10}/></button>
               <button onClick={(e) => { e.stopPropagation(); onDuplicate(ent); }}><Copy size={10}/></button>
-              <button onClick={(e) => { e.stopPropagation(); if(confirm('Delete?')) onDelete(ent.id); }}><Trash2 size={10}/></button>
+              <button onClick={(e) => { e.stopPropagation(); setDeletePending({ id: ent.id, name: ent.name }); }}><Trash2 size={10}/></button>
             </div>
           </div>
         ))}
       </div>
+      {deletePending && (
+        <div style={{ position: 'absolute', right: 16, bottom: 56, zIndex: 60 }}>
+          <div className="flex items-center space-x-2 p-3 rounded shadow" style={{ backgroundColor: theme.colors.bg.secondary, border: `1px solid ${theme.colors.border.default}` }}>
+            <div className="text-sm" style={{ color: theme.colors.text.primary }}>Delete "{deletePending.name}"?</div>
+            <button className="px-3 py-1 rounded text-sm" style={{ backgroundColor: '#ef4444', color: '#fff' }} onClick={() => { onDelete(deletePending.id); setDeletePending(null); }}>Delete</button>
+            <button className="px-3 py-1 rounded text-sm" style={{ backgroundColor: theme.colors.bg.elevated, color: theme.colors.text.primary }} onClick={() => setDeletePending(null)}>Cancel</button>
+          </div>
+        </div>
+      )}
       <div 
         className="h-6 text-[10px] flex items-center px-2"
         style={{

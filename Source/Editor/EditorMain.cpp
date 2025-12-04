@@ -4,15 +4,20 @@
 #include <string>
 #include <filesystem>
 #include <fstream>
+#include <unordered_map>
 #include <thread>
 #include <chrono>
 #include <atomic>
 #include <memory>
+#include <functional>
+// Vendored single-header JSON (nlohmann)
+#include "ThirdParty/nlohmann_json.hpp"
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <windowsx.h>
+#include <shellapi.h>
 #include <dwmapi.h>
 #include <wrl.h>
 #include "WebView2.h"
@@ -33,6 +38,7 @@ struct AppState {
     std::string uiFolder;
     std::atomic<bool> shouldClose{false};
     bool isFullscreen = false; // Track windowed fullscreen state - starts as false
+    std::string clipboardPath; // path copied via context menu
 };
 
 static AppState g_app;
@@ -284,35 +290,254 @@ void InitWebView(const std::string& htmlPath) {
                             g_app.webview->add_WebMessageReceived(
                                 Callback<ICoreWebView2WebMessageReceivedEventHandler>(
                                     [](ICoreWebView2* sender, ICoreWebView2WebMessageReceivedEventArgs* args) -> HRESULT {
-                                        LPWSTR messageRaw;
+                                        LPWSTR messageRaw = nullptr;
                                         args->get_WebMessageAsJson(&messageRaw);
-                                        std::wstring message(messageRaw);
-                                        CoTaskMemFree(messageRaw);
-                                        
-                                        // Parse simple: chercher "minimize", "maximize", "close", "start-drag"
-                                        if (message.find(L"start-drag") != std::wstring::npos) {
-                                            // Simuler un drag de la fenêtre
+                                        std::wstring messageW(messageRaw ? messageRaw : L"");
+                                        if (messageRaw) CoTaskMemFree(messageRaw);
+
+                                        // Convert wide JSON string to UTF-8
+                                        auto wstr_to_utf8 = [&](const std::wstring& w) -> std::string {
+                                            if (w.empty()) return {};
+                                            int size = WideCharToMultiByte(CP_UTF8, 0, w.c_str(), (int)w.size(), NULL, 0, NULL, NULL);
+                                            if (size <= 0) return {};
+                                            std::string out(size, '\0');
+                                            WideCharToMultiByte(CP_UTF8, 0, w.c_str(), (int)w.size(), out.data(), size, NULL, NULL);
+                                            return out;
+                                        };
+
+                                        auto utf8_to_wstr = [&](const std::string& s) -> std::wstring {
+                                            if (s.empty()) return {};
+                                            int size = MultiByteToWideChar(CP_UTF8, 0, s.c_str(), (int)s.size(), NULL, 0);
+                                            if (size <= 0) return {};
+                                            std::wstring out(size, L'\0');
+                                            MultiByteToWideChar(CP_UTF8, 0, s.c_str(), (int)s.size(), out.data(), size);
+                                            return out;
+                                        };
+
+                                        std::string msg = wstr_to_utf8(messageW);
+
+                                        // Parse JSON using nlohmann::json (vendored header)
+                                        nlohmann::json j;
+                                        bool parsed = false;
+                                        try {
+                                            j = nlohmann::json::parse(msg);
+                                            parsed = true;
+                                        } catch(...) { parsed = false; }
+                                        if (!parsed) {
+                                            std::string out = "{\"type\":\"result\",\"success\":false,\"message\":\"Invalid JSON\"}";
+                                            std::wstring wides = utf8_to_wstr(out);
+                                            if (g_app.webview) g_app.webview->PostWebMessageAsJson(wides.c_str());
+                                            return S_OK;
+                                        }
+                                        std::string action = j.value("action", std::string());
+
+                                        // Quick window commands
+                                        if (action == "start-drag") {
                                             ReleaseCapture();
                                             SendMessage(g_app.hwnd, WM_NCLBUTTONDOWN, HTCAPTION, 0);
+                                            return S_OK;
                                         }
-                                        else if (message.find(L"minimize") != std::wstring::npos) {
-                                            ShowWindow(g_app.hwnd, SW_MINIMIZE);
-                                        }
-                                        else if (message.find(L"maximize") != std::wstring::npos) {
-                                            // Utiliser les commandes natives Windows pour les animations
-                                            if (IsZoomed(g_app.hwnd)) {
-                                                // La fenêtre est maximisée, la restaurer
-                                                ShowWindow(g_app.hwnd, SW_RESTORE);
-                                            } else {
-                                                // La fenêtre n'est pas maximisée, la maximiser
-                                                ShowWindow(g_app.hwnd, SW_MAXIMIZE);
+                                        if (action == "minimize") { ShowWindow(g_app.hwnd, SW_MINIMIZE); return S_OK; }
+                                        if (action == "maximize") { if (IsZoomed(g_app.hwnd)) ShowWindow(g_app.hwnd, SW_RESTORE); else ShowWindow(g_app.hwnd, SW_MAXIMIZE); return S_OK; }
+                                        if (action == "close") { g_app.shouldClose = true; PostMessage(g_app.hwnd, WM_CLOSE, 0, 0); return S_OK; }
+
+                                        // Helper to send content list for a given path (string)
+                                        // If recursive==true, return a hierarchical tree of folders/files with children arrays
+                                        std::function<nlohmann::json(const fs::path&)> buildNode;
+                                        buildNode = [&](const fs::path& p) -> nlohmann::json {
+                                            nlohmann::json it;
+                                            std::string name = p.filename().string();
+                                            std::string id = name + "_" + std::to_string(std::hash<std::string>{}(p.string()));
+                                            std::string type = fs::is_directory(p) ? "folder" : "file";
+                                            std::string pathStr = p.string();
+                                            for (auto &c : pathStr) if (c == '\\') c = '/';
+                                            it["id"] = id;
+                                            it["name"] = name;
+                                            it["type"] = type;
+                                            it["path"] = pathStr;
+                                            if (fs::is_directory(p)) {
+                                                try {
+                                                    fs::path meta = p / ".plume_meta";
+                                                    if (fs::exists(meta)) {
+                                                        std::ifstream ifs(meta.string());
+                                                        if (ifs.is_open()) {
+                                                            nlohmann::json metaJson;
+                                                            ifs >> metaJson;
+                                                            it["meta"] = metaJson;
+                                                        }
+                                                    }
+                                                } catch(...) {}
                                             }
+                                            return it;
+                                        };
+
+                                        auto sendContentListFor = [&](const std::string& pathValue, bool recursive = false) {
+                                            fs::path base = fs::path(g_app.uiFolder).parent_path();
+                                            std::string rel = pathValue.empty() ? std::string("Content") : pathValue;
+                                            fs::path target = rel.rfind("://") != std::string::npos ? fs::path(rel) : base / rel;
+                                            nlohmann::json list = nlohmann::json::object();
+                                            list["type"] = "content-list";
+                                            list["path"] = rel;
+                                            list["items"] = nlohmann::json::array();
+                                            try {
+                                                if (fs::exists(target) && fs::is_directory(target)) {
+                                                    if (recursive) {
+                                                        // walk top-level entries and include children for folders
+                                                        for (auto& entry : fs::directory_iterator(target)) {
+                                                            nlohmann::json node = buildNode(entry.path());
+                                                            if (entry.is_directory()) {
+                                                                node["children"] = nlohmann::json::array();
+                                                                try {
+                                                                    for (auto& c : fs::directory_iterator(entry.path())) {
+                                                                        nlohmann::json child = buildNode(c.path());
+                                                                        // don't recurse deeply for performance; children will not have grandchildren
+                                                                        node["children"].push_back(child);
+                                                                    }
+                                                                } catch(...) {}
+                                                            }
+                                                            list["items"].push_back(node);
+                                                        }
+                                                    } else {
+                                                        for (auto& entry : fs::directory_iterator(target)) {
+                                                            list["items"].push_back(buildNode(entry.path()));
+                                                        }
+                                                    }
+                                                }
+                                            } catch(...) {}
+                                            std::string out = list.dump();
+                                            std::wstring wides = utf8_to_wstr(out);
+                                            if (g_app.webview) g_app.webview->PostWebMessageAsJson(wides.c_str());
+                                        };
+
+                                        // Helper to send structured result back to the frontend (optionally with data)
+                                        auto sendResult = [&](bool success, const std::string& message, nlohmann::json data = {}) {
+                                            nlohmann::json res;
+                                            res["type"] = "result";
+                                            res["success"] = success;
+                                            res["message"] = message;
+                                            if (!data.is_null() && !data.empty()) res["data"] = data;
+                                            std::string out = res.dump();
+                                            std::wstring wides = utf8_to_wstr(out);
+                                            if (g_app.webview) g_app.webview->PostWebMessageAsJson(wides.c_str());
+                                        };
+
+                                        // File actions
+                                        if (action == "list-content") {
+                                            std::string path = j.value("path", std::string());
+                                            bool recursive = j.value("recursive", false);
+                                            sendContentListFor(path, recursive);
+                                            return S_OK;
                                         }
-                                        else if (message.find(L"close") != std::wstring::npos) {
-                                            g_app.shouldClose = true;
-                                            PostMessage(g_app.hwnd, WM_CLOSE, 0, 0);
+                                        if (action == "delete") {
+                                            std::string path = j.value("path", std::string());
+                                            bool ok = false;
+                                            if (!path.empty()) {
+                                                try { fs::remove_all(fs::path(path)); ok = true; } catch(...) { ok = false; }
+                                            }
+                                            sendResult(ok, ok ? "Deleted" : "Delete failed");
+                                            // Refresh parent folder listing
+                                            if (!path.empty()) sendContentListFor(fs::path(path).parent_path().string()); else sendContentListFor(std::string("Content"));
+                                            return S_OK;
                                         }
-                                        
+                                        if (action == "rename") {
+                                            std::string path = j.value("path", std::string());
+                                            std::string name = j.value("name", std::string());
+                                            bool ok = false;
+                                            if (!path.empty() && !name.empty()) {
+                                                try { fs::path p(path); fs::path dest = p.parent_path() / name; fs::rename(p, dest); ok = true; } catch(...) { ok = false; }
+                                            }
+                                            sendResult(ok, ok ? "Renamed" : "Rename failed");
+                                            if (!path.empty()) sendContentListFor(fs::path(path).parent_path().string()); else sendContentListFor(std::string("Content"));
+                                            return S_OK;
+                                        }
+                                        if (action == "duplicate") {
+                                            std::string path = j.value("path", std::string());
+                                            bool ok = false;
+                                            if (!path.empty()) {
+                                                try {
+                                                    fs::path p(path);
+                                                    fs::path dest = p.parent_path() / (p.filename().string() + std::string("_copy"));
+                                                    if (fs::is_directory(p)) fs::copy(p, dest, fs::copy_options::recursive);
+                                                    else fs::copy_file(p, dest);
+                                                    ok = true;
+                                                } catch(...) { ok = false; }
+                                            }
+                                            sendResult(ok, ok ? "Duplicated" : "Duplicate failed");
+                                            if (!path.empty()) sendContentListFor(fs::path(path).parent_path().string()); else sendContentListFor(std::string("Content"));
+                                            return S_OK;
+                                        }
+                                        if (action == "create-folder") {
+                                            std::string name = j.value("name", std::string());
+                                            std::string pathParam = j.value("path", std::string());
+                                            bool ok = false;
+                                            if (!name.empty()) {
+                                                try {
+                                                    fs::path base = fs::path(g_app.uiFolder).parent_path();
+                                                    fs::path targetDir;
+                                                    if (!pathParam.empty()) {
+                                                        fs::path p(pathParam);
+                                                        if (p.is_absolute()) targetDir = p;
+                                                        else targetDir = base / pathParam;
+                                                    } else {
+                                                        targetDir = base / "Content";
+                                                    }
+                                                    fs::create_directories(targetDir / name);
+                                                    ok = true;
+                                                } catch(...) { ok = false; }
+                                            }
+                                            sendResult(ok, ok ? "Folder created" : "Create folder failed");
+                                            if (!pathParam.empty()) sendContentListFor(pathParam); else sendContentListFor(std::string("Content"));
+                                            return S_OK;
+                                        }
+                                        if (action == "open-in-explorer") { std::string path = j.value("path", std::string()); std::string toOpen = path.empty() ? (fs::path(g_app.uiFolder).parent_path() / "Content").string() : path; std::wstring args = utf8_to_wstr(std::string("/select,\"") + toOpen + std::string("\"")); ShellExecuteW(NULL, L"open", L"explorer.exe", args.c_str(), NULL, SW_SHOWNORMAL); return S_OK; }
+                                        if (action == "copy") {
+                                            if (j.contains("path")) {
+                                                g_app.clipboardPath = j.value("path", std::string());
+                                                sendResult(true, "Copied to clipboard");
+                                            } else {
+                                                sendResult(false, "No path to copy");
+                                            }
+                                            return S_OK;
+                                        }
+                                        if (action == "paste") {
+                                            std::string source = j.value("sourcePath", g_app.clipboardPath);
+                                            bool ok = false;
+                                            if (!source.empty()) {
+                                                try {
+                                                    fs::path src(source);
+                                                    fs::path base = fs::path(g_app.uiFolder).parent_path();
+                                                    fs::path destDir = base / "Content";
+                                                    fs::path dest = destDir / (src.filename().string() + std::string("_pasted"));
+                                                    if (fs::is_directory(src)) fs::copy(src, dest, fs::copy_options::recursive);
+                                                    else fs::copy_file(src, dest);
+                                                    ok = true;
+                                                } catch(...) { ok = false; }
+                                            }
+                                            sendContentListFor(j.value("path", std::string()));
+                                            sendResult(ok, ok ? "Pasted successfully" : "Paste failed");
+                                            return S_OK;
+                                        }
+                                        if (action == "change-color") {
+                                            std::string path = j.value("path", std::string());
+                                            std::string color = j.value("color", std::string());
+                                            bool ok = false;
+                                            if (!path.empty() && !color.empty()) {
+                                                try {
+                                                    fs::path p(path);
+                                                    fs::path meta = p / ".plume_meta";
+                                                    std::ofstream ofs(meta.string());
+                                                    if (ofs.is_open()) {
+                                                        ofs << "{\"color\": \"" << color << "\"}";
+                                                        ofs.close();
+                                                        ok = true;
+                                                    }
+                                                } catch(...) { ok = false; }
+                                            }
+                                            sendResult(ok, ok ? "Color saved" : "Failed to save color");
+                                            if (!path.empty()) sendContentListFor(fs::path(path).parent_path().string());
+                                            return S_OK;
+                                        }
+
                                         return S_OK;
                                     }).Get(),
                                 nullptr);

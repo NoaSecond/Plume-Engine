@@ -36,4 +36,5 @@ if(WIN32)
         gdiplus
         dwmapi
     )
+    # (nlohmann/json FetchContent was removed to avoid CMake policy issues)
 endif()
