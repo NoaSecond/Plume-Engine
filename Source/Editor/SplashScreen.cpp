@@ -81,10 +81,10 @@ bool SplashScreen::Create(const std::wstring& imagePath, int width, int height) 
             delete m_image;
             m_image = nullptr;
         }
-        // Continuer sans image si le chargement échoue
+        // Continue without image if loading fails
     }
     
-    // Créer les fonts
+    // Create fonts
     m_fontTitle = CreateFontW(
         42, 0, 0, 0, FW_LIGHT, FALSE, FALSE, FALSE,
         DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
@@ -99,7 +99,7 @@ bool SplashScreen::Create(const std::wstring& imagePath, int width, int height) 
         L"Segoe UI"
     );
     
-    // Enregistrer la classe de fenêtre
+    // Register window class
     WNDCLASSEXW wc = {};
     wc.cbSize = sizeof(WNDCLASSEXW);
     wc.style = CS_HREDRAW | CS_VREDRAW;
@@ -113,13 +113,13 @@ bool SplashScreen::Create(const std::wstring& imagePath, int width, int height) 
     
     RegisterClassExW(&wc);
     
-    // Calculer la position centrée
+    // Calculate centered position
     int screenWidth = GetSystemMetrics(SM_CXSCREEN);
     int screenHeight = GetSystemMetrics(SM_CYSCREEN);
     int x = (screenWidth - width) / 2;
     int y = (screenHeight - height) / 2;
     
-    // Créer la fenêtre sans bordure
+    // Create borderless window
     m_hwnd = CreateWindowExW(
         WS_EX_TOPMOST | WS_EX_LAYERED,
         L"PlumeSplashScreen",
@@ -133,7 +133,7 @@ bool SplashScreen::Create(const std::wstring& imagePath, int width, int height) 
         return false;
     }
     
-    // Rendre la fenêtre semi-transparente
+    // Make window semi-transparent
     SetLayeredWindowAttributes(m_hwnd, 0, 255, LWA_ALPHA);
     
     // Activer les coins arrondis (Windows 11)
@@ -164,7 +164,7 @@ void SplashScreen::UpdateProgress(float progress, const std::string& statusText)
         InvalidateRect(m_hwnd, NULL, FALSE);
         UpdateWindow(m_hwnd);
         
-        // Traiter les messages pour maintenir l'interface réactive
+        // Process messages to keep interface responsive
         MSG msg;
         while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
             TranslateMessage(&msg);
@@ -181,7 +181,7 @@ void SplashScreen::Paint(HDC hdc) {
     RECT rect;
     GetClientRect(m_hwnd, &rect);
     
-    // Créer un buffer pour le double buffering
+    // Create buffer for double buffering
     HDC memDC = CreateCompatibleDC(hdc);
     HBITMAP memBitmap = CreateCompatibleBitmap(hdc, rect.right, rect.bottom);
     HBITMAP oldBitmap = (HBITMAP)SelectObject(memDC, memBitmap);
@@ -191,7 +191,7 @@ void SplashScreen::Paint(HDC hdc) {
     FillRect(memDC, &rect, bgBrush);
     DeleteObject(bgBrush);
     
-    // Dessiner l'image PNG si disponible (centrée verticalement)
+    // Draw PNG image if available (vertically centered)
     SetBkMode(memDC, TRANSPARENT);
     
     int imgHeight = 0;
@@ -203,7 +203,7 @@ void SplashScreen::Paint(HDC hdc) {
         int imgWidth = m_image->GetWidth();
         imgHeight = m_image->GetHeight();
         
-        // Centrer l'image verticalement dans la moitié supérieure
+        // Center image vertically in upper half
         int imgX = (rect.right - imgWidth) / 2;
         int imgY = (rect.bottom / 2 - imgHeight) / 2;
         
@@ -222,13 +222,13 @@ void SplashScreen::Paint(HDC hdc) {
     FillRect(memDC, &barBgRect, barBgBrush);
     DeleteObject(barBgBrush);
     
-    // Progression avec couleur de thème dynamique
+    // Progress bar with dynamic theme color
     int progressWidth = static_cast<int>(barWidth * m_progress);
     if (progressWidth > 0) {
-        // Obtenir la couleur d'accent du thème actuel
-        COLORREF accentColor = RGB(79, 195, 247); // Couleur par défaut
+        // Get current theme accent color
+        COLORREF accentColor = RGB(79, 195, 247); // Default color
         
-        // Essayer de lire la couleur depuis les données du thème
+        // Try to read color from theme data
         if (!m_accentColorHex.empty()) {
             // Convertir hex en RGB
             std::string hex = m_accentColorHex;
@@ -273,7 +273,7 @@ void SplashScreen::Paint(HDC hdc) {
     RECT footerRect = {0, rect.bottom - 25, rect.right, rect.bottom - 5};
     DrawTextW(memDC, L"Created by Noa Second", -1, &footerRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
     
-    // Copier le buffer vers l'écran
+    // Copy buffer to screen
     BitBlt(hdc, 0, 0, rect.right, rect.bottom, memDC, 0, 0, SRCCOPY);
     
     // Nettoyer

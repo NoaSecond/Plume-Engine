@@ -199,7 +199,7 @@ function ThemeSettings() {
                       backgroundColor: theme.colors.accent.primary,
                       color: theme.colors.text.primary
                     }}>
-                      Actif
+                      Active
                     </span>
                   )}
                 </div>
@@ -214,17 +214,17 @@ function ThemeSettings() {
 
       <div className="border-t pt-6" style={{ borderColor: theme.colors.border.default }}>
         <h3 className="text-base font-semibold mb-3" style={{ color: theme.colors.text.primary }}>
-          Aperçu des couleurs
+          Color Preview
         </h3>
         <div className="grid grid-cols-2 gap-4">
-          <ColorPreview label="Background Principal" color={theme.colors.bg.primary} />
-          <ColorPreview label="Background Secondaire" color={theme.colors.bg.secondary} />
-          <ColorPreview label="Accent Principal" color={theme.colors.accent.primary} />
-          <ColorPreview label="Accent Secondaire" color={theme.colors.accent.secondary} />
-          <ColorPreview label="Texte Principal" color={theme.colors.text.primary} />
-          <ColorPreview label="Texte Secondaire" color={theme.colors.text.secondary} />
-          <ColorPreview label="Succès" color={theme.colors.status.success} />
-          <ColorPreview label="Erreur" color={theme.colors.status.error} />
+          <ColorPreview label="Primary Background" color={theme.colors.bg.primary} />
+          <ColorPreview label="Secondary Background" color={theme.colors.bg.secondary} />
+          <ColorPreview label="Primary Accent" color={theme.colors.accent.primary} />
+          <ColorPreview label="Secondary Accent" color={theme.colors.accent.secondary} />
+          <ColorPreview label="Primary Text" color={theme.colors.text.primary} />
+          <ColorPreview label="Secondary Text" color={theme.colors.text.secondary} />
+          <ColorPreview label="Success" color={theme.colors.status.success} />
+          <ColorPreview label="Error" color={theme.colors.status.error} />
         </div>
       </div>
     </div>
@@ -259,24 +259,24 @@ function ShortcutSettings() {
   const { theme } = useTheme();
 
   const shortcuts = [
-    { action: 'Sauvegarder', keys: 'Ctrl + S' },
-    { action: 'Ouvrir Content Browser', keys: 'Ctrl + Space' },
+    { action: 'Save', keys: 'Ctrl + S' },
+    { action: 'Open Content Browser', keys: 'Ctrl + Space' },
     { action: 'Clear Console', keys: 'Ctrl + L' },
     { action: 'Play', keys: 'F5' },
     { action: 'Stop', keys: 'Shift + F5' },
-    { action: 'Renommer', keys: 'F2' },
-    { action: 'Dupliquer', keys: 'Ctrl + D' },
-    { action: 'Supprimer', keys: 'Suppr' },
+    { action: 'Rename', keys: 'F2' },
+    { action: 'Duplicate', keys: 'Ctrl + D' },
+    { action: 'Delete', keys: 'Delete' },
   ];
 
   return (
     <div className="space-y-4">
       <div>
         <h3 className="text-base font-semibold mb-3" style={{ color: theme.colors.text.primary }}>
-          Raccourcis clavier
+          Keyboard Shortcuts
         </h3>
         <p className="text-sm mb-4" style={{ color: theme.colors.text.muted }}>
-          Liste des raccourcis clavier disponibles dans l'éditeur.
+          List of keyboard shortcuts available in the editor.
         </p>
       </div>
 
@@ -309,7 +309,7 @@ function ShortcutSettings() {
         border: `1px solid ${theme.colors.border.default}`
       }}>
         <p className="text-xs" style={{ color: theme.colors.text.muted }}>
-          💡 La personnalisation des raccourcis sera disponible dans une prochaine version.
+          💡 Shortcut customization will be available in a future version.
         </p>
       </div>
     </div>

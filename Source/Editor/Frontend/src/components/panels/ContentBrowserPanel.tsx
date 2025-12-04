@@ -6,7 +6,13 @@ import { Toast } from '../ui/Toast';
 import { SimpleModal } from '../ui/SimpleModal';
 import ColorPicker from '../ui/ColorPicker';
 import { useTheme } from '../../ThemeContext';
-interface ContentBrowserProps { show: boolean; onClose: () => void; onLog: (msg: string, type: 'WARN' | 'INFO' | 'ERROR') => void; searchQuery: string; setSearchQuery: (q: string) => void; }
+interface ContentBrowserProps {
+  show: boolean;
+  onClose: () => void;
+  onLog: (msg: string, type: 'WARN' | 'INFO' | 'ERROR') => void;
+  searchQuery: string;
+  setSearchQuery: (q: string) => void;
+}
 export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClose, onLog, searchQuery, setSearchQuery }) => {
   const { theme } = useTheme();
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -14,14 +20,35 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
   const [ctxX, setCtxX] = useState(0);
   const [ctxY, setCtxY] = useState(0);
   const [ctxType, setCtxType] = useState<'empty'|'asset'|'folder'|null>(null);
-  const [ctxTarget, setCtxTarget] = useState<{id:string,name:string,type:string,path?:string}|null>(null);
-  const [assets, setAssets] = useState<Array<{id:string,name:string,type:string,path?:string,meta?:any}>>([]);
+  const [ctxTarget, setCtxTarget] = useState<{
+    id: string;
+    name: string;
+    type: string;
+    path?: string;
+  } | null>(null);
+  const [assets, setAssets] = useState<Array<{
+    id: string;
+    name: string;
+    type: string;
+    path?: string;
+    meta?: any;
+  }>>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [currentPath, setCurrentPath] = useState<string>('Content');
   const [folderTree, setFolderTree] = useState<any[]>([]);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
-  const [colorPicker, setColorPicker] = useState<{open:boolean,x:number,y:number,target?:any}|null>(null);
-  const [clipboard, setClipboard] = useState<{id:string,name:string,type:string,path?:string}|null>(null);
+  const [colorPicker, setColorPicker] = useState<{
+    open: boolean;
+    x: number;
+    y: number;
+    target?: any;
+  } | null>(null);
+  const [clipboard, setClipboard] = useState<{
+    id: string;
+    name: string;
+    type: string;
+    path?: string;
+  } | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [modalTitle, setModalTitle] = useState('');
@@ -30,7 +57,11 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
   // Inline edit state for newly created items
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState<string>('');
-  useEffect(() => { if (show && searchInputRef.current) setTimeout(() => searchInputRef.current?.focus(), 50); }, [show]);
+  useEffect(() => {
+    if (show && searchInputRef.current) {
+      setTimeout(() => searchInputRef.current?.focus(), 50);
+    }
+  }, [show]);
 
   // Keyboard shortcuts: copy(Ctrl+C), duplicate(Ctrl+D), delete(Delete), rename(F2), paste(Ctrl+V)
   // Normalize a path so it always starts with 'Content' and uses '/'
@@ -57,36 +88,32 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.ctrlKey && e.key.toLowerCase() === 'c') {
-        // copy
-        if (selectedId) {
-          const it = assets.find(a => a.id === selectedId);
-          if (it) copyItem(it as any);
-        }
-      }
-      if (e.ctrlKey && e.key.toLowerCase() === 'd') {
-        // duplicate
-        if (selectedId) {
-          const it = assets.find(a => a.id === selectedId);
-          if (it) duplicateItem(it as any);
-        }
-      }
-      if (e.key === 'Delete') {
-        if (selectedId) {
-          const it = assets.find(a => a.id === selectedId);
-          if (it) deleteItem(it as any);
-        }
-      }
-      if (e.key === 'F2') {
-        if (selectedId) {
-          const it = assets.find(a => a.id === selectedId);
-          if (it) renameItem(it as any);
-        }
-      }
-      if (e.ctrlKey && e.key.toLowerCase() === 'v') {
+      if (!selectedId) return;
+      
+      const selectedAsset = assets.find(a => a.id === selectedId);
+      if (!selectedAsset) return;
+      
+      const { ctrlKey, key } = e;
+      const keyLower = key.toLowerCase();
+      
+      if (ctrlKey && keyLower === 'c') {
+        e.preventDefault();
+        copyItem(selectedAsset as any);
+      } else if (ctrlKey && keyLower === 'd') {
+        e.preventDefault();
+        duplicateItem(selectedAsset as any);
+      } else if (key === 'Delete') {
+        e.preventDefault();
+        deleteItem(selectedAsset as any);
+      } else if (key === 'F2') {
+        e.preventDefault();
+        renameItem(selectedAsset as any);
+      } else if (ctrlKey && keyLower === 'v') {
+        e.preventDefault();
         pasteClipboard();
       }
     };
+    
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [assets, selectedId, clipboard, currentPath]);
@@ -118,7 +145,12 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
                 node.children = node.children.map((c: any) => {
                   const child = { ...c };
                   child.path = normalizePath(child.path || child.name || 'Content');
-                  if (child.children && Array.isArray(child.children)) child.children = child.children.map((g: any) => ({ ...g, path: normalizePath(g.path || g.name || 'Content') }));
+                  if (child.children && Array.isArray(child.children)) {
+                    child.children = child.children.map((g: any) => ({
+                      ...g,
+                      path: normalizePath(g.path || g.name || 'Content')
+                    }));
+                  }
                   return child;
                 });
               }
@@ -215,10 +247,10 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
     setEditingValue(item.name);
   };
 
-  const deleteItem = (item: {id:string,name:string,type:string}) => {
+  const deleteItem = React.useCallback((item: {id:string,name:string,type:string}) => {
     // trigger inline confirmation UI (do not use blocking confirm)
     setDeletePending({ id: item.id, name: item.name, path: (item as any).path });
-  };
+  }, []);
 
   // state for inline delete confirmation
   const [deletePending, setDeletePending] = useState<{id:string,name:string,path?:string}|null>(null);

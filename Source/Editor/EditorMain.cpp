@@ -63,14 +63,14 @@ void ExportSceneData() {
 }
 
 void ExportThemeData() {
-    // Créer un fichier de thème par défaut pour le splash screen
+    // Create a default theme file for the splash screen
     std::string dataPath = g_app.uiFolder + "/theme_data.js";
     std::string tempPath = dataPath + ".tmp";
     
     std::ofstream file(tempPath);
     if (file.is_open()) {
         file << "window.PLUME_THEME_DATA = {";
-        file << "\"name\": \"nebula-midnight\","; // Thème par défaut
+        file << "\"name\": \"nebula-midnight\","; // Default theme
         file << "\"colors\": {";
         file << "\"accent\": {";
         file << "\"primary\": \"#9C27B0\""; // Nebula Midnight accent color
@@ -86,7 +86,7 @@ void ExportThemeData() {
 }
 
 std::string GetCurrentThemeAccentColor() {
-    // Lire le fichier theme_data.js pour obtenir la couleur d'accent du thème actuel
+    // Read theme_data.js file to get current theme accent color
     std::string themePath = g_app.uiFolder + "/theme_data.js";
     if (fs::exists(themePath)) {
         std::ifstream themeFile(themePath);
@@ -105,7 +105,7 @@ std::string GetCurrentThemeAccentColor() {
             }
         }
     }
-    // Couleur par défaut Nebula Midnight
+    // Default Nebula Midnight color
     return "9C27B0";
 }
 
@@ -151,12 +151,12 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             }
             return 0;
         case WM_GETMINMAXINFO: {
-            // Ajuster la taille maximale pour éviter que la fenêtre dépasse
+            // Adjust maximum size to prevent window overflow
             MINMAXINFO* mmi = (MINMAXINFO*)lParam;
             MONITORINFO mi = { sizeof(mi) };
             GetMonitorInfo(MonitorFromWindow(hwnd, MONITOR_DEFAULTTOPRIMARY), &mi);
             
-            // Utiliser la zone de travail (avec barre des tâches)
+            // Use work area (with taskbar)
             mmi->ptMaxSize.x = mi.rcWork.right - mi.rcWork.left;
             mmi->ptMaxSize.y = mi.rcWork.bottom - mi.rcWork.top;
             mmi->ptMaxPosition.x = mi.rcWork.left;
@@ -164,13 +164,13 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             return 0;
         }
         case WM_NCHITTEST: {
-            // Permettre le drag de la fenêtre en cliquant sur le header (32px de hauteur)
+            // Allow window dragging by clicking on header (32px height)
             LRESULT hit = DefWindowProc(hwnd, msg, wParam, lParam);
             if (hit == HTCLIENT) {
                 POINT pt = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
                 ScreenToClient(hwnd, &pt);
                 
-                // Si on clique dans les 32 premiers pixels (header), permettre le drag
+                // If clicking in the first 32 pixels (header), allow drag
                 if (pt.y >= 0 && pt.y <= 32) {
                     return HTCAPTION;
                 }
@@ -182,15 +182,15 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 NCCALCSIZE_PARAMS* params = (NCCALCSIZE_PARAMS*)lParam;
                 
                 if (IsZoomed(hwnd)) {
-                    // La fenêtre est maximisée - ajuster pour éviter le débordement
+                    // Window is maximized - adjust to prevent overflow
                     MONITORINFO mi = { sizeof(mi) };
                     GetMonitorInfo(MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST), &mi);
-                    // Ajuster la zone client pour correspondre exactement à la zone de travail
+                    // Adjust client area to match work area exactly
                     params->rgrc[0] = mi.rcWork;
                 } else {
-                    // En mode fenêtré, supprimer uniquement la barre de titre mais garder les bordures
-                    // Réduire seulement le haut pour enlever la barre de titre
-                    params->rgrc[0].top += 0;  // Pas d'offset - enlève complètement la barre de titre
+                    // In windowed mode, only remove title bar but keep borders
+                    // Only reduce top to remove title bar
+                    params->rgrc[0].top += 0;  // No offset - completely removes title bar
                     params->rgrc[0].left += 0;
                     params->rgrc[0].right -= 0;
                     params->rgrc[0].bottom -= 0;
@@ -200,10 +200,10 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             break;
         }
         case WM_SYSCOMMAND: {
-            // Gérer les commandes système pour le snap
+            // Handle system commands for snap
             if ((wParam & 0xFFF0) == SC_MAXIMIZE || 
                 (wParam & 0xFFF0) == SC_RESTORE) {
-                // Laisser Windows gérer maximize/restore
+                // Let Windows handle maximize/restore
                 break;
             }
             return DefWindowProc(hwnd, msg, wParam, lParam);
@@ -248,8 +248,8 @@ bool CreateAppWindow() {
     DWM_WINDOW_CORNER_PREFERENCE corner = DWMWCP_ROUND;
     DwmSetWindowAttribute(g_app.hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, &corner, sizeof(corner));
     
-    // Ne pas afficher la fenêtre tout de suite - on attend la fin du splash screen
-    // mais la créer en mode minimisé invisible pour permettre à WebView2 de se charger
+    // Don't show window immediately - wait for splash screen to finish
+    // but create it in invisible minimized mode to allow WebView2 to load
     ShowWindow(g_app.hwnd, SW_SHOWMINNOACTIVE);
     UpdateWindow(g_app.hwnd);
     return true;
@@ -273,7 +273,7 @@ void InitWebView(const std::string& htmlPath) {
                             ComPtr<ICoreWebView2Settings> settings;
                             g_app.webview->get_Settings(&settings);
                             if (settings) {
-                                // Désactiver le menu contextuel par défaut de WebView2
+                                // Disable default WebView2 context menu
                                 // afin que le frontend (React) puisse gérer `onContextMenu`
                                 settings->put_AreDefaultContextMenusEnabled(FALSE);
                                 settings->put_IsStatusBarEnabled(FALSE);

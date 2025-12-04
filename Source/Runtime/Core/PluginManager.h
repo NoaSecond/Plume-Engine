@@ -15,16 +15,16 @@ public:
     void RegisterPlugin(std::shared_ptr<IPlugin> plugin);
     void UnregisterPlugin(const std::string& pluginId);
     
-    // Contrôle
+    // Control
     void InitializeAll();
     void ShutdownAll();
     void UpdateAll();
     
-    // Activation/Désactivation
+    // Enable/Disable
     void EnablePlugin(const std::string& pluginId, bool enable);
     bool IsPluginEnabled(const std::string& pluginId) const;
     
-    // Requêtes
+    // Queries
     std::vector<PluginInfo> GetAllPlugins() const;
     std::vector<PluginInfo> GetPluginsByCategory(PluginCategory category) const;
     std::shared_ptr<IPlugin> GetPlugin(const std::string& pluginId) const;

@@ -20,9 +20,9 @@
 namespace Plume {
 
 enum class PluginCategory {
-    Official,      // Plugins créés par l'équipe Plume
-    Community,     // Plugins créés par des tiers
-    System         // Plugins système essentiels
+    Official,      // Plugins created by the Plume team
+    Community,     // Plugins created by third parties
+    System         // Essential system plugins
 };
 
 struct PluginInfo {
@@ -46,7 +46,7 @@ public:
     virtual void Shutdown() = 0;
     virtual void Update() = 0;
     
-    // État
+    // State
     virtual bool IsEnabled() const = 0;
     virtual void SetEnabled(bool enabled) = 0;
 };
