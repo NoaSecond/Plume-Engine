@@ -159,6 +159,10 @@ export const AssetTile = ({ id, name, type, selected = false, onClick, onDoubleC
     Icon = Box; 
     color = "#60a5fa"; // blue-400
   }
+  if (name === '.plume_meta' || name.endsWith('.plume_meta')) {
+    Icon = FileCode;
+    color = theme.colors.accent.secondary; // Utilise la couleur accent du thème
+  }
   // meta color overrides handled below
   
   // if meta.color provided, prefer it (strip leading '#')
@@ -206,8 +210,7 @@ export const AssetTile = ({ id, name, type, selected = false, onClick, onDoubleC
           e.currentTarget.style.borderColor = theme.colors.border.default;
         }}
       >
-         <Icon size={32} style={{ color: finalColor }} />
-         <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-white/10 to-transparent"></div>
+         <Icon size={32} style={{ color: finalColor }} fill={type === 'folder' ? 'none' : (name === '.plume_meta' || name.endsWith('.plume_meta') ? finalColor : undefined)} stroke={type === 'folder' ? finalColor : (name === '.plume_meta' || name.endsWith('.plume_meta') ? finalColor : undefined)} strokeWidth={type === 'folder' || name === '.plume_meta' || name.endsWith('.plume_meta') ? '1.5' : undefined} />
       </div>
       <span 
         className="text-[10px] text-center break-words w-full truncate px-1 rounded"

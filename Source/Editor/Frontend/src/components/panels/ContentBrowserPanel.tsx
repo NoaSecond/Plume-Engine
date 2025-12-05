@@ -102,12 +102,15 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
       } else if (ctrlKey && keyLower === 'd') {
         e.preventDefault();
         duplicateItem(selectedAsset as any);
-      } else if (key === 'Delete') {
+      } else if (keyLower === 'delete') {
         e.preventDefault();
         deleteItem(selectedAsset as any);
-      } else if (key === 'F2') {
+      } else if (keyLower === 'f2') {
         e.preventDefault();
-        renameItem(selectedAsset as any);
+        // Preserve meta when starting rename
+        const asset = selectedAsset as any;
+        setEditingId(asset.id);
+        setEditingValue(asset.name);
       } else if (ctrlKey && keyLower === 'v') {
         e.preventDefault();
         pasteClipboard();
@@ -242,9 +245,11 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
     setEditingValue(defaultName);
   };
 
-  const renameItem = (item: {id:string,name:string,type:string,path?:string}) => {
+  const renameItem = (item: {id:string,name:string,type:string,path?:string,meta?:any}) => {
     setEditingId(item.id);
     setEditingValue(item.name);
+    // Ensure meta is preserved in the assets array during rename
+    setAssets(prev => prev.map(a => a.id === item.id ? { ...a, meta: { ...a.meta } } : a));
   };
 
   const deleteItem = React.useCallback((item: {id:string,name:string,type:string}) => {
@@ -382,7 +387,7 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
               <span style={{ display: 'inline-block', width: 12 }} />
             )}
           </div>
-          <Folder size={12} className="mr-2" style={{ color: node.meta?.color ? (node.meta.color.startsWith('#') ? node.meta.color : ('#' + node.meta.color)) : undefined }} />
+          <Folder size={12} className="mr-2" style={{ color: node.meta?.color ? (node.meta.color.startsWith('#') ? node.meta.color : ('#' + node.meta.color)) : undefined }} fill={node.meta?.color ? (node.meta.color.startsWith('#') ? node.meta.color : ('#' + node.meta.color)) : 'currentColor'} />
           <span style={{ fontWeight: currentPath === (node.path || node.name) ? 600 : 400 }}>{node.name}</span>
         </div>
         <div ref={childrenRef} style={{
@@ -428,11 +433,12 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
         backgroundColor: theme.colors.bg.primary,
         borderTop: `1px solid ${theme.colors.accent.primary}`,
         height: '35vh', 
-        bottom: '24px', 
+        bottom: '0px', 
         zIndex: 40,
-        transform: show ? 'translateY(0)' : 'translateY(calc(100% + 24px))', 
+        transform: show ? 'translateY(0)' : 'translateY(100%)', 
         pointerEvents: show ? 'auto' : 'none',
-        willChange: 'transform'
+        willChange: 'transform',
+        position: 'relative'
       }}
     >
       <div 
@@ -573,7 +579,7 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
                      className="w-16 h-16 rounded mb-2 flex items-center justify-center border shadow-sm relative overflow-hidden"
                      style={{ backgroundColor: theme.colors.bg.secondary, borderColor: theme.colors.border.default }}
                    >
-                     <Folder size={32} style={{ color: '#eab308' }} />
+                     <Folder size={32} style={{ color: a.meta?.color ? (a.meta.color.startsWith('#') ? a.meta.color : ('#' + a.meta.color)) : '#eab308' }} fill={a.meta?.color ? 'none' : 'currentColor'} stroke={a.meta?.color ? (a.meta.color.startsWith('#') ? a.meta.color : ('#' + a.meta.color)) : undefined} strokeWidth={a.meta?.color ? '1.5' : undefined} />
                    </div>
                    <input
                      autoFocus
@@ -583,7 +589,26 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
                        if (e.key === 'Enter') {
                           // commit
                           const newName = editingValue.trim() || 'New Folder';
-                          setAssets(prev => prev.map(it => it.id === a.id ? { ...it, name: newName } : it));
+                          
+                          // Update assets and preserve meta
+                          setAssets(prev => prev.map(it => it.id === a.id ? { ...it, name: newName, meta: { ...it.meta } } : it));
+                          
+                          // Update folderTree if it's a folder
+                          if (a.type === 'folder' && a.path) {
+                            const updateFolderName = (nodes: any[], targetPath: string, newName: string): any[] => {
+                              return nodes.map(node => {
+                                if (node.path === targetPath) {
+                                  return { ...node, name: newName, meta: { ...node.meta } };
+                                }
+                                if (node.children && node.children.length > 0) {
+                                  return { ...node, children: updateFolderName(node.children, targetPath, newName) };
+                                }
+                                return node;
+                              });
+                            };
+                            setFolderTree(prev => updateFolderName(prev, a.path!, newName));
+                          }
+                          
                           setEditingId(null);
                           const __webview = (window as any).chrome?.webview;
                           if (!a.path) {
@@ -605,7 +630,26 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
                      onBlur={() => {
                         // commit on blur
                         const newName = editingValue.trim() || 'New Folder';
-                        setAssets(prev => prev.map(it => it.id === a.id ? { ...it, name: newName } : it));
+                        
+                        // Update assets and preserve meta
+                        setAssets(prev => prev.map(it => it.id === a.id ? { ...it, name: newName, meta: { ...it.meta } } : it));
+                        
+                        // Update folderTree if it's a folder
+                        if (a.type === 'folder' && a.path) {
+                          const updateFolderName = (nodes: any[], targetPath: string, newName: string): any[] => {
+                            return nodes.map(node => {
+                              if (node.path === targetPath) {
+                                return { ...node, name: newName, meta: { ...node.meta } };
+                              }
+                              if (node.children && node.children.length > 0) {
+                                return { ...node, children: updateFolderName(node.children, targetPath, newName) };
+                              }
+                              return node;
+                            });
+                          };
+                          setFolderTree(prev => updateFolderName(prev, a.path!, newName));
+                        }
+                        
                         setEditingId(null);
                         const __webview = (window as any).chrome?.webview;
                         if (!a.path) {
@@ -662,7 +706,6 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
                else if (id === 'duplicate' && ctxTarget) duplicateItem(ctxTarget as any);
                else if (id === 'copy' && ctxTarget) copyItem(ctxTarget as any);
                else if (id === 'change_color' && ctxTarget) {
-                 // open inline ColorPicker popover near cursor
                  setColorPicker({ open: true, x: ctxX, y: ctxY, target: ctxTarget });
                }
 
@@ -686,14 +729,44 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
         onSubmit={handleModalSubmit}
       />
       {colorPicker && colorPicker.open && (
-        <div style={{ position: 'absolute', left: colorPicker.x, top: colorPicker.y, zIndex: 80 }}>
+        <div style={{ 
+          position: 'absolute', 
+          left: '50%', 
+          top: '50%', 
+          transform: 'translate(-50%, -50%)',
+          zIndex: 9999
+        }}>
           <ColorPicker
             initial={(colorPicker.target && colorPicker.target.meta && colorPicker.target.meta.color) ? (colorPicker.target.meta.color.startsWith('#') ? colorPicker.target.meta.color : ('#' + colorPicker.target.meta.color)) : '#ffffff'}
             onPick={(hex) => {
+              
+              // Update local folderTree state immediately
+              const updateNodeColor = (nodes: any[], targetPath: string, color: string): any[] => {
+                return nodes.map(node => {
+                  if (node.path === targetPath) {
+                    return { ...node, meta: { ...node.meta, color } };
+                  }
+                  if (node.children && node.children.length > 0) {
+                    return { ...node, children: updateNodeColor(node.children, targetPath, color) };
+                  }
+                  return node;
+                });
+              };
+              
+              const targetPath = (colorPicker.target as any).path;
+              setFolderTree(prev => updateNodeColor(prev, targetPath, hex));
+              
+              // Also update assets state for the content browser
+              setAssets(prev => prev.map(asset => 
+                asset.path === targetPath ? { ...asset, meta: { ...asset.meta, color: hex } } : asset
+              ));
+              
               const __webview = (window as any).chrome?.webview;
-              if (__webview) __webview.postMessage({ action: 'change-color', path: (colorPicker.target as any).path, color: hex });
-              // refresh listing for currentPath
-              if (__webview) __webview.postMessage({ action: 'list-content', path: currentPath });
+              if (__webview) {
+                __webview.postMessage({ action: 'change-color', path: targetPath, color: hex });
+                // Refresh content listing
+                __webview.postMessage({ action: 'list-content', path: currentPath });
+              }
               setColorPicker(null);
             }}
             onCancel={() => setColorPicker(null)}

@@ -444,7 +444,13 @@ void InitWebView(const std::string& htmlPath) {
                                             std::string name = j.value("name", std::string());
                                             bool ok = false;
                                             if (!path.empty() && !name.empty()) {
-                                                try { fs::path p(path); fs::path dest = p.parent_path() / name; fs::rename(p, dest); ok = true; } catch(...) { ok = false; }
+                                                try { 
+                                                    fs::path base = fs::path(g_app.uiFolder).parent_path();
+                                                    fs::path fullPath = base / path;
+                                                    fs::path dest = fullPath.parent_path() / name; 
+                                                    fs::rename(fullPath, dest); 
+                                                    ok = true; 
+                                                } catch(...) { ok = false; }
                                             }
                                             sendResult(ok, ok ? "Renamed" : "Rename failed");
                                             if (!path.empty()) sendContentListFor(fs::path(path).parent_path().string()); else sendContentListFor(std::string("Content"));
@@ -523,8 +529,9 @@ void InitWebView(const std::string& htmlPath) {
                                             bool ok = false;
                                             if (!path.empty() && !color.empty()) {
                                                 try {
-                                                    fs::path p(path);
-                                                    fs::path meta = p / ".plume_meta";
+                                                    fs::path base = fs::path(g_app.uiFolder).parent_path();
+                                                    fs::path fullPath = base / path;
+                                                    fs::path meta = fullPath / ".plume_meta";
                                                     std::ofstream ofs(meta.string());
                                                     if (ofs.is_open()) {
                                                         ofs << "{\"color\": \"" << color << "\"}";
