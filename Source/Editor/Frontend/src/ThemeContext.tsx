@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { ThemeName, Theme, themes, defaultTheme } from './themes';
+import { ThemeName, Theme, themes, defaultTheme } from './themes/index';
 
 interface ThemeContextType {
   currentTheme: ThemeName;

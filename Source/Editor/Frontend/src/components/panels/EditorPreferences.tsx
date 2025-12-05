@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useTheme } from '../../ThemeContext';
-import { themes, ThemeName } from '../../themes';
+import { themes, ThemeName } from '../../themes/index';
 
 interface EditorPreferencesProps {
   isOpen: boolean;
