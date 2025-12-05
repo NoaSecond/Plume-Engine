@@ -219,6 +219,19 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
       if (retryTimer) clearTimeout(retryTimer);
     };
   }, [show]);
+
+  // Load content for the current path when it changes or when panel opens with non-root path
+  useEffect(() => {
+    if (!show) return;
+    if (!currentPath || currentPath === 'Content') return;
+    
+    // Only send content request if we're not at the root level
+    const __webview = (window as any).chrome?.webview;
+    if (__webview) {
+      console.log('Loading content for path:', currentPath);
+      __webview.postMessage({ action: 'list-content', path: currentPath });
+    }
+  }, [show, currentPath]);
   
   const createFolder = (name?: string) => {
     if (name) {
@@ -579,7 +592,7 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
                      className="w-16 h-16 rounded mb-2 flex items-center justify-center border shadow-sm relative overflow-hidden"
                      style={{ backgroundColor: theme.colors.bg.secondary, borderColor: theme.colors.border.default }}
                    >
-                     <Folder size={32} style={{ color: a.meta?.color ? (a.meta.color.startsWith('#') ? a.meta.color : ('#' + a.meta.color)) : '#eab308' }} fill={a.meta?.color ? 'none' : 'currentColor'} stroke={a.meta?.color ? (a.meta.color.startsWith('#') ? a.meta.color : ('#' + a.meta.color)) : undefined} strokeWidth={a.meta?.color ? '1.5' : undefined} />
+                     <Folder size={32} style={{ color: '#eab308' }} />
                    </div>
                    <input
                      autoFocus
