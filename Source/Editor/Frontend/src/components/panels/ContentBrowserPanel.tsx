@@ -531,7 +531,7 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
             <input 
               ref={searchInputRef} 
               type="text" 
-              placeholder="Filter assets..." 
+              placeholder="Filter assets... (Ctrl+K)" 
               className="bg-transparent border-none outline-none text-xs w-full" 
               style={{ color: theme.colors.text.primary }}
               value={searchQuery} 
@@ -629,7 +629,7 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
             })()}
           </div>
            <div className="flex flex-wrap gap-2 content-start">
-               {assets.map(a => (
+               {(searchQuery ? assets.filter(a => a.name.toLowerCase().includes(searchQuery.toLowerCase())) : assets).map(a => (
                a.id === editingId ? (
                  <div key={a.id} className="flex flex-col items-center p-2 rounded cursor-pointer group w-24">
                    <div 
