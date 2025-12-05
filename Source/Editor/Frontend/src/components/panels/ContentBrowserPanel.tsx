@@ -57,11 +57,8 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
   // Inline edit state for newly created items
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState<string>('');
-  useEffect(() => {
-    if (show && searchInputRef.current) {
-      setTimeout(() => searchInputRef.current?.focus(), 50);
-    }
-  }, [show]);
+  // Removed auto-focus on search bar when opening Content Browser
+  // Focus will only happen when user presses Ctrl+K
 
   // Keyboard shortcuts: copy(Ctrl+C), duplicate(Ctrl+D), delete(Delete), rename(F2), paste(Ctrl+V)
   // Normalize a path so it always starts with 'Content' and uses '/'
@@ -88,13 +85,23 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      const { ctrlKey, key } = e;
+      const keyLower = key.toLowerCase();
+      
+      // Ctrl+K for search (works when Content Browser is open)
+      if (show && ctrlKey && keyLower === 'k') {
+        e.preventDefault();
+        if (searchInputRef.current) {
+          searchInputRef.current.focus();
+          searchInputRef.current.select();
+        }
+        return;
+      }
+      
       if (!selectedId) return;
       
       const selectedAsset = assets.find(a => a.id === selectedId);
       if (!selectedAsset) return;
-      
-      const { ctrlKey, key } = e;
-      const keyLower = key.toLowerCase();
       
       if (ctrlKey && keyLower === 'c') {
         e.preventDefault();
@@ -119,7 +126,7 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
     
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [assets, selectedId, clipboard, currentPath]);
+  }, [assets, selectedId, clipboard, currentPath, show]);
   
   
   // When the panel opens, request the real content list from the native side
@@ -463,12 +470,12 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
         backgroundColor: theme.colors.bg.primary,
         borderTop: `1px solid ${theme.colors.accent.primary}`,
         height: '35vh', 
-        bottom: '0px', 
+        bottom: '24px', 
         zIndex: 40,
         transform: show ? 'translateY(0)' : 'translateY(100%)', 
         pointerEvents: show ? 'auto' : 'none',
         willChange: 'transform',
-        position: 'relative'
+        position: 'fixed'
       }}
     >
       <div 
@@ -484,8 +491,28 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
           </span>
           
           <div className="flex space-x-1 ml-4" style={{ color: theme.colors.text.secondary }}>
-            <ChevronRight size={16} className="rotate-180"/>
-            <ChevronRight size={16}/>
+            <button 
+              className="hover:bg-opacity-20 hover:bg-white rounded p-1 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={!currentPath || currentPath === 'Content'}
+              onClick={() => {
+                const parts = currentPath.split('/');
+                if (parts.length > 1) {
+                  const parentPath = parts.slice(0, -1).join('/');
+                  setCurrentPath(parentPath || 'Content');
+                  const __webview = (window as any).chrome?.webview;
+                  if (__webview) __webview.postMessage({ action: 'list-content', path: parentPath || 'Content' });
+                }
+              }}
+            >
+              <ChevronRight size={16} className="rotate-180"/>
+            </button>
+            <button 
+              className="hover:bg-opacity-20 hover:bg-white rounded p-1 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={true}
+              title="Forward (not implemented)"
+            >
+              <ChevronRight size={16}/>
+            </button>
           </div>
           <div 
             className="ml-2 flex items-center rounded px-2 py-0.5 w-64 border transition-colors"
