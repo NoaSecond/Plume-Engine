@@ -61,33 +61,33 @@ export interface Theme {
   };
 }
 
-// Thème 1 – Plume Dark (Référence AAA)
+// Theme 1 – Plume Dark (AAA Reference)
 export const plumeDark: Theme = {
   name: 'plume-dark',
   displayName: 'Plume Dark',
-  description: 'Le thème de référence, inspiré des moteurs AAA modernes',
+  description: 'The reference theme, inspired by modern AAA engines',
   colors: {
     bg: {
-      primary: '#1E1E1E',      // Anthracite profond
+      primary: '#1E1E1E',      // Deep anthracite
       secondary: '#252525',    // Panel background
       tertiary: '#2D2D2D',     // Elevated elements
       elevated: '#333333',     // Hover states
     },
     text: {
-      primary: '#E8E8E8',      // Blanc cassé
-      secondary: '#B8B8B8',    // Texte secondaire
-      muted: '#808080',        // Texte atténué
-      disabled: '#505050',     // Texte désactivé
+      primary: '#E8E8E8',      // Off-white
+      secondary: '#B8B8B8',    // Secondary text
+      muted: '#808080',        // Muted text
+      disabled: '#505050',     // Disabled text
     },
     accent: {
-      primary: '#4FC3F7',      // Cyan lumineux (sélection)
-      secondary: '#29B6F6',    // Bleu glacier
-      hover: '#81D4FA',        // État survol
-      active: '#0288D1',       // État actif
+      primary: '#4FC3F7',      // Bright cyan (selection)
+      secondary: '#29B6F6',    // Glacier blue
+      hover: '#81D4FA',        // Hover state
+      active: '#0288D1',       // Active state
     },
     border: {
-      default: '#3A3A3A',      // Bordure standard
-      subtle: '#2A2A2A',       // Bordure subtile
+      default: '#3A3A3A',      // Standard border
+      subtle: '#2A2A2A',       // Subtle border
       focus: '#4FC3F7',        // Bordure focus
     },
     status: {
@@ -114,11 +114,11 @@ export const plumeDark: Theme = {
   },
 };
 
-// Thème 2 – Nebula Midnight (Sci-fi / Cyberpunk)
+// Theme 2 – Nebula Midnight (Sci-fi / Cyberpunk)
 export const nebulaMidnight: Theme = {
   name: 'nebula-midnight',
   displayName: 'Nebula Midnight',
-  description: 'Thème stylisé pour environnements sombres et écrans OLED',
+  description: 'Stylized theme for dark environments and OLED screens',
   colors: {
     bg: {
       primary: '#0A0A0F',      // Noir profond
@@ -127,16 +127,16 @@ export const nebulaMidnight: Theme = {
       elevated: '#252538',     // Hover states
     },
     text: {
-      primary: '#E0E0FF',      // Blanc légèrement teinté violet
-      secondary: '#B8B8D8',    // Texte secondaire
-      muted: '#7878A8',        // Texte atténué
-      disabled: '#484860',     // Texte désactivé
+      primary: '#E0E0FF',      // White lightly tinted violet
+      secondary: '#B8B8D8',    // Secondary text
+      muted: '#7878A8',        // Muted text
+      disabled: '#484860',     // Disabled text
     },
     accent: {
       primary: '#DA70D6',      // Magenta doux
       secondary: '#9D4EDD',    // Violet froid
-      hover: '#E98EF5',        // État survol
-      active: '#7B2CBF',       // État actif
+      hover: '#E98EF5',        // Hover state
+      active: '#7B2CBF',       // Active state
     },
     border: {
       default: '#2A2A48',      // Bordure standard
@@ -167,32 +167,32 @@ export const nebulaMidnight: Theme = {
   },
 };
 
-// Thème 3 – Feather Light (Lumineux et minimaliste)
+// Theme 3 – Feather Light (Bright and minimalist)
 export const featherLight: Theme = {
   name: 'feather-light',
   displayName: 'Feather Light',
-  description: 'Thème lumineux, minimaliste et respirant',
+  description: 'Bright, minimalist and clean theme',
   colors: {
     bg: {
-      primary: '#F5F5F5',      // Gris clair
+      primary: '#F5F5F5',      // Light gray
       secondary: '#EBEBEB',    // Panel background
       tertiary: '#E0E0E0',     // Elevated elements
       elevated: '#D5D5D5',     // Hover states
     },
     text: {
-      primary: '#1A1A1A',      // Noir profond
-      secondary: '#4A4A4A',    // Texte secondaire
-      muted: '#7A7A7A',        // Texte atténué
-      disabled: '#AAAAAA',     // Texte désactivé
+      primary: '#1A1A1A',      // Deep black
+      secondary: '#4A4A4A',    // Secondary text
+      muted: '#7A7A7A',        // Muted text
+      disabled: '#AAAAAA',     // Disabled text
     },
     accent: {
-      primary: '#64B5F6',      // Bleu pastel
-      secondary: '#42A5F5',    // Bleu vif
-      hover: '#90CAF9',        // État survol
-      active: '#1E88E5',       // État actif
+      primary: '#64B5F6',      // Pastel blue
+      secondary: '#42A5F5',    // Vivid blue
+      hover: '#90CAF9',        // Hover state
+      active: '#1E88E5',       // Active state
     },
     border: {
-      default: '#D0D0D0',      // Bordure standard
+      default: '#D0D0D0',      // Standard border
       subtle: '#E0E0E0',       // Bordure subtile
       focus: '#64B5F6',        // Bordure focus
     },

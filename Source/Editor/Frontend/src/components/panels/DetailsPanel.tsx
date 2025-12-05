@@ -2,16 +2,39 @@
 import { Lightbulb, Box, ChevronDown, MousePointer2 } from 'lucide-react';
 import { Entity, Transform } from '../../types';
 import { useTheme } from '../../ThemeContext';
-interface DetailsPanelProps { selectedEntity: Entity | undefined; setEntities: React.Dispatch<React.SetStateAction<Entity[]>>; }
+interface DetailsPanelProps {
+  selectedEntity: Entity | undefined;
+  setEntities: React.Dispatch<React.SetStateAction<Entity[]>>;
+}
 export const DetailsPanel: React.FC<DetailsPanelProps> = ({ selectedEntity, setEntities }) => {
   const { theme } = useTheme();
-  const updateTransform = (axis: 'x'|'y'|'z', type: 'position'|'rotation'|'scale', value: string) => {
+  const updateTransform = (axis: 'x' | 'y' | 'z', type: 'position' | 'rotation' | 'scale', value: string) => {
     if (!selectedEntity) return;
     const val = parseFloat(value);
     if (isNaN(val)) return;
-    setEntities(prev => prev.map(e => { if (e.id === selectedEntity.id) return { ...e, transform: { ...e.transform, [type]: { ...e.transform[type], [axis]: val } } }; return e; }));
+    
+    setEntities(prev => prev.map(e => {
+      if (e.id === selectedEntity.id) {
+        return {
+          ...e,
+          transform: {
+            ...e.transform,
+            [type]: {
+              ...e.transform[type],
+              [axis]: val
+            }
+          }
+        };
+      }
+      return e;
+    }));
   };
-  const updateName = (name: string) => { if(!selectedEntity) return; setEntities(prev => prev.map(e => e.id === selectedEntity.id ? {...e, name} : e)); };
+  const updateName = (name: string) => {
+    if (!selectedEntity) return;
+    setEntities(prev => prev.map(e => 
+      e.id === selectedEntity.id ? { ...e, name } : e
+    ));
+  };
   if (!selectedEntity) return (
     <div 
       className="h-1/2 flex flex-col"

@@ -86,7 +86,18 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, items, onSelect,
           <div
             key={it.id}
             className="px-4 py-2 text-sm cursor-pointer select-none"
-            onClick={() => { if (!it.disabled) onSelect(it.id); }}
+            onMouseDown={(e) => {
+              // handle selection on mouseDown to avoid other handlers closing the menu first
+              if (!it.disabled) {
+                onSelect(it.id);
+                e.preventDefault();
+                e.stopPropagation();
+              }
+            }}
+            onClick={() => {
+              // fallback: ensure the handler runs if mouseDown wasn't used
+              if (!it.disabled) onSelect(it.id);
+            }}
             onMouseEnter={(e) => {
               const el = e.currentTarget as HTMLElement;
               el.style.backgroundColor = theme.colors.accent.primary;

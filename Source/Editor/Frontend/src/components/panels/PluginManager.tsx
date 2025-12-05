@@ -244,7 +244,7 @@ export const PluginManager: React.FC<PluginManagerProps> = ({ isOpen, onClose })
                 }}
               >
                 <div className="flex items-center justify-between">
-                  <span>Communauté</span>
+                  <span>Community</span>
                   <span 
                     className="text-xs px-2 py-0.5 rounded"
                     style={{ backgroundColor: theme.colors.bg.tertiary }}
@@ -262,10 +262,10 @@ export const PluginManager: React.FC<PluginManagerProps> = ({ isOpen, onClose })
               <div className="flex items-center justify-center h-full">
                 <div className="text-center">
                   <p className="text-lg" style={{ color: theme.colors.text.muted }}>
-                    Aucun plugin trouvé
+                    No plugins found
                   </p>
                   <p className="text-sm mt-2" style={{ color: theme.colors.text.disabled }}>
-                    Essayez de modifier vos filtres ou votre recherche
+                    Try modifying your filters or search query
                   </p>
                 </div>
               </div>

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useTheme } from '../../ThemeContext';
 import { LogEntry } from '../../types';
 
@@ -16,6 +16,19 @@ export function ConsolePanel({ logs, onClear, onExecuteCommand, isOpen, setIsOpe
   const [showInfo, setShowInfo] = useState(true);
   const [showWarning, setShowWarning] = useState(true);
   const [showError, setShowError] = useState(true);
+
+  // Handle Ctrl+L keyboard shortcut for clearing console
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.key.toLowerCase() === 'l' && isOpen) {
+        e.preventDefault();
+        onClear();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClear]);
 
   const filteredLogs = logs.filter(log => {
     if (log.level === 'INFO' && !showInfo) return false;

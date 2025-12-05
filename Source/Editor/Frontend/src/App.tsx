@@ -72,9 +72,50 @@ export default function App() {
 
   const animate = useCallback((time: number) => {
     if (previousTimeRef.current !== undefined) {
-      if (keysPressed.current['KeyW']) setCameraTransform(p => ({...p, position: {...p.position, z: p.position.z + 0.5}}));
-      if (keysPressed.current['KeyS']) setCameraTransform(p => ({...p, position: {...p.position, z: p.position.z - 0.5}}));
-      if (isPlaying) setEntities(prev => prev.map(ent => (ent.type === 'Mesh' ? {...ent, transform: {...ent.transform, rotation: {...ent.transform.rotation, z: ent.transform.rotation.z + 0.5}}} : ent)));
+      const deltaTime = time - previousTimeRef.current;
+      const moveSpeed = deltaTime * 0.1;
+      
+      // Batch camera updates to reduce state changes
+      let needsCameraUpdate = false;
+      const cameraUpdates: any = {};
+      
+      if (keysPressed.current['KeyW']) {
+        cameraUpdates.z = moveSpeed;
+        needsCameraUpdate = true;
+      }
+      if (keysPressed.current['KeyS']) {
+        cameraUpdates.z = -moveSpeed;
+        needsCameraUpdate = true;
+      }
+      
+      if (needsCameraUpdate) {
+        setCameraTransform(prev => ({
+          ...prev,
+          position: {
+            ...prev.position,
+            z: prev.position.z + (cameraUpdates.z || 0)
+          }
+        }));
+      }
+      
+      // Optimize entity rotation updates
+      if (isPlaying) {
+        setEntities(prev => prev.map(ent => {
+          if (ent.type === 'Mesh') {
+            return {
+              ...ent,
+              transform: {
+                ...ent.transform,
+                rotation: {
+                  ...ent.transform.rotation,
+                  z: ent.transform.rotation.z + (deltaTime * 0.001)
+                }
+              }
+            };
+          }
+          return ent;
+        }));
+      }
     }
     previousTimeRef.current = time;
     requestRef.current = requestAnimationFrame(animate);
@@ -217,7 +258,7 @@ export default function App() {
             <h2 className="text-2xl font-light mt-4" style={{ color: theme.colors.text.primary }}>Plume Engine</h2>
             <p className="text-sm mt-2" style={{ color: theme.colors.text.secondary }}>Version 0.1 Alpha</p>
             <p className="text-xs mt-2" style={{ color: theme.colors.text.muted }}>Created by Noa Second</p>
-            <p className="text-xs mt-4" style={{ color: theme.colors.text.muted }}>Thème actuel: {theme.displayName}</p>
+            <p className="text-xs mt-4" style={{ color: theme.colors.text.muted }}>Current theme: {theme.displayName}</p>
             <button 
               onClick={handleAboutClose}
               className="mt-4 px-4 py-2 rounded"
@@ -226,7 +267,7 @@ export default function App() {
                 color: theme.colors.text.primary 
               }}
             >
-              Fermer
+              Close
             </button>
           </div>
         </div>

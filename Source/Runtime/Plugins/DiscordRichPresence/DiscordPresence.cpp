@@ -22,7 +22,7 @@ PluginInfo DiscordPresence::GetInfo() const {
     PluginInfo info;
     info.id = "discord_rich_presence";
     info.name = "Discord Rich Presence";
-    info.description = "Affiche votre activité Plume Engine sur Discord";
+    info.description = "Displays your Plume Engine activity on Discord";
     info.version = "1.0.0";
     info.author = "Plume Engine Team";
     info.category = PluginCategory::Official;
@@ -38,7 +38,7 @@ bool DiscordPresence::Initialize() {
     
     auto result = discord::Core::Create(clientId, DiscordCreateFlags_NoRequireDiscord, &g_discordCore);
     if (result != discord::Result::Ok || !g_discordCore) {
-        // Échec de l'initialisation Discord - l'application continuera sans Rich Presence
+        // Discord initialization failed - application will continue without Rich Presence
         return false;
     }
     
@@ -48,7 +48,7 @@ bool DiscordPresence::Initialize() {
     
     m_initialized = true;
     
-    // État initial
+    // Initial state
     SetDetails("Editing a scene");
     SetState("In Editor");
     SetLargeImage("plume_logo", "Plume Engine");
@@ -133,7 +133,7 @@ void DiscordPresence::UpdatePresence() {
     }
     
     g_discordCore->ActivityManager().UpdateActivity(activity, [](discord::Result result) {
-        // Callback optionnel pour gérer les erreurs
+        // Optional callback to handle errors
     });
 #endif
 }
