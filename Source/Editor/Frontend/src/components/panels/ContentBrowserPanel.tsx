@@ -1,5 +1,5 @@
 ﻿import React, { useRef, useEffect, useState } from 'react';
-import { ChevronRight, Search, Folder, X, ChevronDown } from 'lucide-react';
+import { ChevronRight, Search, Folder, X, ChevronDown, File } from 'lucide-react';
 import { AssetTile } from '../ui/Shared';
 import { ContextMenu, ContextMenuItem } from '../ui/ContextMenu';
 import { Toast } from '../ui/Toast';
@@ -382,13 +382,26 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
             border: currentPath === node.path ? `1px solid ${theme.colors.accent.primary}` : undefined,
             paddingLeft: 8 + depth * 12
           }}
-          onClick={() => { setSelectedId(node.id); setCurrentPath(node.path || node.name); const __webview = (window as any).chrome?.webview; if (__webview) __webview.postMessage({ action: 'list-content', path: node.path || node.name }); }}
-          onDoubleClick={() => { openFolder(node); }}
+          onClick={() => { 
+            setSelectedId(node.id); 
+            // Only change path and load content for folders
+            if (node.type === 'folder') {
+              setCurrentPath(node.path || node.name); 
+              const __webview = (window as any).chrome?.webview; 
+              if (__webview) __webview.postMessage({ action: 'list-content', path: node.path || node.name }); 
+            }
+          }}
+          onDoubleClick={() => { 
+            // Only open folders, not files
+            if (node.type === 'folder') {
+              openFolder(node); 
+            }
+          }}
           onContextMenu={(e) => {
             e.preventDefault();
             setCtxX(e.clientX);
             setCtxY(e.clientY);
-            setCtxType('folder');
+            setCtxType(node.type === 'folder' ? 'folder' : 'asset');
             setCtxTarget(node);
             setCtxVisible(true);
           }}
@@ -400,7 +413,11 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
               <span style={{ display: 'inline-block', width: 12 }} />
             )}
           </div>
-          <Folder size={12} className="mr-2" style={{ color: node.meta?.color ? (node.meta.color.startsWith('#') ? node.meta.color : ('#' + node.meta.color)) : undefined }} fill={node.meta?.color ? (node.meta.color.startsWith('#') ? node.meta.color : ('#' + node.meta.color)) : 'currentColor'} />
+          {node.type === 'folder' ? (
+            <Folder size={12} className="mr-2" style={{ color: node.meta?.color ? (node.meta.color.startsWith('#') ? node.meta.color : ('#' + node.meta.color)) : undefined }} fill={node.meta?.color ? (node.meta.color.startsWith('#') ? node.meta.color : ('#' + node.meta.color)) : 'currentColor'} />
+          ) : (
+            <File size={12} className="mr-2" style={{ color: theme.colors.text.secondary }} />
+          )}
           <span style={{ fontWeight: currentPath === (node.path || node.name) ? 600 : 400 }}>{node.name}</span>
         </div>
         <div ref={childrenRef} style={{
