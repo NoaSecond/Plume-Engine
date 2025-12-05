@@ -1,5 +1,5 @@
-﻿import React, { useRef, useEffect, useState } from 'react';
-import { ChevronRight, Search, Folder, X, ChevronDown, File } from 'lucide-react';
+import React, { useRef, useEffect, useState } from 'react';
+import { ChevronRight, Search, Folder, X, ChevronDown, File, Upload } from 'lucide-react';
 import { AssetTile } from '../ui/Shared';
 import { ContextMenu, ContextMenuItem } from '../ui/ContextMenu';
 import { Toast } from '../ui/Toast';
@@ -33,7 +33,8 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
     path?: string;
     meta?: any;
   }>>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [lastSelectedId, setLastSelectedId] = useState<string | null>(null);
   const [currentPath, setCurrentPath] = useState<string>('Content');
   const [folderTree, setFolderTree] = useState<any[]>([]);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
@@ -57,6 +58,9 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
   // Inline edit state for newly created items
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState<string>('');
+  // Drag & drop state
+  const [isDragOver, setIsDragOver] = useState(false);
+  const contentAreaRef = useRef<HTMLDivElement>(null);
   // Removed auto-focus on search bar when opening Content Browser
   // Focus will only happen when user presses Ctrl+K
 
@@ -98,26 +102,42 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
         return;
       }
       
-      if (!selectedId) return;
+      // Ctrl+A to select all
+      if (show && ctrlKey && keyLower === 'a') {
+        e.preventDefault();
+        const allIds = assets.map(a => a.id);
+        setSelectedIds(new Set(allIds));
+        if (allIds.length > 0) setLastSelectedId(allIds[allIds.length - 1]);
+        return;
+      }
       
-      const selectedAsset = assets.find(a => a.id === selectedId);
+      if (selectedIds.size === 0) return;
+      
+      const firstSelectedId = Array.from(selectedIds)[0];
+      const selectedAsset = assets.find(a => a.id === firstSelectedId);
       if (!selectedAsset) return;
       
       if (ctrlKey && keyLower === 'c') {
         e.preventDefault();
-        copyItem(selectedAsset as any);
+        if (selectedIds.size === 1) copyItem(selectedAsset as any);
       } else if (ctrlKey && keyLower === 'd') {
         e.preventDefault();
-        duplicateItem(selectedAsset as any);
+        if (selectedIds.size === 1) duplicateItem(selectedAsset as any);
       } else if (keyLower === 'delete') {
         e.preventDefault();
-        deleteItem(selectedAsset as any);
+        // Delete all selected items
+        selectedIds.forEach(id => {
+          const item = assets.find(a => a.id === id);
+          if (item) deleteItem(item as any);
+        });
       } else if (keyLower === 'f2') {
         e.preventDefault();
-        // Preserve meta when starting rename
-        const asset = selectedAsset as any;
-        setEditingId(asset.id);
-        setEditingValue(asset.name);
+        if (selectedIds.size === 1) {
+          // Preserve meta when starting rename
+          const asset = selectedAsset as any;
+          setEditingId(asset.id);
+          setEditingValue(asset.name);
+        }
       } else if (ctrlKey && keyLower === 'v') {
         e.preventDefault();
         pasteClipboard();
@@ -126,7 +146,7 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
     
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [assets, selectedId, clipboard, currentPath, show]);
+  }, [assets, selectedIds, clipboard, currentPath, show]);
   
   
   // When the panel opens, request the real content list from the native side
@@ -172,7 +192,8 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
             setAssets(nodes.map((it: any) => ({ id: it.id, name: it.name, type: it.type, path: it.path, meta: it.meta })));
             // By default only expand the root; do NOT auto-expand all top-level nodes.
             // Expand ancestors only when currentPath is inside that branch so the tree follows selection.
-            let newExpanded = new Set<string>();
+            // Preserve existing expanded nodes
+            let newExpanded = new Set<string>(expandedIds);
             newExpanded.add('root_content');
             try {
               const anc = findAncestorIds(nodes, normalizePath(currentPath || 'Content'));
@@ -188,8 +209,12 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
         if (data.type === 'result') {
           const ok = !!data.success;
           const msg = data.message || (ok ? 'OK' : 'Error');
-          // Only show toast on error (suppress success messages)
-          if (!ok) setToast(msg);
+          // Log to console instead of showing toast
+          if (ok) {
+            onLog(msg, 'INFO');
+          } else {
+            onLog(msg, 'ERROR');
+          }
         }
       } catch (e) {
         // ignore parse errors
@@ -244,7 +269,8 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
     if (name) {
       const folderName = name;
       const id = `${folderName.toLowerCase().replace(/[^a-z0-9]+/g,'_')}_${Date.now()}`;
-      const item = { id, name: folderName, type: 'folder' };
+        const folderPath = `${currentPath}/${folderName}`.replace(/\/{2,}/g, '/');
+        const item = { id, name: folderName, type: 'folder', path: folderPath };
       setAssets(prev => [item, ...prev]);
       onLog(`Created folder ${folderName}`, 'INFO');
       // Inform backend
@@ -259,7 +285,8 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
     // Create a placeholder folder immediately and start inline rename
     const defaultName = 'New Folder';
     const id = `${defaultName.toLowerCase().replace(/[^a-z0-9]+/g,'_')}_${Date.now()}`;
-    const placeholder = { id, name: defaultName, type: 'folder' };
+      const folderPath = `${currentPath}/${defaultName}`.replace(/\/{2,}/g, '/');
+      const placeholder = { id, name: defaultName, type: 'folder', path: folderPath };
     setAssets(prev => [placeholder, ...prev]);
     setEditingId(id);
     setEditingValue(defaultName);
@@ -273,54 +300,195 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
   };
 
   const deleteItem = React.useCallback((item: {id:string,name:string,type:string}) => {
-    // trigger inline confirmation UI (do not use blocking confirm)
-    setDeletePending({ id: item.id, name: item.name, path: (item as any).path });
-  }, []);
+    // If the item is part of a multi-selection, delete all selected items
+    if (selectedIds.has(item.id) && selectedIds.size > 1) {
+      const selectedItems = assets.filter(a => selectedIds.has(a.id));
+      const names = selectedItems.map(a => a.name).join(', ');
+      setDeletePending({ id: 'multi', name: `${selectedIds.size} items (${names})`, path: 'multi', items: selectedItems });
+    } else {
+      // Single item delete
+      setDeletePending({ id: item.id, name: item.name, path: (item as any).path, items: [item] });
+    }
+  }, [selectedIds, assets]);
 
   // state for inline delete confirmation
-  const [deletePending, setDeletePending] = useState<{id:string,name:string,path?:string}|null>(null);
+  const [deletePending, setDeletePending] = useState<{id:string,name:string,path?:string,items?:any[]}|null>(null);
 
   const confirmDeleteNow = () => {
     if (!deletePending) return;
-    const id = deletePending.id;
-    setAssets(prev => prev.filter(a => a.id !== id));
-    onLog(`Deleted ${deletePending.name}`, 'INFO');
-    const __webview = (window as any).chrome?.webview;
-    if (__webview) {
-      __webview.postMessage({ action: 'delete', id: id, path: deletePending.path });
-      // request refresh after delete
-      __webview.postMessage({ action: 'list-content', path: 'Content' });
+    const itemsToDelete = deletePending.items || [];
+    
+    if (itemsToDelete.length > 0) {
+      // Delete multiple items
+      const idsToDelete = itemsToDelete.map(item => item.id);
+      setAssets(prev => prev.filter(a => !idsToDelete.includes(a.id)));
+      onLog(`Deleted ${itemsToDelete.length} item(s)`, 'INFO');
+      
+      const __webview = (window as any).chrome?.webview;
+      if (__webview) {
+        // Send delete message for each item
+        itemsToDelete.forEach(item => {
+          __webview.postMessage({ action: 'delete', path: (item as any).path });
+        });
+        // request refresh after delete
+        __webview.postMessage({ action: 'list-content', path: currentPath });
+      }
+      
+      // Clear selection
+      setSelectedIds(new Set());
+      setLastSelectedId(null);
     }
     setDeletePending(null);
   };
 
   const cancelDelete = () => setDeletePending(null);
 
+  // Handle Enter key in delete confirmation popup
+  useEffect(() => {
+    if (!deletePending) return;
+    
+    const onDeletePopupKey = (e: KeyboardEvent) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        confirmDeleteNow();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        cancelDelete();
+      }
+    };
+    
+    window.addEventListener('keydown', onDeletePopupKey);
+    return () => window.removeEventListener('keydown', onDeletePopupKey);
+  }, [deletePending]);
+
   const duplicateItem = (item: {id:string,name:string,type:string}) => {
-    onLog(`Duplicating ${item.name}`, 'INFO');
+    // If the item is part of a multi-selection, duplicate all selected items
+    const itemsToDuplicate = selectedIds.has(item.id) && selectedIds.size > 1
+      ? assets.filter(a => selectedIds.has(a.id))
+      : [item];
+    
+    onLog(`Duplicating ${itemsToDuplicate.length} item(s)`, 'INFO');
     const __webview = (window as any).chrome?.webview;
-    if (__webview) __webview.postMessage({ action: 'duplicate', path: (item as any).path });
+    if (__webview) {
+      itemsToDuplicate.forEach(it => {
+        __webview.postMessage({ action: 'duplicate', path: (it as any).path });
+      });
+    }
   };
 
   const copyItem = (item: {id:string,name:string,type:string}) => {
-    setClipboard(item);
-    onLog(`Copied ${item.name} to clipboard`, 'INFO');
+    // If the item is part of a multi-selection, copy all selected items
+    const itemsToCopy = selectedIds.has(item.id) && selectedIds.size > 1
+      ? assets.filter(a => selectedIds.has(a.id))
+      : [item];
+    
+    setClipboard(itemsToCopy.length === 1 ? itemsToCopy[0] : itemsToCopy as any);
+    onLog(`Copied ${itemsToCopy.length} item(s) to clipboard`, 'INFO');
+    
     // Inform backend clipboard if needed
-    // @ts-ignore
-    if (window.chrome?.webview) window.chrome.webview.postMessage({ action: 'copy', id: item.id, path: (item as any).path });
+    const __webview = (window as any).chrome?.webview;
+    if (__webview) {
+      itemsToCopy.forEach(it => {
+        __webview.postMessage({ action: 'copy', id: it.id, path: (it as any).path });
+      });
+    }
   };
 
   const pasteClipboard = () => {
     if (!clipboard) return;
-    onLog(`Pasting ${clipboard.name}`, 'INFO');
+    
+    // Check if clipboard contains multiple items
+    const itemsToPaste = Array.isArray(clipboard) ? clipboard : [clipboard];
+    
+    onLog(`Pasting ${itemsToPaste.length} item(s)`, 'INFO');
     const __webview = (window as any).chrome?.webview;
-    if (__webview) __webview.postMessage({ action: 'paste', sourcePath: (clipboard as any).path, path: currentPath });
+    if (__webview) {
+      itemsToPaste.forEach(item => {
+        __webview.postMessage({ action: 'paste', sourcePath: (item as any).path, path: currentPath });
+      });
+    }
   };
 
   const openInExplorer = (item?: {id:string,name:string,type:string}) => {
     onLog(`Open in Explorer${item ? ' : ' + item.name : ''}`, 'INFO');
     // @ts-ignore
-    if (window.chrome?.webview) window.chrome.webview.postMessage({ action: 'open-in-explorer', path: item ? (item as any).path : undefined });
+     if (window.chrome?.webview) window.chrome.webview.postMessage({ action: 'open-in-explorer', path: item ? (item as any).path : currentPath });
+  };
+
+  const handleImport = () => {
+    const __webview = (window as any).chrome?.webview;
+    if (__webview) {
+      __webview.postMessage({ action: 'import-file', path: currentPath });
+    } else {
+      // Fallback pour le d�veloppement
+      onLog('Import dialog not available', 'ERROR');
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) {
+      // In WebView2, we need to use the file picker dialog for reliable file paths
+      // Simply trigger the import dialog which will handle the file selection
+      const __webview = (window as any).chrome?.webview;
+      if (__webview) {
+        __webview.postMessage({ action: 'import-file', path: currentPath });
+        onLog(`Opening import dialog...`, 'INFO');
+      }
+    }
+  };
+  
+  // Handle asset click with Ctrl and Shift modifiers
+  const handleAssetClick = (e: React.MouseEvent, assetId: string) => {
+    if (e.ctrlKey) {
+      // Ctrl+Click: toggle selection
+      setSelectedIds(prev => {
+        const newSet = new Set(prev);
+        if (newSet.has(assetId)) {
+          newSet.delete(assetId);
+        } else {
+          newSet.add(assetId);
+        }
+        return newSet;
+      });
+      setLastSelectedId(assetId);
+    } else if (e.shiftKey && lastSelectedId) {
+      // Shift+Click: select range
+      const currentIndex = assets.findIndex(a => a.id === assetId);
+      const lastIndex = assets.findIndex(a => a.id === lastSelectedId);
+      
+      if (currentIndex !== -1 && lastIndex !== -1) {
+        const start = Math.min(currentIndex, lastIndex);
+        const end = Math.max(currentIndex, lastIndex);
+        const rangeIds = assets.slice(start, end + 1).map(a => a.id);
+        
+        setSelectedIds(prev => {
+          const newSet = new Set(prev);
+          rangeIds.forEach(id => newSet.add(id));
+          return newSet;
+        });
+      }
+    } else {
+      // Normal click: select only this item
+      setSelectedIds(new Set([assetId]));
+      setLastSelectedId(assetId);
+    }
   };
   
   // Open folder (navigate into) - set currentPath and request listing
@@ -335,21 +503,15 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
       return raw.startsWith('Content') ? raw.replace(/\\\\/g, '/') : `Content/${raw}`;
     })();
     setCurrentPath(p);
-    setSelectedId(item.id);
-    // ensure ancestor nodes are expanded so the selected node is visible
-    try {
-      if (folderTree && folderTree.length) {
-        const anc = findAncestorIds(folderTree, p);
-        if (anc) setExpandedIds(prev => new Set([...Array.from(prev), 'root_content', ...anc]));
-        else setExpandedIds(prev => new Set([...Array.from(prev), 'root_content']));
-      } else {
-        // at least ensure root is expanded
-        setExpandedIds(prev => new Set([...Array.from(prev), 'root_content']));
-      }
-    } catch (e) {}
+    setSelectedIds(new Set([item.id]));
+    setLastSelectedId(item.id);
+    // Don't manually set expandedIds here - let the tree refresh handler do it
+    // to avoid the open/close flicker issue
 
     const __webview = (window as any).chrome?.webview;
     if (__webview) __webview.postMessage({ action: 'list-content', path: p });
+      // Also refresh the full tree to ensure it's up to date
+      if (__webview) __webview.postMessage({ action: 'list-content', path: 'Content', recursive: true });
   };
 
   // Toggle expansion for folder tree
@@ -390,7 +552,8 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
             paddingLeft: 8 + depth * 12
           }}
           onClick={() => { 
-            setSelectedId(node.id); 
+            setSelectedIds(new Set([node.id]));
+            setLastSelectedId(node.id); 
             // Only change path and load content for folders
             if (node.type === 'folder') {
               setCurrentPath(node.path || node.name); 
@@ -421,7 +584,7 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
             )}
           </div>
           {node.type === 'folder' ? (
-            <Folder size={12} className="mr-2" style={{ color: node.meta?.color ? (node.meta.color.startsWith('#') ? node.meta.color : ('#' + node.meta.color)) : undefined }} fill={node.meta?.color ? (node.meta.color.startsWith('#') ? node.meta.color : ('#' + node.meta.color)) : 'currentColor'} />
+            <Folder size={12} className="mr-2" style={{ color: node.meta?.color ? (node.meta.color.startsWith('#') ? node.meta.color : ('#' + node.meta.color)) : '#eab308' }} fill={node.meta?.color ? (node.meta.color.startsWith('#') ? node.meta.color : ('#' + node.meta.color)) : '#eab308'} />
           ) : (
             <File size={12} className="mr-2" style={{ color: theme.colors.text.secondary }} />
           )}
@@ -541,7 +704,7 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
         </div>
         <div className="flex items-center space-x-2">
           <button 
-            className="text-xs px-3 py-1 rounded font-medium shadow-sm transition-colors"
+            className="text-xs px-3 py-1 rounded font-medium shadow-sm transition-colors flex items-center gap-1"
             style={{
               backgroundColor: theme.colors.accent.primary,
               color: theme.colors.text.primary
@@ -552,8 +715,9 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
             onMouseLeave={(e) => {
               e.currentTarget.style.backgroundColor = theme.colors.accent.primary;
             }}
-            onClick={() => onLog("Import not implemented", "WARN")}
+            onClick={handleImport}
           >
+            <Upload size={14} />
             Import
           </button>
           <button 
@@ -599,7 +763,8 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
             </div>
          </div>
          <div 
-           className="flex-1 p-2 overflow-y-auto"
+           ref={contentAreaRef}
+           className="flex-1 p-2 overflow-y-auto relative"
            style={{ backgroundColor: theme.colors.bg.secondary }}
            onContextMenu={(e) => {
              // Right click on empty area
@@ -610,7 +775,24 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
              setCtxTarget(null);
              setCtxVisible(true);
            }}
+           onDragOver={handleDragOver}
+           onDragLeave={handleDragLeave}
+           onDrop={handleDrop}
          >
+          {isDragOver && (
+            <div 
+              className="absolute inset-0 border-2 border-dashed rounded flex items-center justify-center pointer-events-none"
+              style={{ 
+                borderColor: theme.colors.accent.primary,
+                backgroundColor: theme.colors.accent.primary + '20'
+              }}
+            >
+              <div style={{ color: theme.colors.text.primary }} className="text-center">
+                <Upload size={32} className="mx-auto mb-2" />
+                <div className="text-sm font-medium">Drop files to import</div>
+              </div>
+            </div>
+          )}
           <div className="mb-2 text-xs" style={{ color: theme.colors.text.muted }}>
             {/* Breadcrumbs for currentPath */}
             {(() => {
@@ -628,7 +810,16 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
               });
             })()}
           </div>
-           <div className="flex flex-wrap gap-2 content-start">
+           <div 
+             className="flex flex-wrap gap-2 content-start"
+             onClick={(e) => {
+               // Clear selection when clicking on empty area
+               if (e.target === e.currentTarget) {
+                 setSelectedIds(new Set());
+                 setLastSelectedId(null);
+               }
+             }}
+           >
                {(searchQuery ? assets.filter(a => a.name.toLowerCase().includes(searchQuery.toLowerCase())) : assets).map(a => (
                a.id === editingId ? (
                  <div key={a.id} className="flex flex-col items-center p-2 rounded cursor-pointer group w-24">
@@ -721,7 +912,12 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
                    />
                  </div>
                  ) : (
-                 <AssetTile key={a.id} id={a.id} name={a.name} type={a.type} meta={(a as any).meta} selected={selectedId === a.id} onClick={() => setSelectedId(a.id)} onDoubleClick={() => { if (a.type === 'folder') openFolder(a as any); }} onContextMenu={(_e, info) => {
+                 <AssetTile key={a.id} id={a.id} name={a.name} type={a.type} meta={(a as any).meta} selected={selectedIds.has(a.id)} onClick={(e) => handleAssetClick(e, a.id)} onDoubleClick={() => { if (a.type === 'folder') openFolder(a as any); }} onContextMenu={(_e, info) => {
+                   // If right-clicking on an unselected item, select only it
+                   if (!selectedIds.has(a.id)) {
+                     setSelectedIds(new Set([a.id]));
+                     setLastSelectedId(a.id);
+                   }
                    setCtxX(_e.clientX);
                    setCtxY(_e.clientY);
                    setCtxType(info.type === 'folder' ? 'folder' : 'asset');
@@ -758,6 +954,7 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
                if (id === 'create_folder') createFolder();
                else if (id === 'paste') pasteClipboard();
                else if (id === 'open_in_explorer') openInExplorer(ctxTarget ?? undefined);
+               else if (id === 'import') handleImport();
                else if (id === 'rename' && ctxTarget) renameItem(ctxTarget as any);
                else if (id === 'delete' && ctxTarget) deleteItem(ctxTarget as any);
                else if (id === 'duplicate' && ctxTarget) duplicateItem(ctxTarget as any);

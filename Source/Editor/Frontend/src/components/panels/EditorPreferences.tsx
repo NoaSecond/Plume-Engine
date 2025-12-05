@@ -261,12 +261,19 @@ function ShortcutSettings() {
   const shortcuts = [
     { action: 'Save', keys: 'Ctrl + S' },
     { action: 'Open Content Browser', keys: 'Ctrl + Space' },
-    { action: 'Clear Console', keys: 'Ctrl + L' },
-    { action: 'Play', keys: 'F5' },
-    { action: 'Stop', keys: 'Shift + F5' },
+    { action: 'Search in Content Browser', keys: 'Ctrl + K' },
+    { action: 'Select All (Content Browser)', keys: 'Ctrl + A' },
+    { action: 'Copy', keys: 'Ctrl + C' },
+    { action: 'Paste', keys: 'Ctrl + V' },
     { action: 'Rename', keys: 'F2' },
     { action: 'Duplicate', keys: 'Ctrl + D' },
     { action: 'Delete', keys: 'Delete' },
+    { action: 'Confirm Delete', keys: 'Enter' },
+    { action: 'Cancel Delete', keys: 'Escape' },
+    { action: 'Clear Console', keys: 'Ctrl + L' },
+    { action: 'Toggle Console', keys: 'Ctrl + I' },
+    { action: 'Play', keys: 'F5' },
+    { action: 'Stop', keys: 'Shift + F5' },
   ];
 
   return (

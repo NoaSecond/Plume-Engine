@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { LucideIcon, FileCode, Folder, Image as ImageIcon, Box } from 'lucide-react';
 import { useTheme } from '../../ThemeContext';
 
@@ -61,7 +61,7 @@ export const MenuBarItem: React.FC<MenuBarItemProps> = ({ label, items, onAction
     setIsOpen(false);
   };
   
-  // Écouter les événements globaux
+  // �couter les �v�nements globaux
   useEffect(() => {
     const handleCloseAllMenus = (event: CustomEvent) => {
       if (event.detail.except !== label) {
@@ -141,7 +141,7 @@ export const MenuBarItem: React.FC<MenuBarItemProps> = ({ label, items, onAction
 export const AssetTile = ({ id, name, type, selected = false, onClick, onDoubleClick, onContextMenu, meta }: { id?: string, name: string, type: string, selected?: boolean, onClick?: (e: React.MouseEvent) => void, onDoubleClick?: (e: React.MouseEvent) => void, onContextMenu?: (e: React.MouseEvent, info: { name: string, type: string }) => void, meta?: any }) => {
   const { theme } = useTheme();
   let Icon = FileCode;
-  let color = theme.colors.text.muted;
+  let color = "#8b5cf6"; // violet-500 - default color for files
   
   if (type === 'folder') { 
     Icon = Folder; 
@@ -162,6 +162,10 @@ export const AssetTile = ({ id, name, type, selected = false, onClick, onDoubleC
   if (name === '.plume_meta' || name.endsWith('.plume_meta')) {
     Icon = FileCode;
     color = theme.colors.accent.secondary; // Utilise la couleur accent du thème
+  }
+  if (name.endsWith('.plume_mesh')) {
+    Icon = Box;
+    color = "#60a5fa"; // blue-400
   }
   // meta color overrides handled below
   
@@ -218,6 +222,7 @@ export const AssetTile = ({ id, name, type, selected = false, onClick, onDoubleC
           color: selected ? theme.colors.text.primary : theme.colors.text.secondary,
           backgroundColor: 'transparent'
         }}
+        title={name}
       >
         {name}
       </span>

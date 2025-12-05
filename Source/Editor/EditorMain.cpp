@@ -19,6 +19,7 @@
 #include <windowsx.h>
 #include <shellapi.h>
 #include <dwmapi.h>
+#include <commdlg.h>
 #include <wrl.h>
 #include "WebView2.h"
 #include "SplashScreen.h"
@@ -26,6 +27,7 @@
 #include "Version.h"
 using namespace Microsoft::WRL;
 #pragma comment(lib, "dwmapi.lib")
+#pragma comment(lib, "comdlg32.lib")
 #endif
 
 namespace fs = std::filesystem;
@@ -432,7 +434,12 @@ void InitWebView(const std::string& htmlPath) {
                                             std::string path = j.value("path", std::string());
                                             bool ok = false;
                                             if (!path.empty()) {
-                                                try { fs::remove_all(fs::path(path)); ok = true; } catch(...) { ok = false; }
+                                                try { 
+                                                    fs::path base = fs::path(g_app.uiFolder).parent_path();
+                                                    fs::path fullPath = base / path;
+                                                    fs::remove_all(fullPath); 
+                                                    ok = true; 
+                                                } catch(...) { ok = false; }
                                             }
                                             sendResult(ok, ok ? "Deleted" : "Delete failed");
                                             // Refresh parent folder listing
@@ -461,8 +468,23 @@ void InitWebView(const std::string& htmlPath) {
                                             bool ok = false;
                                             if (!path.empty()) {
                                                 try {
-                                                    fs::path p(path);
-                                                    fs::path dest = p.parent_path() / (p.filename().string() + std::string("_copy"));
+                                                    fs::path base = fs::path(g_app.uiFolder).parent_path();
+                                                    fs::path p = base / path;
+                                                    
+                                                    // Preserve extension while adding _2, _3 suffix
+                                                    std::string stem = p.stem().string();
+                                                    std::string extension = p.extension().string();
+                                                    
+                                                    // Find unique name starting from _2
+                                                    fs::path dest;
+                                                    int counter = 2;
+                                                    dest = p.parent_path() / (stem + "_" + std::to_string(counter) + extension);
+                                                    
+                                                    while (fs::exists(dest)) {
+                                                        counter++;
+                                                        dest = p.parent_path() / (stem + "_" + std::to_string(counter) + extension);
+                                                    }
+                                                    
                                                     if (fs::is_directory(p)) fs::copy(p, dest, fs::copy_options::recursive);
                                                     else fs::copy_file(p, dest);
                                                     ok = true;
@@ -495,7 +517,22 @@ void InitWebView(const std::string& htmlPath) {
                                             if (!pathParam.empty()) sendContentListFor(pathParam); else sendContentListFor(std::string("Content"));
                                             return S_OK;
                                         }
-                                        if (action == "open-in-explorer") { std::string path = j.value("path", std::string()); std::string toOpen = path.empty() ? (fs::path(g_app.uiFolder).parent_path() / "Content").string() : path; std::wstring args = utf8_to_wstr(std::string("/select,\"") + toOpen + std::string("\"")); ShellExecuteW(NULL, L"open", L"explorer.exe", args.c_str(), NULL, SW_SHOWNORMAL); return S_OK; }
+                                        if (action == "open-in-explorer") { 
+                                            std::string path = j.value("path", std::string()); 
+                                            fs::path base = fs::path(g_app.uiFolder).parent_path();
+                                            fs::path fullPath = path.empty() ? (base / "Content") : (base / path);
+                                            
+                                            // If it's a directory, open it directly; if it's a file, open the parent and select it
+                                            if (fs::exists(fullPath) && fs::is_directory(fullPath)) {
+                                                std::wstring widePath = fullPath.wstring();
+                                                ShellExecuteW(NULL, L"open", widePath.c_str(), NULL, NULL, SW_SHOWNORMAL);
+                                            } else {
+                                                // For files or if path doesn't exist, use /select
+                                                std::wstring args = utf8_to_wstr(std::string("/select,\"") + fullPath.string() + std::string("\""));
+                                                ShellExecuteW(NULL, L"open", L"explorer.exe", args.c_str(), NULL, SW_SHOWNORMAL);
+                                            }
+                                            return S_OK; 
+                                        }
                                         if (action == "copy") {
                                             if (j.contains("path")) {
                                                 g_app.clipboardPath = j.value("path", std::string());
@@ -507,19 +544,34 @@ void InitWebView(const std::string& htmlPath) {
                                         }
                                         if (action == "paste") {
                                             std::string source = j.value("sourcePath", g_app.clipboardPath);
+                                            std::string targetPath = j.value("path", std::string());
                                             bool ok = false;
                                             if (!source.empty()) {
                                                 try {
-                                                    fs::path src(source);
                                                     fs::path base = fs::path(g_app.uiFolder).parent_path();
-                                                    fs::path destDir = base / "Content";
-                                                    fs::path dest = destDir / (src.filename().string() + std::string("_pasted"));
+                                                    fs::path src = base / source;
+                                                    fs::path destDir = targetPath.empty() ? (base / "Content") : (base / targetPath);
+                                                    
+                                                    // Find a unique name by incrementing number while preserving extension
+                                                    std::string stem = src.stem().string(); // filename without extension
+                                                    std::string extension = src.extension().string(); // .plume_mesh, .txt, etc.
+                                                    
+                                                    // Try name_2, name_3, etc.
+                                                    fs::path dest;
+                                                    int counter = 2;
+                                                    dest = destDir / (stem + "_" + std::to_string(counter) + extension);
+                                                    
+                                                    while (fs::exists(dest)) {
+                                                        counter++;
+                                                        dest = destDir / (stem + "_" + std::to_string(counter) + extension);
+                                                    }
+                                                    
                                                     if (fs::is_directory(src)) fs::copy(src, dest, fs::copy_options::recursive);
                                                     else fs::copy_file(src, dest);
                                                     ok = true;
                                                 } catch(...) { ok = false; }
                                             }
-                                            sendContentListFor(j.value("path", std::string()));
+                                            sendContentListFor(targetPath.empty() ? std::string("Content") : targetPath);
                                             sendResult(ok, ok ? "Pasted successfully" : "Paste failed");
                                             return S_OK;
                                         }
@@ -542,6 +594,231 @@ void InitWebView(const std::string& htmlPath) {
                                             }
                                             sendResult(ok, ok ? "Color saved" : "Failed to save color");
                                             if (!path.empty()) sendContentListFor(fs::path(path).parent_path().string());
+                                            return S_OK;
+                                        }
+
+                                        // Import file (open file dialog)
+                                        if (action == "import-file") {
+                                            std::string path = j.value("path", std::string());
+                                            OPENFILENAMEA ofn = {};
+                                            char szFile[260] = {};
+                                            ofn.lStructSize = sizeof(ofn);
+                                            ofn.hwndOwner = g_app.hwnd;
+                                            ofn.lpstrFile = szFile;
+                                            ofn.nMaxFile = sizeof(szFile);
+                                            ofn.lpstrFilter = "3D Models (*.fbx;*.obj;*.glb;*.gltf)\0*.fbx;*.obj;*.glb;*.gltf\0All Files (*.*)\0*.*\0";
+                                            ofn.nFilterIndex = 1;
+                                            ofn.lpstrFileTitle = NULL;
+                                            ofn.nMaxFileTitle = 0;
+                                            ofn.lpstrInitialDir = NULL;
+                                            ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST | OFN_ALLOWMULTISELECT | OFN_EXPLORER;
+                                            
+                                            if (GetOpenFileNameA(&ofn)) {
+                                                // Process the selected files
+                                                std::vector<std::string> selectedFiles;
+                                                std::string fileName = szFile;
+                                                
+                                                // Check if it's a multi-select
+                                                if (ofn.nFileOffset > fileName.length()) {
+                                                    // Multi-select: directory\0file1\0file2\0\0
+                                                    std::string dir = fileName;
+                                                    char* p = szFile + ofn.nFileOffset;
+                                                    while (*p) {
+                                                        selectedFiles.push_back(dir + "\\" + p);
+                                                        p += strlen(p) + 1;
+                                                    }
+                                                } else {
+                                                    // Single file
+                                                    selectedFiles.push_back(fileName);
+                                                }
+                                                
+                                                // Process the files directly
+                                                nlohmann::json files = nlohmann::json::array();
+                                                for (const auto& file : selectedFiles) {
+                                                    nlohmann::json fileObj;
+                                                    fileObj["name"] = fs::path(file).filename().string();
+                                                    fileObj["path"] = file;
+                                                    files.push_back(fileObj);
+                                                }
+                                                
+                                                // Create the import request
+                                                nlohmann::json importReq;
+                                                importReq["action"] = "import-files";
+                                                importReq["files"] = files;
+                                                importReq["path"] = path;
+                                                
+                                                // Recursively call to process the import
+                                                // (simulating a new message with the selected files)
+                                                // For now, we'll process it here inline
+                                                if (!files.empty()) {
+                                                    fs::path base = fs::path(g_app.uiFolder).parent_path();
+                                                    fs::path contentDir = base / path;
+                                                    
+                                                    // Ensure the target directory exists
+                                                    try {
+                                                        if (!fs::exists(contentDir)) {
+                                                            fs::create_directories(contentDir);
+                                                        }
+                                                    } catch(...) {}
+                                                    
+                                                    int importedCount = 0;
+                                                    std::vector<std::string> createdAssets;
+                                                    
+                                                    // Process each file
+                                                    for (const auto& fileObj : files) {
+                                                        std::string filePath = fileObj.value("path", std::string());
+                                                        std::string fileName = fileObj.value("name", std::string());
+                                                        
+                                                        if (filePath.empty() || fileName.empty()) continue;
+                                                        
+                                                        try {
+                                                            fs::path src(filePath);
+                                                            if (!fs::exists(src)) continue;
+                                                            
+                                                            // Get file extension
+                                                            std::string ext = src.extension().string();
+                                                            for (auto& c : ext) c = std::tolower(c);
+                                                            
+                                                            // Check if it's a 3D model
+                                                            bool is3DModel = (ext == ".fbx" || ext == ".obj" || ext == ".glb" || ext == ".gltf");
+                                                            
+                                                            if (is3DModel) {
+                                                                // Create a Static Mesh asset (just .plume_mesh file, no folder)
+                                                                std::string meshName = fs::path(fileName).stem().string();
+                                                                
+                                                                try {
+                                                                    // Create a .plume_mesh metadata file directly
+                                                                    nlohmann::json meshMeta;
+                                                                    meshMeta["type"] = "StaticMesh";
+                                                                    meshMeta["sourceFile"] = fileName;
+                                                                    meshMeta["format"] = ext.substr(1); // Remove the dot
+                                                                    
+                                                                    fs::path metaFile = contentDir / (meshName + ".plume_mesh");
+                                                                    std::ofstream ofs(metaFile.string());
+                                                                    if (ofs.is_open()) {
+                                                                        ofs << meshMeta.dump(2);
+                                                                        ofs.close();
+                                                                    }
+                                                                    
+                                                                    createdAssets.push_back(meshName + ".plume_mesh");
+                                                                    importedCount++;
+                                                                } catch(...) {}
+                                                            } else {
+                                                                // For other files, just copy them
+                                                                fs::path destFile = contentDir / fileName;
+                                                                fs::copy_file(src, destFile, fs::copy_options::overwrite_existing);
+                                                                createdAssets.push_back(fileName);
+                                                                importedCount++;
+                                                            }
+                                                        } catch(...) {}
+                                                    }
+                                                    
+                                                    // Send result back
+                                                    nlohmann::json resultData;
+                                                    resultData["importedCount"] = importedCount;
+                                                    resultData["assets"] = nlohmann::json::array();
+                                                    for (const auto& asset : createdAssets) {
+                                                        resultData["assets"].push_back(asset);
+                                                    }
+                                                    
+                                                    sendResult(importedCount > 0, importedCount > 0 ? 
+                                                        std::to_string(importedCount) + " file(s) imported" : 
+                                                        "Failed to import files", resultData);
+                                                    
+                                                    // Refresh the content listing
+                                                    sendContentListFor(path);
+                                                }
+                                            }
+                                            return S_OK;
+                                        }
+
+                                        // Import files (from drag & drop or file dialog)
+                                        if (action == "import-files") {
+                                            std::string targetPath = j.value("path", std::string());
+                                            nlohmann::json files = j.value("files", nlohmann::json::array());
+                                            
+                                            if (!files.is_array() || files.empty()) {
+                                                sendResult(false, "No files to import");
+                                                return S_OK;
+                                            }
+                                            
+                                            fs::path base = fs::path(g_app.uiFolder).parent_path();
+                                            fs::path contentDir = base / targetPath;
+                                            
+                                            // Ensure the target directory exists
+                                            try {
+                                                if (!fs::exists(contentDir)) {
+                                                    fs::create_directories(contentDir);
+                                                }
+                                            } catch(...) {}
+                                            
+                                            int importedCount = 0;
+                                            std::vector<std::string> createdAssets;
+                                            
+                                            // Process each file
+                                            for (const auto& fileObj : files) {
+                                                std::string filePath = fileObj.value("path", std::string());
+                                                std::string fileName = fileObj.value("name", std::string());
+                                                
+                                                if (filePath.empty() || fileName.empty()) continue;
+                                                
+                                                try {
+                                                    fs::path src(filePath);
+                                                    if (!fs::exists(src)) continue;
+                                                    
+                                                    // Get file extension
+                                                    std::string ext = src.extension().string();
+                                                    for (auto& c : ext) c = std::tolower(c);
+                                                    
+                                                    // Check if it's a 3D model
+                                                    bool is3DModel = (ext == ".fbx" || ext == ".obj" || ext == ".glb" || ext == ".gltf");
+                                                    
+                                                    if (is3DModel) {
+                                                        // Create a Static Mesh asset
+                                                        std::string meshName = fs::path(fileName).stem().string();
+                                                        fs::path meshFolder = contentDir / meshName;
+                                                        
+                                                        try {
+                                                            // Create a .plume_mesh metadata file directly (no folder)
+                                                            nlohmann::json meshMeta;
+                                                            meshMeta["type"] = "StaticMesh";
+                                                            meshMeta["sourceFile"] = fileName;
+                                                            meshMeta["format"] = ext.substr(1); // Remove the dot
+                                                            
+                                                            fs::path metaFile = contentDir / (meshName + ".plume_mesh");
+                                                            std::ofstream ofs(metaFile.string());
+                                                            if (ofs.is_open()) {
+                                                                ofs << meshMeta.dump(2);
+                                                                ofs.close();
+                                                            }
+                                                            
+                                                            createdAssets.push_back(meshName + ".plume_mesh");
+                                                            importedCount++;
+                                                        } catch(...) {}
+                                                    } else {
+                                                        // For other files, just copy them
+                                                        fs::path destFile = contentDir / fileName;
+                                                        fs::copy_file(src, destFile, fs::copy_options::overwrite_existing);
+                                                        createdAssets.push_back(fileName);
+                                                        importedCount++;
+                                                    }
+                                                } catch(...) {}
+                                            }
+                                            
+                                            // Send result back
+                                            nlohmann::json resultData;
+                                            resultData["importedCount"] = importedCount;
+                                            resultData["assets"] = nlohmann::json::array();
+                                            for (const auto& asset : createdAssets) {
+                                                resultData["assets"].push_back(asset);
+                                            }
+                                            
+                                            sendResult(importedCount > 0, importedCount > 0 ? 
+                                                std::to_string(importedCount) + " file(s) imported" : 
+                                                "Failed to import files", resultData);
+                                            
+                                            // Refresh the content listing
+                                            sendContentListFor(targetPath);
                                             return S_OK;
                                         }
 
