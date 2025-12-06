@@ -23,6 +23,7 @@ namespace Plume {
         m_WindowHandle = windowHandle;
         m_WindowWidth = width;
         m_WindowHeight = height;
+        m_CurrentAPI = api;
         
         // Créer le device avec l'API spécifiée
         m_Renderer = RHI::RHIDevice::Create(api);
@@ -35,6 +36,8 @@ namespace Plume {
 
     void Engine::ReInitRenderer(RHI::GraphicsAPI api) {
         if (!m_WindowHandle) return;
+        
+        m_CurrentAPI = api;
         
         // Shutdown the current renderer if it exists
         if (m_Renderer) {

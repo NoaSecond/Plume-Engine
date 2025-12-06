@@ -20,14 +20,15 @@ namespace RHI {
         Engine();
         ~Engine();
         void Init();
-        void InitRenderer(void* windowHandle, uint32_t width, uint32_t height, RHI::GraphicsAPI api = RHI::GraphicsAPI::DirectX12);
-        void ReInitRenderer(RHI::GraphicsAPI api = RHI::GraphicsAPI::DirectX12);
+        void InitRenderer(void* windowHandle, uint32_t width, uint32_t height, RHI::GraphicsAPI api = RHI::GraphicsAPI::OpenGL);
+        void ReInitRenderer(RHI::GraphicsAPI api = RHI::GraphicsAPI::OpenGL);
         void Run();
         void RenderFrame();
         void Shutdown();
         bool IsRunning() const { return m_IsRunning; }
         Scene* GetActiveScene() { return m_Scene.get(); }
         RHI::RHIDevice* GetRenderer() { return m_Renderer.get(); }
+        RHI::GraphicsAPI GetCurrentGraphicsAPI() const { return m_CurrentAPI; }
     private:
         bool m_IsRunning = false;
         std::unique_ptr<Scene> m_Scene;
@@ -35,5 +36,6 @@ namespace RHI {
         void* m_WindowHandle = nullptr;
         uint32_t m_WindowWidth = 1280;
         uint32_t m_WindowHeight = 720;
+        RHI::GraphicsAPI m_CurrentAPI = RHI::GraphicsAPI::OpenGL;
     };
 }

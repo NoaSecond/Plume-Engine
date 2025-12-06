@@ -76,7 +76,7 @@ export const ProjectSettings: React.FC<ProjectSettingsProps> = ({ isOpen, onClos
   });
 
   const [renderingSettings, setRenderingSettings] = useState<RenderingSettings>({
-    graphicsAPI: 'DirectX12',
+    graphicsAPI: 'OpenGL',
     vsync: true,
     maxFPS: 144,
     antiAliasing: 'TAA',

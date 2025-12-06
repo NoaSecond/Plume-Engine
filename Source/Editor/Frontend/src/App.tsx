@@ -29,7 +29,7 @@ export default function App() {
   const [showPreferences, setShowPreferences] = useState(false);
   const [showPluginManager, setShowPluginManager] = useState(false);
   const [showProjectSettings, setShowProjectSettings] = useState(false);
-  const [renderingAPI, setRenderingAPI] = useState<'DirectX12' | 'Vulkan' | 'OpenGL' | 'Metal'>('DirectX12');
+  const [renderingAPI, setRenderingAPI] = useState<'DirectX12' | 'Vulkan' | 'OpenGL' | 'Metal'>('OpenGL');
   const [cameraTransform, setCameraTransform] = useState({ position: {x:0, y:-50, z:-150}, rotation: {x:20, y:0, z:0} });
   const [viewMode, setViewMode] = useState<'Lit' | 'Unlit' | 'Wireframe'>('Lit');
   const requestRef = useRef<number>();
@@ -66,8 +66,42 @@ export default function App() {
       };
       document.body.appendChild(script);
     };
+    
+    const loadRenderingData = () => {
+      const script = document.createElement('script');
+      script.src = './rendering_data.js';
+      script.onload = () => {
+        const data = (window as any).PLUME_RENDERING_DATA;
+        if (data && data.graphicsAPI) {
+          setRenderingAPI(data.graphicsAPI);
+        }
+      };
+      document.body.appendChild(script);
+    };
+    
     loadSceneData();
+    loadRenderingData();
+    
+    // Poll for rendering data updates every 500ms
+    const renderingInterval = setInterval(() => {
+      const script = document.createElement('script');
+      script.src = './rendering_data.js?t=' + Date.now();
+      script.onload = () => {
+        const data = (window as any).PLUME_RENDERING_DATA;
+        if (data && data.graphicsAPI) {
+          setRenderingAPI(data.graphicsAPI);
+        }
+        document.body.removeChild(script);
+      };
+      script.onerror = () => {
+        document.body.removeChild(script);
+      };
+      document.body.appendChild(script);
+    }, 500);
+    
     addLog('Plume Engine Editor initialized', 'INFO');
+    
+    return () => clearInterval(renderingInterval);
   }, [addLog]);
 
   const animate = useCallback((time: number) => {

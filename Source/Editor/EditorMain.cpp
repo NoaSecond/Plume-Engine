@@ -87,6 +87,36 @@ void ExportThemeData() {
     }
 }
 
+void ExportRenderingData() {
+    if (!g_app.engine) return;
+    
+    // Convert GraphicsAPI enum to string
+    std::string apiName;
+    auto api = g_app.engine->GetCurrentGraphicsAPI();
+    switch(api) {
+        case Plume::RHI::GraphicsAPI::Vulkan: apiName = "Vulkan"; break;
+        case Plume::RHI::GraphicsAPI::DirectX12: apiName = "DirectX12"; break;
+        case Plume::RHI::GraphicsAPI::OpenGL: apiName = "OpenGL"; break;
+        case Plume::RHI::GraphicsAPI::Metal: apiName = "Metal"; break;
+        default: apiName = "Unknown"; break;
+    }
+    
+    std::string dataPath = g_app.uiFolder + "/rendering_data.js";
+    std::string tempPath = dataPath + ".tmp";
+    
+    std::ofstream file(tempPath);
+    if (file.is_open()) {
+        file << "window.PLUME_RENDERING_DATA = {";
+        file << "\"graphicsAPI\": \"" << apiName << "\"";
+        file << "};";
+        file.close();
+        try {
+            if (fs::exists(dataPath)) fs::remove(dataPath);
+            fs::rename(tempPath, dataPath);
+        } catch(...) {}
+    }
+}
+
 std::string GetCurrentThemeAccentColor() {
     // Read theme_data.js file to get current theme accent color
     std::string themePath = g_app.uiFolder + "/theme_data.js";
@@ -951,6 +981,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         auto now = std::chrono::steady_clock::now();
         if (std::chrono::duration_cast<std::chrono::milliseconds>(now - lastExport).count() >= 100) {
             ExportSceneData();
+            ExportRenderingData();
             lastExport = now;
         }
         
