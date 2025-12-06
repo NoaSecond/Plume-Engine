@@ -95,9 +95,15 @@ Following the project specifications:
 - [x] Theme system (3 official themes with Hot-Reload)
 - [x] Branding assets (SVG logos and splash screen)
 - [x] Console panel with filtering
+- [x] Rendering system (RHI abstraction)
+- [x] Vulkan backend (optional, with SDK)
+- [x] OpenGL backend (always available)
+- [x] DirectX 12 backend (Windows 10+)
+- [x] Metal backend (macOS/iOS)
+- [ ] Vertex buffers and mesh rendering
+- [ ] Shader system (SPIR-V, GLSL, HLSL)
 - [ ] Splash screen integration in C++
 - [ ] Complete layout panels
-- [ ] Vulkan rendering (RHI abstraction)
 - [ ] Launcher application
 - [ ] Input system
 - [ ] Physics integration (PhysX)
