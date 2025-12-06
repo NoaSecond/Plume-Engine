@@ -29,6 +29,7 @@ export default function App() {
   const [showPreferences, setShowPreferences] = useState(false);
   const [showPluginManager, setShowPluginManager] = useState(false);
   const [showProjectSettings, setShowProjectSettings] = useState(false);
+  const [renderingAPI, setRenderingAPI] = useState<'DirectX12' | 'Vulkan' | 'OpenGL' | 'Metal'>('DirectX12');
   const [cameraTransform, setCameraTransform] = useState({ position: {x:0, y:-50, z:-150}, rotation: {x:20, y:0, z:0} });
   const [viewMode, setViewMode] = useState<'Lit' | 'Unlit' | 'Wireframe'>('Lit');
   const requestRef = useRef<number>();
@@ -270,7 +271,8 @@ export default function App() {
           <span style={{ color: theme.colors.accent.primary }}>Plume Engine v0.1 Alpha</span>
           <span style={{ color: theme.colors.border.default }}>|</span>
           <span>{theme.displayName}</span>
-
+          <span style={{ color: theme.colors.border.default }}>|</span>
+          <span>{renderingAPI}</span>
         </div>
       </div>
       {(showAboutModal || isAboutClosing) && (

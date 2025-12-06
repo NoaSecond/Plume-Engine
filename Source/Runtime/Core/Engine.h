@@ -21,6 +21,7 @@ namespace RHI {
         ~Engine();
         void Init();
         void InitRenderer(void* windowHandle, uint32_t width, uint32_t height, RHI::GraphicsAPI api = RHI::GraphicsAPI::DirectX12);
+        void ReInitRenderer(RHI::GraphicsAPI api = RHI::GraphicsAPI::DirectX12);
         void Run();
         void RenderFrame();
         void Shutdown();
@@ -31,5 +32,8 @@ namespace RHI {
         bool m_IsRunning = false;
         std::unique_ptr<Scene> m_Scene;
         std::unique_ptr<RHI::RHIDevice> m_Renderer;
+        void* m_WindowHandle = nullptr;
+        uint32_t m_WindowWidth = 1280;
+        uint32_t m_WindowHeight = 720;
     };
 }

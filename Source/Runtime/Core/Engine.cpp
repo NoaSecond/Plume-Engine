@@ -19,10 +19,33 @@ namespace Plume {
     }
 
     void Engine::InitRenderer(void* windowHandle, uint32_t width, uint32_t height, RHI::GraphicsAPI api) {
+        // Store window info for potential reinitialization
+        m_WindowHandle = windowHandle;
+        m_WindowWidth = width;
+        m_WindowHeight = height;
+        
         // Créer le device avec l'API spécifiée
         m_Renderer = RHI::RHIDevice::Create(api);
         if (m_Renderer) {
             if (!m_Renderer->Initialize(windowHandle, width, height)) {
+                m_Renderer.reset();
+            }
+        }
+    }
+
+    void Engine::ReInitRenderer(RHI::GraphicsAPI api) {
+        if (!m_WindowHandle) return;
+        
+        // Shutdown the current renderer if it exists
+        if (m_Renderer) {
+            m_Renderer->Shutdown();
+            m_Renderer.reset();
+        }
+        
+        // Re-initialize with the new API using stored window info
+        m_Renderer = RHI::RHIDevice::Create(api);
+        if (m_Renderer) {
+            if (!m_Renderer->Initialize(m_WindowHandle, m_WindowWidth, m_WindowHeight)) {
                 m_Renderer.reset();
             }
         }
