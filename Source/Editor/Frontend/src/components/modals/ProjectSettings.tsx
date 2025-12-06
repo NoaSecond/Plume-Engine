@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Gamepad2, Monitor, Package, Settings, Info } from 'lucide-react';
+import { X, Monitor, Package, Settings, Info } from 'lucide-react';
 import { useTheme } from '../../ThemeContext';
 
 interface ProjectSettingsProps {
@@ -28,6 +28,16 @@ interface GameSettings {
   fullscreenMode: 'windowed' | 'fullscreen' | 'borderless';
 }
 
+interface RenderingSettings {
+  graphicsAPI: 'DirectX12' | 'Vulkan' | 'OpenGL' | 'Metal';
+  vsync: boolean;
+  maxFPS: number;
+  antiAliasing: 'None' | 'FXAA' | 'TAA' | 'MSAA x2' | 'MSAA x4' | 'MSAA x8';
+  shadowQuality: 'Low' | 'Medium' | 'High' | 'Ultra';
+  textureQuality: 'Low' | 'Medium' | 'High' | 'Ultra';
+  viewDistance: number;
+}
+
 interface PhysicsSettings {
   physicsEngine: 'PhysX' | 'Jolt Physics';
   gravity: number;
@@ -35,30 +45,10 @@ interface PhysicsSettings {
   enableCCD: boolean;
 }
 
-interface InputSettings {
-  inputMappings: Array<{
-    name: string;
-    key: string;
-    action: string;
-  }>;
-  controllerSupport: boolean;
-  keyboardLayout: 'QWERTY' | 'AZERTY' | 'QWERTZ';
-}
-
 export const ProjectSettings: React.FC<ProjectSettingsProps> = ({ isOpen, onClose }) => {
   const { theme } = useTheme();
   const [isClosing, setIsClosing] = useState(false);
-  const [activeTab, setActiveTab] = useState<'general' | 'rendering' | 'physics' | 'packaging' | 'input'>('general');
-  
-  const handleClose = () => {
-    setIsClosing(true);
-    setTimeout(() => {
-      setIsClosing(false);
-      onClose();
-    }, 180);
-  };
-  
-  if (!isOpen && !isClosing) return null;
+  const [activeTab, setActiveTab] = useState<'general' | 'rendering' | 'physics' | 'packaging'>('general');
   
   const [projectInfo, setProjectInfo] = useState<ProjectInfo>({
     name: 'My Plume Game',
@@ -85,16 +75,25 @@ export const ProjectSettings: React.FC<ProjectSettingsProps> = ({ isOpen, onClos
     enableCCD: true
   });
 
-  const [inputSettings, setInputSettings] = useState<InputSettings>({
-    inputMappings: [
-      { name: 'Move Forward', key: 'W', action: 'MoveForward' },
-      { name: 'Move Backward', key: 'S', action: 'MoveBackward' },
-      { name: 'Move Left', key: 'A', action: 'MoveLeft' },
-      { name: 'Move Right', key: 'D', action: 'MoveRight' }
-    ],
-    controllerSupport: true,
-    keyboardLayout: 'QWERTY'
+  const [renderingSettings, setRenderingSettings] = useState<RenderingSettings>({
+    graphicsAPI: 'DirectX12',
+    vsync: true,
+    maxFPS: 144,
+    antiAliasing: 'TAA',
+    shadowQuality: 'High',
+    textureQuality: 'High',
+    viewDistance: 5000
   });
+  
+  const handleClose = () => {
+    setIsClosing(true);
+    setTimeout(() => {
+      setIsClosing(false);
+      onClose();
+    }, 180);
+  };
+  
+  if (!isOpen && !isClosing) return null;
 
   const handleProjectInfoChange = (field: keyof ProjectInfo, value: string) => {
     setProjectInfo(prev => ({ ...prev, [field]: value }));
@@ -108,16 +107,15 @@ export const ProjectSettings: React.FC<ProjectSettingsProps> = ({ isOpen, onClos
     setPhysicsSettings(prev => ({ ...prev, [field]: value }));
   };
 
-  const handleInputSettingsChange = (field: keyof InputSettings, value: any) => {
-    setInputSettings(prev => ({ ...prev, [field]: value }));
+  const handleRenderingSettingsChange = (field: keyof RenderingSettings, value: any) => {
+    setRenderingSettings(prev => ({ ...prev, [field]: value }));
   };
 
   const tabs = [
     { id: 'general' as const, label: 'General', icon: Settings },
     { id: 'rendering' as const, label: 'Rendering', icon: Monitor },
     { id: 'physics' as const, label: 'Physics', icon: Info },
-    { id: 'packaging' as const, label: 'Packaging', icon: Package },
-    { id: 'input' as const, label: 'Input', icon: Gamepad2 }
+    { id: 'packaging' as const, label: 'Packaging', icon: Package }
   ];
 
   return (
@@ -327,7 +325,7 @@ export const ProjectSettings: React.FC<ProjectSettingsProps> = ({ isOpen, onClos
 
                 <div>
                   <h3 className="text-lg font-medium mb-4 flex items-center" style={{ color: theme.colors.text.primary }}>
-                    <Gamepad2 size={18} className="mr-2" />
+                    <Settings size={18} className="mr-2" />
                     Game Settings
                   </h3>
                   <div className="grid grid-cols-2 gap-4">
@@ -455,12 +453,160 @@ export const ProjectSettings: React.FC<ProjectSettingsProps> = ({ isOpen, onClos
 
             {activeTab === 'rendering' && (
               <div className="space-y-6">
-                <h3 className="text-lg font-medium mb-4" style={{ color: theme.colors.text.primary }}>
+                <h3 className="text-lg font-medium mb-4 flex items-center" style={{ color: theme.colors.text.primary }}>
+                  <Monitor size={18} className="mr-2" />
                   Rendering Settings
                 </h3>
-                <p className="text-sm" style={{ color: theme.colors.text.muted }}>
-                  Rendering configuration will be available in a future update.
-                </p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1" style={{ color: theme.colors.text.secondary }}>
+                      Graphics API
+                    </label>
+                    <select
+                      value={renderingSettings.graphicsAPI}
+                      onChange={(e) => handleRenderingSettingsChange('graphicsAPI', e.target.value)}
+                      className="w-full px-3 py-2 text-sm rounded border transition-colors"
+                      style={{
+                        backgroundColor: theme.colors.bg.secondary,
+                        borderColor: theme.colors.border.default,
+                        color: theme.colors.text.primary
+                      }}
+                      onFocus={(e) => e.currentTarget.style.borderColor = theme.colors.accent.primary}
+                      onBlur={(e) => e.currentTarget.style.borderColor = theme.colors.border.default}
+                    >
+                      <option value="DirectX12">DirectX 12</option>
+                      <option value="Vulkan">Vulkan</option>
+                      <option value="OpenGL">OpenGL</option>
+                      <option value="Metal">Metal (macOS/iOS)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1" style={{ color: theme.colors.text.secondary }}>
+                      Anti-Aliasing
+                    </label>
+                    <select
+                      value={renderingSettings.antiAliasing}
+                      onChange={(e) => handleRenderingSettingsChange('antiAliasing', e.target.value)}
+                      className="w-full px-3 py-2 text-sm rounded border transition-colors"
+                      style={{
+                        backgroundColor: theme.colors.bg.secondary,
+                        borderColor: theme.colors.border.default,
+                        color: theme.colors.text.primary
+                      }}
+                      onFocus={(e) => e.currentTarget.style.borderColor = theme.colors.accent.primary}
+                      onBlur={(e) => e.currentTarget.style.borderColor = theme.colors.border.default}
+                    >
+                      <option value="None">None</option>
+                      <option value="FXAA">FXAA</option>
+                      <option value="TAA">TAA</option>
+                      <option value="MSAA x2">MSAA x2</option>
+                      <option value="MSAA x4">MSAA x4</option>
+                      <option value="MSAA x8">MSAA x8</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1" style={{ color: theme.colors.text.secondary }}>
+                      Shadow Quality
+                    </label>
+                    <select
+                      value={renderingSettings.shadowQuality}
+                      onChange={(e) => handleRenderingSettingsChange('shadowQuality', e.target.value)}
+                      className="w-full px-3 py-2 text-sm rounded border transition-colors"
+                      style={{
+                        backgroundColor: theme.colors.bg.secondary,
+                        borderColor: theme.colors.border.default,
+                        color: theme.colors.text.primary
+                      }}
+                      onFocus={(e) => e.currentTarget.style.borderColor = theme.colors.accent.primary}
+                      onBlur={(e) => e.currentTarget.style.borderColor = theme.colors.border.default}
+                    >
+                      <option value="Low">Low</option>
+                      <option value="Medium">Medium</option>
+                      <option value="High">High</option>
+                      <option value="Ultra">Ultra</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1" style={{ color: theme.colors.text.secondary }}>
+                      Texture Quality
+                    </label>
+                    <select
+                      value={renderingSettings.textureQuality}
+                      onChange={(e) => handleRenderingSettingsChange('textureQuality', e.target.value)}
+                      className="w-full px-3 py-2 text-sm rounded border transition-colors"
+                      style={{
+                        backgroundColor: theme.colors.bg.secondary,
+                        borderColor: theme.colors.border.default,
+                        color: theme.colors.text.primary
+                      }}
+                      onFocus={(e) => e.currentTarget.style.borderColor = theme.colors.accent.primary}
+                      onBlur={(e) => e.currentTarget.style.borderColor = theme.colors.border.default}
+                    >
+                      <option value="Low">Low</option>
+                      <option value="Medium">Medium</option>
+                      <option value="High">High</option>
+                      <option value="Ultra">Ultra</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1" style={{ color: theme.colors.text.secondary }}>
+                      Max FPS
+                    </label>
+                    <input
+                      type="number"
+                      min="30"
+                      max="300"
+                      value={renderingSettings.maxFPS}
+                      onChange={(e) => handleRenderingSettingsChange('maxFPS', parseInt(e.target.value) || 60)}
+                      className="w-full px-3 py-2 text-sm rounded border transition-colors"
+                      style={{
+                        backgroundColor: theme.colors.bg.secondary,
+                        borderColor: theme.colors.border.default,
+                        color: theme.colors.text.primary
+                      }}
+                      onFocus={(e) => e.currentTarget.style.borderColor = theme.colors.accent.primary}
+                      onBlur={(e) => e.currentTarget.style.borderColor = theme.colors.border.default}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1" style={{ color: theme.colors.text.secondary }}>
+                      View Distance
+                    </label>
+                    <input
+                      type="number"
+                      min="1000"
+                      max="20000"
+                      step="100"
+                      value={renderingSettings.viewDistance}
+                      onChange={(e) => handleRenderingSettingsChange('viewDistance', parseInt(e.target.value) || 5000)}
+                      className="w-full px-3 py-2 text-sm rounded border transition-colors"
+                      style={{
+                        backgroundColor: theme.colors.bg.secondary,
+                        borderColor: theme.colors.border.default,
+                        color: theme.colors.text.primary
+                      }}
+                      onFocus={(e) => e.currentTarget.style.borderColor = theme.colors.accent.primary}
+                      onBlur={(e) => e.currentTarget.style.borderColor = theme.colors.border.default}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="flex items-center space-x-2 text-sm font-medium" style={{ color: theme.colors.text.secondary }}>
+                    <input
+                      type="checkbox"
+                      checked={renderingSettings.vsync}
+                      onChange={(e) => handleRenderingSettingsChange('vsync', e.target.checked)}
+                      className="rounded transition-colors"
+                      style={{
+                        accentColor: theme.colors.accent.primary
+                      }}
+                    />
+                    <span>Enable VSync</span>
+                  </label>
+                  <p className="text-xs mt-1 ml-6" style={{ color: theme.colors.text.muted }}>
+                    Synchronizes rendering with display refresh rate to prevent screen tearing.
+                  </p>
+                </div>
               </div>
             )}
 
@@ -579,99 +725,7 @@ export const ProjectSettings: React.FC<ProjectSettingsProps> = ({ isOpen, onClos
               </div>
             )}
 
-            {activeTab === 'input' && (
-              <div className="space-y-6">
-                <h3 className="text-lg font-medium mb-4 flex items-center" style={{ color: theme.colors.text.primary }}>
-                  <Gamepad2 size={18} className="mr-2" />
-                  Input System
-                </h3>
-                
-                <div>
-                  <h4 className="text-md font-medium mb-3" style={{ color: theme.colors.text.primary }}>
-                    General Input Settings
-                  </h4>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium mb-1" style={{ color: theme.colors.text.secondary }}>
-                        Keyboard Layout
-                      </label>
-                      <select
-                        value={inputSettings.keyboardLayout}
-                        onChange={(e) => handleInputSettingsChange('keyboardLayout', e.target.value)}
-                        className="w-full px-3 py-2 text-sm rounded border transition-colors"
-                        style={{
-                          backgroundColor: theme.colors.bg.secondary,
-                          borderColor: theme.colors.border.default,
-                          color: theme.colors.text.primary
-                        }}
-                        onFocus={(e) => e.currentTarget.style.borderColor = theme.colors.accent.primary}
-                        onBlur={(e) => e.currentTarget.style.borderColor = theme.colors.border.default}
-                      >
-                        <option value="QWERTY">QWERTY</option>
-                        <option value="AZERTY">AZERTY</option>
-                        <option value="QWERTZ">QWERTZ</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="flex items-center space-x-2 text-sm font-medium" style={{ color: theme.colors.text.secondary }}>
-                        <input
-                          type="checkbox"
-                          checked={inputSettings.controllerSupport}
-                          onChange={(e) => handleInputSettingsChange('controllerSupport', e.target.checked)}
-                          className="rounded transition-colors"
-                          style={{
-                            accentColor: theme.colors.accent.primary
-                          }}
-                        />
-                        <span>Controller Support</span>
-                      </label>
-                    </div>
-                  </div>
-                </div>
 
-                <div>
-                  <h4 className="text-md font-medium mb-3" style={{ color: theme.colors.text.primary }}>
-                    Input Mappings
-                  </h4>
-                  <div className="space-y-2">
-                    {inputSettings.inputMappings.map((mapping, index) => (
-                      <div key={index} className="flex items-center space-x-4 p-3 rounded" style={{ backgroundColor: theme.colors.bg.secondary }}>
-                        <div className="flex-1">
-                          <span className="text-sm font-medium" style={{ color: theme.colors.text.primary }}>
-                            {mapping.name}
-                          </span>
-                        </div>
-                        <div className="w-20">
-                          <input
-                            type="text"
-                            value={mapping.key}
-                            onChange={(e) => {
-                              const newMappings = [...inputSettings.inputMappings];
-                              newMappings[index].key = e.target.value;
-                              handleInputSettingsChange('inputMappings', newMappings);
-                            }}
-                            className="w-full px-2 py-1 text-sm text-center rounded border"
-                            style={{
-                              backgroundColor: theme.colors.bg.elevated,
-                              borderColor: theme.colors.border.default,
-                              color: theme.colors.text.primary
-                            }}
-                          />
-                        </div>
-                        <div className="w-32">
-                          <span className="text-sm" style={{ color: theme.colors.text.secondary }}>
-                            {mapping.action}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  <p className="text-xs mt-2" style={{ color: theme.colors.text.muted }}>
-                    Note: InputAction and InputMappingContext files can be created from the Content Browser.
-                  </p>
-                </div>
-              </div>
-            )}
           </div>
         </div>
 
