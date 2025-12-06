@@ -35,7 +35,9 @@ export const DetailsPanel: React.FC<DetailsPanelProps> = ({ selectedEntity, setE
       e.id === selectedEntity.id ? { ...e, name } : e
     ));
   };
-  if (!selectedEntity) return (
+  
+  // Don't show details for Folders
+  if (!selectedEntity || selectedEntity.type === 'Folder') return (
     <div 
       className="h-1/2 flex flex-col"
       style={{ 
@@ -58,7 +60,7 @@ export const DetailsPanel: React.FC<DetailsPanelProps> = ({ selectedEntity, setE
         style={{ color: theme.colors.text.muted }}
       >
         <MousePointer2 size={32} className="mb-2 opacity-50"/>
-        <p>Select an actor.</p>
+        <p>{!selectedEntity ? 'Select an actor.' : 'Folders have no properties.'}</p>
       </div>
     </div>
   );

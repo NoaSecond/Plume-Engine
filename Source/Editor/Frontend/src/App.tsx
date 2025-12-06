@@ -56,7 +56,6 @@ export default function App() {
         const data = (window as any).PLUME_SCENE_DATA;
         if (data) { 
           setEntities(data); 
-          if(data.length>0) setSelectedId(data[0].id);
           addLog('Scene loaded successfully', 'INFO');
         }
       };
@@ -186,7 +185,40 @@ export default function App() {
             borderColor: theme.colors.border.default 
           }}
         >
-          <OutlinerPanel entities={entities} selectedId={selectedId} setSelectedId={setSelectedId} onAddEntity={()=>{}} setEntities={setEntities} onDuplicate={()=>{}} onDelete={()=>{}} />
+          <OutlinerPanel 
+            entities={entities} 
+            selectedId={selectedId} 
+            setSelectedId={setSelectedId} 
+            onAddEntity={(type) => {
+              const newEntity: Entity = {
+                id: Date.now().toString(),
+                name: type,
+                type,
+                visible: true,
+                transform: {
+                  position: {x:0, y:0, z:0},
+                  rotation: {x:0, y:0, z:0},
+                  scale: {x:1, y:1, z:1}
+                }
+              };
+              setEntities([...entities, newEntity]);
+            }} 
+            setEntities={setEntities} 
+            onDuplicate={(ent) => {
+              const newEntity: Entity = {
+                ...ent,
+                id: Date.now().toString(),
+                name: `${ent.name}_Copy`
+              };
+              setEntities([...entities, newEntity]);
+            }} 
+            onDelete={(id) => {
+              setEntities(entities.filter(e => e.id !== id));
+              if (selectedId === id) {
+                setSelectedId(null);
+              }
+            }} 
+          />
           <DetailsPanel selectedEntity={selectedEntity} setEntities={setEntities} />
         </div>
       </div>
