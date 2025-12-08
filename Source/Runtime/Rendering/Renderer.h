@@ -35,11 +35,25 @@ namespace Plume {
 
         void RenderScene(Scene* scene);
         
+        // Set viewport rendering region (in screen coordinates)
+        void SetViewportRegion(int x, int y, int width, int height) {
+            m_ViewportX = x;
+            m_ViewportY = y;
+            m_ViewportWidth = width;
+            m_ViewportHeight = height;
+        }
+        
     private:
         void RenderTestTriangle(RHI::RHICommandBuffer* cmdBuffer);
         void RenderTestCube(RHI::RHICommandBuffer* cmdBuffer);
 
         RHI::RHIDevice* m_Device;
+        
+        // Viewport region for rendering (set by editor)
+        int m_ViewportX = 0;
+        int m_ViewportY = 0;
+        int m_ViewportWidth = 800;
+        int m_ViewportHeight = 600;
         
         // Ressources de test pour le MVP
         std::vector<Vertex> m_TestVertices;

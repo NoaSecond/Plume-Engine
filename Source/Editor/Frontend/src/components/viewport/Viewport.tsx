@@ -1,4 +1,4 @@
-﻿import React, { useRef, useState } from 'react';
+﻿import React, { useRef, useState, useEffect } from 'react';
 import { ChevronDown, Check, Box, Lightbulb, Camera, Hammer, Layers, Circle, Disc, Square, Sun, Globe, Zap } from 'lucide-react';
 import { Entity, ToolType } from '../../types';
 import { IconButton } from '../ui/Shared';
@@ -15,6 +15,42 @@ export const Viewport: React.FC<ViewportProps> = ({ entities, selectedId, setSel
   const [showViewModeMenu, setShowViewModeMenu] = useState(false);
   const isRightMouseDownRef = useRef(false);
   const [activeLeftMenu, setActiveLeftMenu] = useState<'mesh' | 'light' | null>(null);
+  const viewportRef = useRef<HTMLDivElement>(null);
+  
+  // Notify C++ backend of viewport dimensions when they change
+  useEffect(() => {
+    const updateViewportDimensions = () => {
+      if (!viewportRef.current) return;
+      const rect = viewportRef.current.getBoundingClientRect();
+      
+      // @ts-ignore - WebView2 API
+      if (window.chrome?.webview) {
+        // @ts-ignore
+        window.chrome.webview.postMessage({
+          action: 'viewport-bounds',
+          x: Math.round(rect.left),
+          y: Math.round(rect.top),
+          width: Math.round(rect.width),
+          height: Math.round(rect.height)
+        });
+      }
+    };
+
+    // Update immediately
+    updateViewportDimensions();
+
+    // Update on window resize
+    window.addEventListener('resize', updateViewportDimensions);
+    
+    // Update periodically (in case of layout changes)
+    const interval = setInterval(updateViewportDimensions, 1000);
+
+    return () => {
+      window.removeEventListener('resize', updateViewportDimensions);
+      clearInterval(interval);
+    };
+  }, []);
+  
   const handleViewportMouseDown = (e: React.MouseEvent) => { if (e.button === 2) { isRightMouseDownRef.current = true; e.currentTarget.requestPointerLock(); }};
   const handleViewportMouseUp = (e: React.MouseEvent) => { if (e.button === 2) { isRightMouseDownRef.current = false; document.exitPointerLock(); }};
   const handleViewportMouseMove = (e: React.MouseEvent) => { if (isRightMouseDownRef.current) { setCameraTransform(prev => ({ ...prev, rotation: { x: Math.max(-85, Math.min(85, prev.rotation.x - e.movementY * 0.1)), y: prev.rotation.y + e.movementX * 0.1, z: prev.rotation.z } })); }};
@@ -84,8 +120,9 @@ export const Viewport: React.FC<ViewportProps> = ({ entities, selectedId, setSel
            <IconButton icon={Camera} onClick={() => onAddEntity('Camera')} />
         </div>
         <div 
+          ref={viewportRef}
           className="flex-1 relative flex flex-col overflow-hidden" 
-          style={{ backgroundColor: '#0a0a0a' }} // Keep dark for 3D viewport
+          style={{ backgroundColor: 'transparent' }}
           onMouseDown={handleViewportMouseDown} 
           onMouseUp={handleViewportMouseUp} 
           onMouseMove={handleViewportMouseMove} 
@@ -137,15 +174,9 @@ export const Viewport: React.FC<ViewportProps> = ({ entities, selectedId, setSel
               )}
             </div>
           </div>
-          <div className={`w-full h-full relative overflow-hidden bg-gradient-to-b from-[#1a1a1a] to-[#050505] ${viewMode === 'Wireframe' ? 'grayscale contrast-125' : ''}`}>
-             <div className="absolute inset-0 opacity-20" style={{ backgroundImage: 'linear-gradient(#444 1px, transparent 1px), linear-gradient(90deg, #444 1px, transparent 1px)', backgroundSize: '40px 40px', transform: `perspective(1000px) rotateX(${60 + cameraTransform.rotation.x}deg) rotateY(${cameraTransform.rotation.y}deg) translateY(${cameraTransform.position.y - 100}px) translateX(${cameraTransform.position.x}px) translateZ(${cameraTransform.position.z}px) scale(2)`, transformOrigin: 'center 80%' }}></div>
-             <div className="absolute top-1/2 left-1/2 w-0 h-0" style={{ transformStyle: 'preserve-3d', transform: `perspective(1000px) rotateX(${-20 + cameraTransform.rotation.x}deg) rotateY(${15 + cameraTransform.rotation.y}deg) translateX(${cameraTransform.position.x}px) translateY(${cameraTransform.position.y}px) translateZ(${cameraTransform.position.z}px)` }}>
-                {entities.filter(e => e.visible).map((ent) => (
-                  <div key={ent.id} onMouseDown={(e) => { e.stopPropagation(); if(e.button===0) setSelectedId(ent.id); }} className={`absolute -ml-10 -mt-10 border cursor-pointer transition-colors duration-75 flex items-center justify-center ${selectedId === ent.id ? 'border-orange-500 bg-orange-500/20' : 'border-slate-600 bg-slate-700/50'} ${ent.subType === 'Sphere' ? 'rounded-full' : ''}`} style={{ transform: `translate3d(${ent.transform.position.x}px, ${-ent.transform.position.y}px, ${-ent.transform.position.z}px) rotateX(${ent.transform.rotation.x}deg) rotateY(${ent.transform.rotation.y}deg) rotateZ(${ent.transform.rotation.z}deg) scale3d(${ent.transform.scale.x}, ${ent.transform.scale.y}, ${ent.transform.scale.z})`, width: '80px', height: '80px' }}>
-                    <span className="text-[8px] opacity-50">{ent.name}</span>
-                  </div>
-                ))}
-             </div>
+          {/* Native 3D rendering happens here - keep this div transparent */}
+          <div className="w-full h-full relative overflow-hidden" style={{ backgroundColor: 'transparent' }}>
+            {/* Overlay UI elements can go here with pointer-events-none */}
           </div>
         </div>
     </div>

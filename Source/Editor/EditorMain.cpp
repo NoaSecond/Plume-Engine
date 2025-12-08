@@ -1,5 +1,7 @@
 #include <Core/Engine.h>
 #include <Core/PluginManager.h>
+#include <Rendering/RHI/RHIDevice.h>
+#include <Rendering/RHI/RHISwapChain.h>
 #include <Plugins/DiscordRichPresence/DiscordPresence.h>
 #include <string>
 #include <filesystem>
@@ -10,6 +12,7 @@
 #include <atomic>
 #include <memory>
 #include <functional>
+#include <ctime>
 // Vendored single-header JSON (nlohmann)
 #include "ThirdParty/nlohmann_json.hpp"
 
@@ -34,16 +37,47 @@ namespace fs = std::filesystem;
 
 struct AppState {
     HWND hwnd = nullptr;
+    HWND viewport = nullptr;
     ComPtr<ICoreWebView2Controller> controller;
     ComPtr<ICoreWebView2> webview;
     Plume::Engine* engine = nullptr;
     std::string uiFolder;
     std::atomic<bool> shouldClose{false};
-    bool isFullscreen = false; // Track windowed fullscreen state - starts as false
-    std::string clipboardPath; // path copied via context menu
+    bool isFullscreen = false;
+    std::string clipboardPath;
+    
+    // Viewport bounds from web UI (for 3D rendering region)
+    struct {
+        int x = 0;
+        int y = 0;
+        int width = 800;
+        int height = 600;
+    } viewportBounds;
+    // Input state for viewport camera control
+    POINT lastMouse = {0,0};
+    bool isLeftDown = false;
+    // WebView visibility toggle state
+    bool webviewVisible = true;
+    bool lastCtrlT = false;
 };
 
 static AppState g_app;
+
+static void ToggleWebViewVisibility() {
+    if (!g_app.controller) return;
+
+    BOOL isVisible = FALSE;
+    HRESULT hr = g_app.controller->get_IsVisible(&isVisible);
+    if (SUCCEEDED(hr)) {
+        BOOL newVis = isVisible ? FALSE : TRUE;
+        g_app.controller->put_IsVisible(newVis);
+    }
+
+    if (g_app.hwnd) {
+        InvalidateRect(g_app.hwnd, NULL, TRUE);
+        UpdateWindow(g_app.hwnd);
+    }
+}
 
 void ExportSceneData() {
     if (!g_app.engine) return;
@@ -106,8 +140,12 @@ void ExportRenderingData() {
     
     std::ofstream file(tempPath);
     if (file.is_open()) {
+        float fps = g_app.engine->GetFPS();
+        float ms = g_app.engine->GetFrameTimeMs();
         file << "window.PLUME_RENDERING_DATA = {";
-        file << "\"graphicsAPI\": \"" << apiName << "\"";
+        file << "\"graphicsAPI\": \"" << apiName << "\",";
+        file << "\"fps\": " << fps << ",";
+        file << "\"frameTimeMs\": " << ms;
         file << "};";
         file.close();
         try {
@@ -175,11 +213,22 @@ void ExportPluginData() {
 #ifdef _WIN32
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     switch (msg) {
+        case WM_HOTKEY: {
+            if (wParam == 1) {
+                ToggleWebViewVisibility();
+                return 0;
+            }
+            break;
+        }
         case WM_SIZE:
             if (g_app.controller) {
+                // Resize WebView2 to fill the entire client area
                 RECT bounds;
                 GetClientRect(hwnd, &bounds);
                 g_app.controller->put_Bounds(bounds);
+                
+                // Note: Renderer swapchain resize will be handled when we detect
+                // viewport dimension changes from the web UI
             }
             return 0;
         case WM_GETMINMAXINFO: {
@@ -245,6 +294,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             DestroyWindow(hwnd);
             return 0;
         case WM_DESTROY:
+            // Unregister the global hotkey if it was registered
+            UnregisterHotKey(hwnd, 1);
             PostQuitMessage(0);
             return 0;
     }
@@ -284,6 +335,12 @@ bool CreateAppWindow() {
     // but create it in invisible minimized mode to allow WebView2 to load
     ShowWindow(g_app.hwnd, SW_SHOWMINNOACTIVE);
     UpdateWindow(g_app.hwnd);
+
+    // Register a global hotkey (Ctrl+T) for toggling the WebView overlay
+    RegisterHotKey(g_app.hwnd, 1, MOD_CONTROL, 'T');
+    
+    g_app.viewport = nullptr;
+    
     return true;
 }
 
@@ -297,9 +354,9 @@ void InitWebView(const std::string& htmlPath) {
                             g_app.controller = controller;
                             controller->get_CoreWebView2(&g_app.webview);
                             
-                            RECT bounds;
-                            GetClientRect(g_app.hwnd, &bounds);
-                            controller->put_Bounds(bounds);
+                            RECT client;
+                            GetClientRect(g_app.hwnd, &client);
+                            controller->put_Bounds(client);
                             
                             // Configurer WebView2 pour permettre le drag
                             ComPtr<ICoreWebView2Settings> settings;
@@ -316,6 +373,39 @@ void InitWebView(const std::string& htmlPath) {
                             controller->QueryInterface(IID_PPV_ARGS(&controller3));
                             if (controller3) {
                                 controller3->put_ShouldDetectMonitorScaleChanges(TRUE);
+                            }
+
+                            // Try to set default background color transparent if controller2 is available
+                            ComPtr<ICoreWebView2Controller2> controller2;
+                            controller->QueryInterface(IID_PPV_ARGS(&controller2));
+                            if (controller2) {
+                                COREWEBVIEW2_COLOR transparentColor = {0, 0, 0, 0};
+                                controller2->put_DefaultBackgroundColor(transparentColor);
+                            }
+
+                            // Make controller visible
+                            controller->put_IsVisible(TRUE);
+
+                            // Ensure the page background is transparent via injected script
+                                if (g_app.webview) {
+                                    // Inject a small diagnostic script: force transparent backgrounds and post a ready message
+                                    // The script posts a JSON message to the host so the native side can confirm DOM rendering.
+                                    LPWSTR script = L"(function(){\n"
+                                        L"  try{\n"
+                                        L"    document.documentElement.style.background='transparent';\n"
+                                        L"    document.body.style.background='transparent';\n"
+                                        L"    document.body.style.backgroundColor='transparent';\n"
+                                        L"    document.documentElement.style.backgroundColor='transparent';\n"
+                                        L"  }catch(e){}\n"
+                                        L"  try{\n"
+                                        L"    if (window.chrome && window.chrome.webview && window.chrome.webview.postMessage) {\n"
+                                        L"      window.chrome.webview.postMessage({ action: 'plume_dom_ready' });\n"
+                                        L"      document.addEventListener('DOMContentLoaded', function(){ window.chrome.webview.postMessage({ action: 'plume_dom_ready' }); });\n"
+                                        L"      setTimeout(function(){ window.chrome.webview.postMessage({ action: 'plume_dom_heartbeat' }); }, 750);\n"
+                                        L"    }\n"
+                                        L"  }catch(e){}\n"
+                                        L"})();";
+                                    g_app.webview->ExecuteScript(script, nullptr);
                             }
                             
                             // Écouter les messages depuis le frontend
@@ -362,6 +452,15 @@ void InitWebView(const std::string& htmlPath) {
                                             return S_OK;
                                         }
                                         std::string action = j.value("action", std::string());
+                                            // Diagnostic messages from the page (transparency / DOM ready checks)
+                                            if (action == "plume_dom_ready" || action == "plume_dom_heartbeat") {
+                                                std::ofstream diag("plume_diag.txt", std::ios::app);
+                                                if (diag.is_open()) {
+                                                    diag << "WebMessage received: " << action << "\n";
+                                                    diag.close();
+                                                }
+                                                return S_OK;
+                                            }
 
                                         // Quick window commands
                                         if (action == "start-drag") {
@@ -372,6 +471,77 @@ void InitWebView(const std::string& htmlPath) {
                                         if (action == "minimize") { ShowWindow(g_app.hwnd, SW_MINIMIZE); return S_OK; }
                                         if (action == "maximize") { if (IsZoomed(g_app.hwnd)) ShowWindow(g_app.hwnd, SW_RESTORE); else ShowWindow(g_app.hwnd, SW_MAXIMIZE); return S_OK; }
                                         if (action == "close") { g_app.shouldClose = true; PostMessage(g_app.hwnd, WM_CLOSE, 0, 0); return S_OK; }
+
+                                        // Viewport bounds update from Web UI
+                                        if (action == "viewport-bounds") {
+                                            g_app.viewportBounds.x = j.value("x", 0);
+                                            g_app.viewportBounds.y = j.value("y", 0);
+                                            g_app.viewportBounds.width = j.value("width", 800);
+                                            g_app.viewportBounds.height = j.value("height", 600);
+                                            
+                                            // Update renderer viewport region
+                                            if (g_app.engine && g_app.engine->GetRendererObject()) {
+                                                g_app.engine->GetRendererObject()->SetViewportRegion(
+                                                    g_app.viewportBounds.x,
+                                                    g_app.viewportBounds.y,
+                                                    g_app.viewportBounds.width,
+                                                    g_app.viewportBounds.height
+                                                );
+                                            }
+                                            
+                                            // Resize the renderer swapchain if dimensions changed
+                                            if (g_app.engine && g_app.engine->GetRenderer()) {
+                                                Plume::RHI::RHISwapChain* swap = g_app.engine->GetRenderer()->GetSwapChain();
+                                                if (swap && (swap->GetWidth() != (uint32_t)g_app.viewportBounds.width || 
+                                                             swap->GetHeight() != (uint32_t)g_app.viewportBounds.height)) {
+                                                    swap->Resize((uint32_t)g_app.viewportBounds.width, (uint32_t)g_app.viewportBounds.height);
+                                                }
+                                            }
+                                            return S_OK;
+                                        }
+
+                                        // Viewport pointer events forwarded from the Web UI
+                                        if (action == "viewport-pointer") {
+                                            std::string type = j.value("type", std::string());
+                                            if (g_app.engine) {
+                                                if (type == "move") {
+                                                    float dx = j.value("dx", 0.0f);
+                                                    float dy = j.value("dy", 0.0f);
+                                                    // Match native lookSpeed used earlier
+                                                    const float lookSpeed = 0.15f;
+                                                    Plume::Vec3 rotDelta;
+                                                    rotDelta.x = -dy * lookSpeed;
+                                                    rotDelta.y = -dx * lookSpeed;
+                                                    rotDelta.z = 0.0f;
+                                                    g_app.engine->RotateCamera(rotDelta);
+                                                } else if (type == "wheel") {
+                                                    float delta = j.value("delta", 0.0f);
+                                                    Plume::Vec3 mv{0,0,0};
+                                                    mv.z += (delta > 0.0f) ? 0.5f : -0.5f;
+                                                    g_app.engine->TranslateCameraLocal(mv);
+                                                }
+                                            }
+                                            return S_OK;
+                                        }
+
+                                        // Viewport keyboard events forwarded from the Web UI
+                                        if (action == "viewport-key") {
+                                            std::string key = j.value("key", std::string());
+                                            std::string ktype = j.value("type", std::string());
+                                            if (g_app.engine && ktype == "down") {
+                                                Plume::Vec3 moveDelta{0,0,0};
+                                                if (key == "ArrowUp") moveDelta.z -= 0.2f;
+                                                else if (key == "ArrowDown") moveDelta.z += 0.2f;
+                                                else if (key == "ArrowLeft") moveDelta.x -= 0.2f;
+                                                else if (key == "ArrowRight") moveDelta.x += 0.2f;
+                                                else if (key == "q" || key == "Q") moveDelta.y -= 0.2f;
+                                                else if (key == "e" || key == "E") moveDelta.y += 0.2f;
+                                                if (moveDelta.x != 0 || moveDelta.y != 0 || moveDelta.z != 0) {
+                                                    g_app.engine->TranslateCameraLocal(moveDelta);
+                                                }
+                                            }
+                                            return S_OK;
+                                        }
 
                                         // Helper to send content list for a given path (string)
                                         // If recursive==true, return a hierarchical tree of folders/files with children arrays
@@ -856,6 +1026,37 @@ void InitWebView(const std::string& htmlPath) {
                                     }).Get(),
                                 nullptr);
                             
+                            // Ensure page background transparency after navigation completes
+                            if (g_app.webview) {
+                                g_app.webview->add_NavigationCompleted(
+                                    Callback<ICoreWebView2NavigationCompletedEventHandler>(
+                                        [](ICoreWebView2* sender, ICoreWebView2NavigationCompletedEventArgs* args) -> HRESULT {
+                                            // Log NavigationCompleted for diagnostics
+                                            {
+                                                std::ofstream diag("plume_diag.txt", std::ios::app);
+                                                if (diag.is_open()) {
+                                                    diag << "WebView NavigationCompleted\n";
+                                                    diag.close();
+                                                }
+                                            }
+                                            // Ensure the page DOM is transparent
+                                            if (g_app.webview) {
+                                                LPWSTR script = L"(function(){document.documentElement.style.background='transparent';document.body.style.background='transparent';document.body.style.backgroundColor='transparent';document.documentElement.style.backgroundColor='transparent';})();";
+                                                g_app.webview->ExecuteScript(script, nullptr);
+                                            }
+
+                                            // Also re-assert controller default background color now that navigation is complete
+                                            if (g_app.controller) {
+                                                ComPtr<ICoreWebView2Controller2> controller2;
+                                                if (SUCCEEDED(g_app.controller->QueryInterface(IID_PPV_ARGS(&controller2))) && controller2) {
+                                                    COREWEBVIEW2_COLOR transparentColor = {0, 0, 0, 0};
+                                                    controller2->put_DefaultBackgroundColor(transparentColor);
+                                                }
+                                            }
+
+                                            return S_OK;
+                                        }).Get(), nullptr);
+                            }
                             std::wstring wurl = std::wstring(htmlPath.begin(), htmlPath.end());
                             g_app.webview->Navigate(wurl.c_str());
                             
@@ -937,11 +1138,33 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         return 1;
     }
     
-    g_app.uiFolder = uiEntryPath.parent_path().string();
+    // Resolve the UI entry to a canonical absolute path (collapse any "..")
+    std::string resolvedUiFolder;
+    try {
+        fs::path resolved = fs::canonical(uiEntryPath);
+        resolvedUiFolder = resolved.parent_path().string();
+    } catch(...) {
+        // Fallback to absolute path if canonicalization fails
+        fs::path resolved = fs::absolute(uiEntryPath);
+        resolvedUiFolder = resolved.parent_path().string();
+    }
+
+    g_app.uiFolder = resolvedUiFolder;
+
+    // Log resolved UI folder for diagnostics
+    {
+        std::ofstream diag("plume_diag.txt", std::ios::app);
+        if (diag.is_open()) {
+            diag << "Resolved UI folder: " << g_app.uiFolder << "\n";
+            diag.close();
+        }
+    }
     splash.UpdateProgress(0.55f, "Exporting data...");
     ExportSceneData();
     ExportPluginData();
     ExportThemeData();
+    // Ensure rendering data exists before the UI loads to avoid initial 404s
+    ExportRenderingData();
     splash.UpdateProgress(0.6f, "Creating window...");
     
     // Créer la fenêtre principale (mais ne pas l'afficher encore)
@@ -954,6 +1177,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     // Initialiser WebView2
     std::string url = "file:///" + fs::absolute(uiEntryPath).string();
     for (auto& c : url) if (c == '\\') c = '/';
+    // Create the WebView overlay (Editor owns the WebView2 instance)
     InitWebView(url);
     
     // Attendre que WebView2 se charge complètement
@@ -967,6 +1191,25 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     // Afficher la fenêtre maximisée avec l'animation Windows
     ShowWindow(g_app.hwnd, SW_MAXIMIZE);
     SetForegroundWindow(g_app.hwnd);
+
+    // Initialize the renderer with the main window
+    // The renderer will draw into the main window, and the WebView2 will overlay
+    // the UI elements. The 3D viewport area will be determined by the web UI layout.
+    RECT rc;
+    GetClientRect(g_app.hwnd, &rc);
+    uint32_t w = static_cast<uint32_t>(rc.right - rc.left);
+    uint32_t h = static_cast<uint32_t>(rc.bottom - rc.top);
+    
+    // Log window size used for renderer init
+    {
+        std::ofstream diag("plume_diag.txt", std::ios::app);
+        if (diag.is_open()) {
+            diag << "Initializing renderer with main window size: " << w << "x" << h << "\n";
+            diag.close();
+        }
+    }
+    
+    engine.InitRenderer(reinterpret_cast<void*>(g_app.hwnd), w, h, engine.GetCurrentGraphicsAPI());
     
     // Boucle principale
     MSG msg = {};
@@ -987,7 +1230,80 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         
         // Mettre à jour tous les plugins
         Plume::PluginManager::Get().UpdateAll();
+
+        // Drive the engine renderer per-frame so the editor shows the scene
+        if (g_app.engine) {
+            if (g_app.engine->GetRenderer()) {
+                g_app.engine->RenderFrame();
+            }
+        }
         
+        // --- Input polling for viewport camera control ---
+        // Basic FPS-like controls: W/A/S/D to move in world axes, Q/E up/down
+        // Left mouse drag to rotate camera (pitch/yaw)
+        if (g_app.engine) {
+            // Determine viewport rect in client coordinates (use main window)
+            RECT vpRc = {};
+            GetClientRect(g_app.hwnd, &vpRc);
+
+            // Get cursor pos in client coords of main window
+            POINT cursorScreen;
+            GetCursorPos(&cursorScreen);
+            POINT cursorClient = cursorScreen;
+            MapWindowPoints(HWND_DESKTOP, g_app.hwnd, &cursorClient, 1);
+
+            bool inViewport = (cursorClient.x >= 0 && cursorClient.y >= 0 && cursorClient.x < (vpRc.right - vpRc.left) && cursorClient.y < (vpRc.bottom - vpRc.top));
+
+            SHORT leftState = GetAsyncKeyState(VK_LBUTTON);
+            bool leftDown = (leftState & 0x8000) != 0;
+
+            const float lookSpeed = 0.15f; // degrees per pixel
+            const float moveSpeed = 0.1f; // units per frame (approx)
+
+            if (leftDown && inViewport) {
+                if (!g_app.isLeftDown) {
+                    g_app.isLeftDown = true;
+                    g_app.lastMouse = cursorClient;
+                } else {
+                    int dx = cursorClient.x - g_app.lastMouse.x;
+                    int dy = cursorClient.y - g_app.lastMouse.y;
+                    g_app.lastMouse = cursorClient;
+                    // Rotate camera: pitch (x) by dy, yaw (y) by dx
+                    Plume::Vec3 rotDelta;
+                    rotDelta.x = -dy * lookSpeed;
+                    rotDelta.y = -dx * lookSpeed;
+                    rotDelta.z = 0.0f;
+                    g_app.engine->RotateCamera(rotDelta);
+                }
+            } else {
+                g_app.isLeftDown = false;
+            }
+
+            // Movement keys (arrow keys for lateral motion, Q/E for up/down)
+            Plume::Vec3 moveDelta{0,0,0};
+            if ((GetAsyncKeyState(VK_UP) & 0x8000) != 0) moveDelta.z -= moveSpeed;
+            if ((GetAsyncKeyState(VK_DOWN) & 0x8000) != 0) moveDelta.z += moveSpeed;
+            if ((GetAsyncKeyState(VK_LEFT) & 0x8000) != 0) moveDelta.x -= moveSpeed;
+            if ((GetAsyncKeyState(VK_RIGHT) & 0x8000) != 0) moveDelta.x += moveSpeed;
+            if ((GetAsyncKeyState('Q') & 0x8000) != 0) moveDelta.y -= moveSpeed;
+            if ((GetAsyncKeyState('E') & 0x8000) != 0) moveDelta.y += moveSpeed;
+
+            if (moveDelta.x != 0 || moveDelta.y != 0 || moveDelta.z != 0) {
+                // Translate relative to camera orientation (local space)
+                g_app.engine->TranslateCameraLocal(moveDelta);
+            }
+
+            // Toggle WebView visibility with Ctrl+T (edge detect)
+            SHORT ctrlState = GetAsyncKeyState(VK_CONTROL);
+            SHORT tState = GetAsyncKeyState('T');
+            bool ctrlTPressed = ((ctrlState & 0x8000) != 0) && ((tState & 0x8000) != 0);
+            if (ctrlTPressed && !g_app.lastCtrlT) {
+                g_app.webviewVisible = !g_app.webviewVisible;
+                if (g_app.controller) g_app.controller->put_IsVisible(g_app.webviewVisible ? TRUE : FALSE);
+            }
+            g_app.lastCtrlT = ctrlTPressed;
+        }
+
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
     

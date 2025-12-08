@@ -205,13 +205,13 @@ export default function App() {
     <div 
       className="h-screen w-full flex flex-col overflow-hidden font-sans select-none"
       style={{ 
-        backgroundColor: theme.colors.bg.primary, 
+        backgroundColor: 'transparent',
         color: theme.colors.text.primary 
       }}
     >
       <Header isPlaying={isPlaying} onSave={() => {}} onAbout={() => setShowAboutModal(true)} onPreferences={() => setShowPreferences(true)} onPlugins={() => setShowPluginManager(true)} onProjectSettings={() => setShowProjectSettings(true)} />
       <Toolbar activeTool={activeTool} setActiveTool={setActiveTool} onSave={() => {}} onDelete={() => {}} isPlaying={isPlaying} onPlay={() => setIsPlaying(true)} onPause={() => setIsPlaying(false)} onStop={() => setIsPlaying(false)} />
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex overflow-hidden" style={{ backgroundColor: 'transparent' }}>
         <Viewport entities={entities} selectedId={selectedId} setSelectedId={setSelectedId} cameraTransform={cameraTransform} setCameraTransform={setCameraTransform} activeTool={activeTool} viewMode={viewMode} setViewMode={setViewMode} onAddEntity={(type) => setEntities([...entities, {id: Date.now().toString(), name: type, type, visible: true, transform: {position:{x:0,y:0,z:0}, rotation:{x:0,y:0,z:0}, scale:{x:1,y:1,z:1}}}])} />
         <div 
           className="w-80 flex flex-col shrink-0 border-l"

@@ -37,16 +37,19 @@ namespace Plume {
 
         cmdBuffer->BeginRenderPass();
         
-        // Configure viewport et scissor
-        auto* swapChain = m_Device->GetSwapChain();
+        // Configure viewport et scissor to match the web UI viewport region
         RHI::Viewport viewport;
-        viewport.width = static_cast<float>(swapChain->GetWidth());
-        viewport.height = static_cast<float>(swapChain->GetHeight());
+        viewport.x = static_cast<float>(m_ViewportX);
+        viewport.y = static_cast<float>(m_ViewportY);
+        viewport.width = static_cast<float>(m_ViewportWidth);
+        viewport.height = static_cast<float>(m_ViewportHeight);
         cmdBuffer->SetViewport(viewport);
         
         RHI::Scissor scissor;
-        scissor.width = swapChain->GetWidth();
-        scissor.height = swapChain->GetHeight();
+        scissor.x = m_ViewportX;
+        scissor.y = m_ViewportY;
+        scissor.width = m_ViewportWidth;
+        scissor.height = m_ViewportHeight;
         cmdBuffer->SetScissor(scissor);
         
         // Pour le moment, on rend juste un triangle de test

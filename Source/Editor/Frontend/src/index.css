@@ -17,7 +17,7 @@ html, body {
 body {
   font-family: "Inter", "Segoe UI", -apple-system, BlinkMacSystemFont, "Roboto", "Oxygen", "Ubuntu", sans-serif;
   user-select: none;
-  background-color: var(--color-bg-primary);
+  background-color: transparent;
   color: var(--color-text-primary);
 }
 

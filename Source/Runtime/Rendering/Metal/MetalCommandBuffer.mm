@@ -84,6 +84,7 @@ namespace RHI {
         m_RenderPassDescriptor.colorAttachments[0].texture = drawable.texture;
         m_RenderPassDescriptor.colorAttachments[0].loadAction = MTLLoadActionClear;
         m_RenderPassDescriptor.colorAttachments[0].storeAction = MTLStoreActionStore;
+        // Default clear color (dark bluish) for normal editor look
         m_RenderPassDescriptor.colorAttachments[0].clearColor = MTLClearColorMake(0.1, 0.1, 0.15, 1.0);
         
         // Create render encoder

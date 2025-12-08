@@ -21,6 +21,9 @@ A lightweight game engine with C++ backend and React frontend.
 - **Scene Management**: Entity-component system
 - **Hot-Reload UI**: Development-friendly workflow
 
+### Rendering Architecture Update
+- **Composition Hardware (Overlay) (Recommended)**: The project now uses a hardware composition overlay approach for UI integration. 3D rendering happens in a native window (HWND) using the engine's RHI backends while the modern HTML UI is displayed by a WebView2 control placed above the renderer with transparent background. This abandons previous attempts at sharing GPU textures between processes or subsystems (shared textures/shared handles). See `VULKAN_INTEGRATION.md` for details.
+
 ## Project Structure
 
 ```

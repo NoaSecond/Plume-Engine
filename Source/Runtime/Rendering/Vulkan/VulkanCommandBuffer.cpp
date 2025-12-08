@@ -52,6 +52,7 @@ namespace RHI {
         renderPassInfo.renderArea.extent = {swapChain->GetWidth(), swapChain->GetHeight()};
 
         VkClearValue clearValues[2];
+        // Default clear color (dark bluish) for normal editor look
         clearValues[0].color = {{0.1f, 0.1f, 0.15f, 1.0f}};
         clearValues[1].depthStencil = {1.0f, 0};
 
