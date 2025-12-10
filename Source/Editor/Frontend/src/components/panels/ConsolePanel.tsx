@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTheme } from '../../ThemeContext';
 import { LogEntry } from '../../types';
 
@@ -16,6 +16,7 @@ export function ConsolePanel({ logs, onClear, onExecuteCommand, isOpen, setIsOpe
   const [showInfo, setShowInfo] = useState(true);
   const [showWarning, setShowWarning] = useState(true);
   const [showError, setShowError] = useState(true);
+  const inputRef = useRef<HTMLInputElement | null>(null);
 
   // Handle Ctrl+L keyboard shortcut for clearing console
   useEffect(() => {
@@ -30,6 +31,16 @@ export function ConsolePanel({ logs, onClear, onExecuteCommand, isOpen, setIsOpe
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClear]);
 
+  // Focus the command input when the console opens
+  useEffect(() => {
+    if (isOpen) {
+      const id = window.setTimeout(() => {
+        inputRef.current?.focus();
+      }, 50);
+      return () => window.clearTimeout(id);
+    }
+  }, [isOpen]);
+
   const filteredLogs = logs.filter(log => {
     if (log.level === 'INFO' && !showInfo) return false;
     if (log.level === 'WARN' && !showWarning) return false;
@@ -42,6 +53,7 @@ export function ConsolePanel({ logs, onClear, onExecuteCommand, isOpen, setIsOpe
     if (command.trim()) {
       onExecuteCommand(command);
       setCommand('');
+      inputRef.current?.focus();
     }
   };
 
@@ -118,7 +130,7 @@ export function ConsolePanel({ logs, onClear, onExecuteCommand, isOpen, setIsOpe
             }}
             title="Clear Console (Ctrl+L)"
           >
-            Clear
+            Clear (Ctrl+L)
           </button>
           <button
             onClick={() => setIsOpen(false)}
@@ -166,7 +178,21 @@ export function ConsolePanel({ logs, onClear, onExecuteCommand, isOpen, setIsOpe
           type="text"
           value={command}
           onChange={(e) => setCommand(e.target.value)}
+          onKeyDown={(e) => {
+            // Allow shortcuts (Ctrl/Alt/Meta) and Escape to propagate so global
+            // handlers (eg. Ctrl+I, Ctrl+Space) still work. Only stop propagation
+            // for normal typing keys.
+            if (!(e.ctrlKey || e.altKey || e.metaKey) && e.key !== 'Escape') {
+              e.stopPropagation();
+            }
+          }}
+          onKeyUp={(e) => {
+            if (!(e.ctrlKey || e.altKey || e.metaKey) && e.key !== 'Escape') {
+              e.stopPropagation();
+            }
+          }}
           placeholder="Entrez une commande (ex: r.ShowHitboxes 1)..."
+          ref={inputRef}
           className="w-full px-2 py-1 text-xs font-mono rounded outline-none"
           style={{
             backgroundColor: theme.colors.bg.primary,

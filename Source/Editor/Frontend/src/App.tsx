@@ -11,6 +11,7 @@ import { PluginManager } from './components/panels/PluginManager';
 import { ProjectSettings } from './components/modals/ProjectSettings';
 import { PlumeLogo } from './components/ui/PlumeLogo';
 import { DEFAULT_SCENE } from './data/constants';
+import { COMMANDS } from './data/commands';
 import { Entity, LogEntry, ToolType } from './types';
 import { useTheme } from './ThemeContext';
 
@@ -131,6 +132,122 @@ export default function App() {
     return () => clearInterval(renderingInterval);
   }, [addLog]);
 
+  const normalizeAngle = (v:number) => {
+    let a = ((v % 360) + 360) % 360;
+    if (a >= 180) a -= 360;
+    return a;
+  };
+
+  const handleExecuteCommand = (cmd: string) => {
+    const raw = cmd.trim();
+    if (!raw) return;
+    addLog(`> ${raw}`, 'INFO');
+
+    // Support help requests like `help <name>` or `help <prefix>` (ex: `help viewport` or `help viewport.cam`)
+    const helpPrefixMatch = raw.match(/^(help|\?|commands)\s+([a-z0-9_.-]+)$/i);
+    if (helpPrefixMatch) {
+      const prefix = helpPrefixMatch[2].toLowerCase();
+
+      // If there's an exact command with that name, show its detailed help
+      const exact = COMMANDS[prefix];
+      if (exact) {
+        addLog(`${prefix}: ${exact.description}`, 'INFO');
+        addLog(`${exact.usage}`, 'INFO');
+        return;
+      }
+
+      // Otherwise treat as a prefix and list immediate children (groups and leaf commands)
+      const keys = Object.keys(COMMANDS);
+      const normalized = prefix.replace(/^\.+|\.+$/g, '');
+      const matched = keys.filter(k => k === normalized || k.startsWith(normalized + '.'));
+      if (matched.length === 0) {
+        addLog(`No commands under ${prefix}`, 'WARN');
+        return;
+      }
+
+      addLog(`Commands under '${prefix}':`, 'INFO');
+      const children = new Set<string>();
+      for (const k of matched) {
+        if (k === normalized) {
+          children.add('');
+        } else {
+          const rest = k.slice(normalized.length + 1);
+          const next = rest.split('.')[0];
+          children.add(next);
+        }
+      }
+
+      // For each child, show whether it's a subgroup (with count) or a leaf command (with usage)
+      Array.from(children).sort().forEach((child) => {
+        if (child === '') {
+          const info = COMMANDS[normalized];
+          if (info) addLog(`${normalized}: ${info.usage} — ${info.description}`, 'INFO');
+          return;
+        }
+        const full = normalized + '.' + child;
+        const isLeaf = !!COMMANDS[full];
+        const descendantCount = keys.filter(k => k === full || k.startsWith(full + '.')).length;
+        if (isLeaf) {
+          const info = COMMANDS[full];
+          addLog(`${full}: ${info.usage} — ${info.description}`, 'INFO');
+        }
+        // Only show a count for groups that actually contain more than the leaf itself
+        if (descendantCount > 1) {
+          addLog(`${full}/ (${descendantCount})`, 'INFO');
+        }
+      });
+      return;
+    }
+
+    
+
+    // If user asks for a general help / commands list (top-level prefixes)
+    if (/^(help|\?|commands)$/i.test(raw)) {
+      addLog('Top-level command prefixes:', 'INFO');
+      const keys = Object.keys(COMMANDS);
+      const top = Array.from(new Set(keys.map(k => k.split('.')[0]))).sort();
+      top.forEach(t => {
+        const count = keys.filter(k => k === t || k.startsWith(t + '.')).length;
+        addLog(`${t}/ (${count})`, 'INFO');
+      });
+      addLog("Note: to see child commands of a prefix use e.g. 'help viewport' or 'help viewport.cam'", 'INFO');
+      return;
+    }
+
+    // replace commas with spaces and split
+    const parts = raw.replace(/,/g, ' ').split(/\s+/);
+    const name = parts[0].toLowerCase();
+    const args = parts.slice(1).map(v => Number(v));
+
+    if (name === 'viewport.cam.loc') {
+      if (args.length < 3 || !args.slice(0,3).every(Number.isFinite)) {
+        addLog('Usage: viewport.cam.loc x y z', 'ERROR');
+        return;
+      }
+      const [x, y, z] = args;
+      setCameraTransform(prev => ({ ...prev, position: { x, y, z } }));
+      addLog(`Camera position set to (${x}, ${y}, ${z})`, 'INFO');
+      return;
+    }
+
+    if (name === 'viewport.cam.rot') {
+      if (args.length < 3 || !args.slice(0,3).every(Number.isFinite)) {
+        addLog('Usage: viewport.cam.rot pitch yaw roll', 'ERROR');
+        return;
+      }
+      let [px, py, pz] = args;
+      // Normalize angles and clamp pitch to avoid flipping
+      px = Math.max(-89, Math.min(89, normalizeAngle(px)));
+      py = normalizeAngle(py);
+      pz = normalizeAngle(pz);
+      setCameraTransform(prev => ({ ...prev, rotation: { x: px, y: py, z: pz } }));
+      addLog(`Camera rotation set to (${px}, ${py}, ${pz})`, 'INFO');
+      return;
+    }
+
+    addLog(`Unknown command: ${name}`, 'WARN');
+  };
+
   const animate = useCallback((time: number) => {
     if (previousTimeRef.current !== undefined) {
       const deltaTime = time - previousTimeRef.current;
@@ -185,8 +302,17 @@ export default function App() {
   useEffect(() => { requestRef.current = requestAnimationFrame(animate); return () => { if (requestRef.current) cancelAnimationFrame(requestRef.current); }; }, [animate]);
 
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => { 
-      keysPressed.current[e.code] = true; 
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // If the user is typing in a text input/textarea/contenteditable, ignore
+      // regular keys so the viewport camera doesn't react. Allow shortcuts
+      // (Ctrl/Alt/Meta) and Escape to still work.
+      const active = document.activeElement as HTMLElement | null;
+      const isTyping = !!active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable);
+      if (isTyping && !(e.ctrlKey || e.altKey || e.metaKey) && e.key !== 'Escape') {
+        return;
+      }
+
+      keysPressed.current[e.code] = true;
       
       // Handle Escape key to close modals and drawers
       if (e.key === 'Escape') {
@@ -288,7 +414,7 @@ export default function App() {
       <ConsolePanel 
         logs={logs} 
         onClear={() => setLogs([])} 
-        onExecuteCommand={(cmd) => addLog(`> ${cmd}`, 'INFO')}
+        onExecuteCommand={(cmd) => handleExecuteCommand(cmd)}
         isOpen={showConsole}
         setIsOpen={setShowConsole}
       />
