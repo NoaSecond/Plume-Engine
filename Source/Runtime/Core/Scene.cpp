@@ -16,6 +16,9 @@ namespace Plume {
         if (type == EntityType::Light) {
             data.Transform.Position = { 100.f, 200.f, 50.f };
             data.Transform.Rotation = { -45.f, 30.f, 0.f };
+        } else if (type == EntityType::Camera) {
+            data.Transform.Position = { -1.5f, 2.0f, -1.5f };
+            data.Transform.Rotation = { -35.0f, 225.0f, 0.0f };
         }
         m_Registry.push_back(data);
         return Entity((int)m_Registry.size() - 1, this);
@@ -61,44 +64,62 @@ namespace Plume {
         }
     }
 
-    void Scene::TranslateCameraLocal(const Vec3& localDelta) {
+    void Scene::TranslateCameraLocal(const Vec3& localDelta, bool followPitch) {
         for (auto& e : m_Registry) {
             if (e.Type.Type == EntityType::Camera) {
                 // Convert rotation (degrees) to radians
                 float pitch = e.Transform.Rotation.x * 3.14159265f / 180.0f;
                 float yaw   = e.Transform.Rotation.y * 3.14159265f / 180.0f;
 
-                // Compute forward vector
+
+                // Compute forward vector (full, including pitch) and a yaw-only
+                // forward vector used for horizontal movement so that pressing
+                // forward/back doesn't move the camera up/down when looking up/down.
                 float cp = cosf(pitch);
                 float sp = sinf(pitch);
                 float cy = cosf(yaw);
                 float sy = sinf(yaw);
-                Vec3 forward;
-                forward.x = cp * sy;
+                Vec3 forward; // full forward including pitch (used for computing orientation)
+                forward.x = -cp * sy;
                 forward.y = sp;
-                forward.z = cp * cy;
+                forward.z = -cp * cy;
+                // yaw-only forward (horizontal plane)
+                Vec3 forwardYaw;
+                forwardYaw.x = -sy;
+                forwardYaw.y = 0.0f;
+                forwardYaw.z = -cy;
 
-                // Right = normalize(cross(forward, worldUp))
+                // Right = normalize(cross(worldUp, forwardYaw)) -- use yaw-only forward
+                // so strafing is parallel to the ground plane when camera is pitched.
                 Vec3 upWorld{0.0f, 1.0f, 0.0f};
                 Vec3 right;
-                right.x = forward.y * upWorld.z - forward.z * upWorld.y;
-                right.y = forward.z * upWorld.x - forward.x * upWorld.z;
-                right.z = forward.x * upWorld.y - forward.y * upWorld.x;
+                right.x = upWorld.y * forwardYaw.z - upWorld.z * forwardYaw.y;
+                right.y = upWorld.z * forwardYaw.x - upWorld.x * forwardYaw.z;
+                right.z = upWorld.x * forwardYaw.y - upWorld.y * forwardYaw.x;
                 // normalize right
                 float rlen = sqrtf(right.x*right.x + right.y*right.y + right.z*right.z);
                 if (rlen > 1e-6f) { right.x /= rlen; right.y /= rlen; right.z /= rlen; }
 
-                // Recompute up = cross(right, forward)
-                Vec3 up;
-                up.x = right.y * forward.z - right.z * forward.y;
-                up.y = right.z * forward.x - right.x * forward.z;
-                up.z = right.x * forward.y - right.y * forward.x;
 
-                // World delta = right*local.x + up*local.y + forward*local.z
+                // For vertical movement (Q/E) use world up so Q/E always move
+                // along the global Y axis. For forward/back, choose between
+                // yaw-only forward or full forward depending on followPitch flag.
+                Vec3 usedForward = followPitch ? forward : forwardYaw;
+                // local Z is negative for forward input (frontend uses -moveSpeed for forward).
+                // The computed `usedForward` points along the world's forward direction
+                // relative to the camera orientation, and multiplying it directly by
+                // localDelta.z produces the correct world-space displacement.
+                // Map local Z so that pressing "forward" (which the frontend encodes
+                // as a negative localDelta.z) moves the camera toward its forward
+                // vector. We therefore subtract usedForward * localDelta.z.
+                // Invert vertical control so positive localDelta.y moves camera up
+                // in world-space according to the expected input convention.
                 Vec3 worldDelta;
-                worldDelta.x = right.x * localDelta.x + up.x * localDelta.y + forward.x * localDelta.z;
-                worldDelta.y = right.y * localDelta.x + up.y * localDelta.y + forward.y * localDelta.z;
-                worldDelta.z = right.z * localDelta.x + up.z * localDelta.y + forward.z * localDelta.z;
+                // Fix left/right: apply negative of the computed right vector so
+                // positive localDelta.x moves to the camera's right direction.
+                worldDelta.x = -right.x * localDelta.x - upWorld.x * localDelta.y - usedForward.x * localDelta.z;
+                worldDelta.y = -right.y * localDelta.x - upWorld.y * localDelta.y - usedForward.y * localDelta.z;
+                worldDelta.z = -right.z * localDelta.x - upWorld.z * localDelta.y - usedForward.z * localDelta.z;
 
                 e.Transform.Position.x += worldDelta.x;
                 e.Transform.Position.y += worldDelta.y;

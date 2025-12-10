@@ -27,8 +27,8 @@ namespace RHI {
     }
 
     void OpenGLCommandBuffer::BeginRenderPass() {
-        // Magenta clear color to make OpenGL rendering obvious
-        glClearColor(1.0f, 0.0f, 1.0f, 1.0f);
+        // Default clear color (black) - remove magenta debug clear
+        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     }
 

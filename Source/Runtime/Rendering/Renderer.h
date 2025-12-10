@@ -46,8 +46,11 @@ namespace Plume {
     private:
         void RenderTestTriangle(RHI::RHICommandBuffer* cmdBuffer);
         void RenderTestCube(RHI::RHICommandBuffer* cmdBuffer);
+        void RenderGrid(RHI::RHICommandBuffer* cmdBuffer);
+        void RenderGizmo(RHI::RHICommandBuffer* cmdBuffer);
 
         RHI::RHIDevice* m_Device;
+        Scene* m_Scene = nullptr; // Current scene being rendered
         
         // Viewport region for rendering (set by editor)
         int m_ViewportX = 0;

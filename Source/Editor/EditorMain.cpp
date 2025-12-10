@@ -13,6 +13,8 @@
 #include <memory>
 #include <functional>
 #include <ctime>
+#include <mutex>
+#include <unordered_set>
 // Vendored single-header JSON (nlohmann)
 #include "ThirdParty/nlohmann_json.hpp"
 
@@ -56,6 +58,9 @@ struct AppState {
     // Input state for viewport camera control
     POINT lastMouse = {0,0};
     bool isLeftDown = false;
+    // Pressed keys reported from the web UI (thread-safe)
+    std::mutex keysMutex;
+    std::unordered_set<std::string> pressedKeys;
     // WebView visibility toggle state
     bool webviewVisible = true;
     bool lastCtrlT = false;
@@ -135,6 +140,17 @@ void ExportRenderingData() {
         default: apiName = "Unknown"; break;
     }
     
+    // Get camera transform from scene
+    Plume::Vec3 camPos{0,0,0};
+    Plume::Vec3 camRot{0,0,0};
+    if (g_app.engine->GetActiveScene()) {
+        Plume::TransformComponent camTransform;
+        if (g_app.engine->GetActiveScene()->GetCameraTransform(camTransform)) {
+            camPos = camTransform.Position;
+            camRot = camTransform.Rotation;
+        }
+    }
+    
     std::string dataPath = g_app.uiFolder + "/rendering_data.js";
     std::string tempPath = dataPath + ".tmp";
     
@@ -145,7 +161,11 @@ void ExportRenderingData() {
         file << "window.PLUME_RENDERING_DATA = {";
         file << "\"graphicsAPI\": \"" << apiName << "\",";
         file << "\"fps\": " << fps << ",";
-        file << "\"frameTimeMs\": " << ms;
+        file << "\"frameTimeMs\": " << ms << ",";
+        file << "\"camera\": {";
+        file << "\"position\": {\"x\": " << camPos.x << ", \"y\": " << camPos.y << ", \"z\": " << camPos.z << "},";
+        file << "\"rotation\": {\"x\": " << camRot.x << ", \"y\": " << camRot.y << ", \"z\": " << camRot.z << "}";
+        file << "}";
         file << "};";
         file.close();
         try {
@@ -479,24 +499,96 @@ void InitWebView(const std::string& htmlPath) {
                                             g_app.viewportBounds.width = j.value("width", 800);
                                             g_app.viewportBounds.height = j.value("height", 600);
                                             
-                                            // Update renderer viewport region
-                                            if (g_app.engine && g_app.engine->GetRendererObject()) {
-                                                g_app.engine->GetRendererObject()->SetViewportRegion(
-                                                    g_app.viewportBounds.x,
-                                                    g_app.viewportBounds.y,
-                                                    g_app.viewportBounds.width,
-                                                    g_app.viewportBounds.height
-                                                );
-                                            }
-                                            
-                                            // Resize the renderer swapchain if dimensions changed
-                                            if (g_app.engine && g_app.engine->GetRenderer()) {
-                                                Plume::RHI::RHISwapChain* swap = g_app.engine->GetRenderer()->GetSwapChain();
-                                                if (swap && (swap->GetWidth() != (uint32_t)g_app.viewportBounds.width || 
-                                                             swap->GetHeight() != (uint32_t)g_app.viewportBounds.height)) {
-                                                    swap->Resize((uint32_t)g_app.viewportBounds.width, (uint32_t)g_app.viewportBounds.height);
+                                            // Convert Y from top-origin (HTML/CSS) to bottom-origin (OpenGL)
+                                            // Also convert from CSS/logical pixels to device pixels using window DPI
+                                            RECT clientRect;
+                                            GetClientRect(g_app.hwnd, &clientRect);
+                                            int clientHeight = clientRect.bottom - clientRect.top;
+
+                                            // Get DPI for the window if available (fallback to screen DPI)
+                                            UINT dpi = 96;
+                                            HMODULE user32 = GetModuleHandleA("user32.dll");
+                                            if (user32) {
+                                                typedef UINT(WINAPI *PFN_GetDpiForWindow)(HWND);
+                                                PFN_GetDpiForWindow pGetDpiForWindow = (PFN_GetDpiForWindow)GetProcAddress(user32, "GetDpiForWindow");
+                                                if (pGetDpiForWindow) {
+                                                    dpi = pGetDpiForWindow(g_app.hwnd);
+                                                } else {
+                                                    HDC screenDC = GetDC(NULL);
+                                                    if (screenDC) {
+                                                        dpi = GetDeviceCaps(screenDC, LOGPIXELSX);
+                                                        ReleaseDC(NULL, screenDC);
+                                                    }
                                                 }
                                             }
+
+                                            float scale = (float)dpi / 96.0f;
+
+                                            int vpX = static_cast<int>(roundf(g_app.viewportBounds.x * scale));
+                                            int vpY = static_cast<int>(roundf(g_app.viewportBounds.y * scale));
+                                            int vpW = static_cast<int>(roundf(g_app.viewportBounds.width * scale));
+                                            int vpH = static_cast<int>(roundf(g_app.viewportBounds.height * scale));
+
+                                            int windowHeightPx = static_cast<int>(roundf(clientHeight * scale));
+                                            int glY = windowHeightPx - vpY - vpH;
+
+                                            // Diagnostic: write viewport conversion details (CSS -> device pixels)
+                                            {
+                                                std::ofstream diag("plume_diag.txt", std::ios::app);
+                                                if (diag.is_open()) {
+                                                    diag << "DiagViewportBounds raw: x=" << g_app.viewportBounds.x << " y=" << g_app.viewportBounds.y
+                                                         << " w=" << g_app.viewportBounds.width << " h=" << g_app.viewportBounds.height
+                                                         << " dpi=" << dpi << " scale=" << scale << " vpX=" << vpX << " vpY=" << vpY
+                                                         << " vpW=" << vpW << " vpH=" << vpH << " windowHeightPx=" << windowHeightPx
+                                                         << " glY=" << glY;
+                                                    if (g_app.engine && g_app.engine->GetRenderer()) {
+                                                        Plume::RHI::RHISwapChain* swap = g_app.engine->GetRenderer()->GetSwapChain();
+                                                        if (swap) diag << " swap=" << swap->GetWidth() << "x" << swap->GetHeight();
+                                                    }
+                                                    diag << "\n";
+                                                    diag.close();
+                                                }
+                                            }
+
+                                                // Resize the renderer swapchain to the viewport device-pixel size
+                                                if (g_app.engine && g_app.engine->GetRenderer()) {
+                                                    Plume::RHI::RHISwapChain* swap = g_app.engine->GetRenderer()->GetSwapChain();
+
+                                                    if (swap && (swap->GetWidth() != (uint32_t)vpW || 
+                                                                 swap->GetHeight() != (uint32_t)vpH)) {
+                                                        swap->Resize((uint32_t)vpW, (uint32_t)vpH);
+                                                    }
+
+                                                    // Use the actual swapchain size to avoid off-by-one margins
+                                                    uint32_t actualW = vpW;
+                                                    uint32_t actualH = vpH;
+                                                    if (swap) {
+                                                        actualW = swap->GetWidth();
+                                                        actualH = swap->GetHeight();
+                                                    }
+
+                                                    if (g_app.engine->GetRendererObject()) {
+                                                        // Ajout d'une marge à gauche et en bas
+                                                        constexpr int marginLeft = 32; // px
+                                                        constexpr int marginBottom = 32; // px
+                                                        g_app.engine->GetRendererObject()->SetViewportRegion(
+                                                            marginLeft,
+                                                            marginBottom,
+                                                            static_cast<int>(actualW) - marginLeft,
+                                                            static_cast<int>(actualH) - marginBottom
+                                                        );
+                                                    }
+                                                } else {
+                                                    // No renderer available yet - fall back to setting logical device coords
+                                                    if (g_app.engine && g_app.engine->GetRendererObject()) {
+                                                        g_app.engine->GetRendererObject()->SetViewportRegion(
+                                                            vpX,
+                                                            glY,
+                                                            vpW,
+                                                            vpH
+                                                        );
+                                                    }
+                                                }
                                             return S_OK;
                                         }
 
@@ -518,7 +610,8 @@ void InitWebView(const std::string& htmlPath) {
                                                     float delta = j.value("delta", 0.0f);
                                                     Plume::Vec3 mv{0,0,0};
                                                     mv.z += (delta > 0.0f) ? 0.5f : -0.5f;
-                                                    g_app.engine->TranslateCameraLocal(mv);
+                                                    // Zoom by moving along camera forward including pitch
+                                                    g_app.engine->TranslateCameraLocal(mv, true);
                                                 }
                                             }
                                             return S_OK;
@@ -537,8 +630,47 @@ void InitWebView(const std::string& htmlPath) {
                                                 else if (key == "q" || key == "Q") moveDelta.y -= 0.2f;
                                                 else if (key == "e" || key == "E") moveDelta.y += 0.2f;
                                                 if (moveDelta.x != 0 || moveDelta.y != 0 || moveDelta.z != 0) {
-                                                    g_app.engine->TranslateCameraLocal(moveDelta);
+                                                    // Fly camera: always follow pitch
+                                                    g_app.engine->TranslateCameraLocal(moveDelta, true);
                                                 }
+                                            }
+                                            return S_OK;
+                                        }
+
+                                        // Camera rotation from viewport (left mouse drag)
+                                        if (action == "camera-rotate") {
+                                            if (g_app.engine) {
+                                                float dx = j.value("deltaX", 0.0f);
+                                                float dy = j.value("deltaY", 0.0f);
+                                                Plume::Vec3 rotDelta;
+                                                rotDelta.x = dx; // pitch
+                                                rotDelta.y = dy; // yaw
+                                                rotDelta.z = 0.0f;
+                                                g_app.engine->RotateCamera(rotDelta);
+                                            }
+                                            return S_OK;
+                                        }
+
+                                        // Camera keyboard input (WASD, Q/E for movement)
+                                        if (action == "camera-input") {
+                                            if (g_app.engine) {
+                                                // Update the pressed-keys set so a dedicated input thread
+                                                // can apply continuous movement each engine frame.
+                                                auto keys = j.value("keys", std::vector<std::string>());
+                                                try {
+                                                    std::lock_guard<std::mutex> lk(g_app.keysMutex);
+                                                    g_app.pressedKeys.clear();
+                                                    for (const auto& k : keys) g_app.pressedKeys.insert(k);
+                                                } catch(...) {}
+                                                // Diagnostic: log receipt of camera-input messages
+                                                try {
+                                                    std::ofstream ofs("plume_diag.txt", std::ios::app);
+                                                    if (ofs.is_open()) {
+                                                        auto now = std::chrono::system_clock::now();
+                                                        std::time_t tt = std::chrono::system_clock::to_time_t(now);
+                                                        ofs << "Diag: camera-input received keys=" << keys.size() << " time=" << std::ctime(&tt);
+                                                    }
+                                                } catch(...) {}
                                             }
                                             return S_OK;
                                         }
@@ -1099,6 +1231,31 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     Plume::Engine engine;
     engine.Init();
     g_app.engine = &engine;
+    // Start a background input thread that polls the pressed keys and applies
+    // continuous camera translation at ~60Hz while the app runs.
+            std::thread([](){
+        const std::chrono::milliseconds tick(16);
+        while (!g_app.shouldClose.load()) {
+            Plume::Vec3 moveDelta{0,0,0};
+            bool has = false;
+            {
+                std::lock_guard<std::mutex> lk(g_app.keysMutex);
+                for (const auto& k : g_app.pressedKeys) {
+                    if (k == "w" || k == "arrowup") { moveDelta.z -= 0.1f; has = true; }
+                    else if (k == "s" || k == "arrowdown") { moveDelta.z += 0.1f; has = true; }
+                    else if (k == "a" || k == "arrowleft") { moveDelta.x -= 0.1f; has = true; }
+                    else if (k == "d" || k == "arrowright") { moveDelta.x += 0.1f; has = true; }
+                    else if (k == "q") { moveDelta.y -= 0.1f; has = true; }
+                    else if (k == "e") { moveDelta.y += 0.1f; has = true; }
+                }
+            }
+            if (has && g_app.engine) {
+                // Fly camera: always follow pitch
+                g_app.engine->TranslateCameraLocal(moveDelta, true);
+            }
+            std::this_thread::sleep_for(tick);
+        }
+    }).detach();
     splash.UpdateProgress(0.33f, "Loading scene...");
     
     // Initialiser le système de plugins
@@ -1238,62 +1395,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
             }
         }
         
-        // --- Input polling for viewport camera control ---
-        // Basic FPS-like controls: W/A/S/D to move in world axes, Q/E up/down
-        // Left mouse drag to rotate camera (pitch/yaw)
+        // Toggle WebView visibility with Ctrl+T (edge detect)
         if (g_app.engine) {
-            // Determine viewport rect in client coordinates (use main window)
-            RECT vpRc = {};
-            GetClientRect(g_app.hwnd, &vpRc);
-
-            // Get cursor pos in client coords of main window
-            POINT cursorScreen;
-            GetCursorPos(&cursorScreen);
-            POINT cursorClient = cursorScreen;
-            MapWindowPoints(HWND_DESKTOP, g_app.hwnd, &cursorClient, 1);
-
-            bool inViewport = (cursorClient.x >= 0 && cursorClient.y >= 0 && cursorClient.x < (vpRc.right - vpRc.left) && cursorClient.y < (vpRc.bottom - vpRc.top));
-
-            SHORT leftState = GetAsyncKeyState(VK_LBUTTON);
-            bool leftDown = (leftState & 0x8000) != 0;
-
-            const float lookSpeed = 0.15f; // degrees per pixel
-            const float moveSpeed = 0.1f; // units per frame (approx)
-
-            if (leftDown && inViewport) {
-                if (!g_app.isLeftDown) {
-                    g_app.isLeftDown = true;
-                    g_app.lastMouse = cursorClient;
-                } else {
-                    int dx = cursorClient.x - g_app.lastMouse.x;
-                    int dy = cursorClient.y - g_app.lastMouse.y;
-                    g_app.lastMouse = cursorClient;
-                    // Rotate camera: pitch (x) by dy, yaw (y) by dx
-                    Plume::Vec3 rotDelta;
-                    rotDelta.x = -dy * lookSpeed;
-                    rotDelta.y = -dx * lookSpeed;
-                    rotDelta.z = 0.0f;
-                    g_app.engine->RotateCamera(rotDelta);
-                }
-            } else {
-                g_app.isLeftDown = false;
-            }
-
-            // Movement keys (arrow keys for lateral motion, Q/E for up/down)
-            Plume::Vec3 moveDelta{0,0,0};
-            if ((GetAsyncKeyState(VK_UP) & 0x8000) != 0) moveDelta.z -= moveSpeed;
-            if ((GetAsyncKeyState(VK_DOWN) & 0x8000) != 0) moveDelta.z += moveSpeed;
-            if ((GetAsyncKeyState(VK_LEFT) & 0x8000) != 0) moveDelta.x -= moveSpeed;
-            if ((GetAsyncKeyState(VK_RIGHT) & 0x8000) != 0) moveDelta.x += moveSpeed;
-            if ((GetAsyncKeyState('Q') & 0x8000) != 0) moveDelta.y -= moveSpeed;
-            if ((GetAsyncKeyState('E') & 0x8000) != 0) moveDelta.y += moveSpeed;
-
-            if (moveDelta.x != 0 || moveDelta.y != 0 || moveDelta.z != 0) {
-                // Translate relative to camera orientation (local space)
-                g_app.engine->TranslateCameraLocal(moveDelta);
-            }
-
-            // Toggle WebView visibility with Ctrl+T (edge detect)
             SHORT ctrlState = GetAsyncKeyState(VK_CONTROL);
             SHORT tState = GetAsyncKeyState('T');
             bool ctrlTPressed = ((ctrlState & 0x8000) != 0) && ((tState & 0x8000) != 0);

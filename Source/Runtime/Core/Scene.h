@@ -24,7 +24,7 @@ namespace Plume {
         void TranslateCamera(const Vec3& delta);
         void RotateCamera(const Vec3& delta);
         // Translate in camera-local space (x = right, y = up, z = forward)
-        void TranslateCameraLocal(const Vec3& localDelta);
+        void TranslateCameraLocal(const Vec3& localDelta, bool followPitch = true);
     private:
         struct EntityData {
             TagComponent Tag;

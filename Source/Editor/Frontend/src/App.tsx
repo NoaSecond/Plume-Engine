@@ -91,6 +91,33 @@ export default function App() {
         if (data && data.graphicsAPI) {
           setRenderingAPI(data.graphicsAPI);
         }
+        // Sync camera transform from C++ backend
+        if (data && data.camera) {
+          // Normalize and clamp rotation values coming from the native backend
+          const rawRot = data.camera.rotation || { x: 0, y: 0, z: 0 };
+          const clamp = (v:number, a:number, b:number) => Math.max(a, Math.min(b, v));
+          const normalizeAngle = (v:number) => {
+            // Normalize to [-180,180)
+            let a = ((v % 360) + 360) % 360;
+            if (a >= 180) a -= 360;
+            return a;
+          };
+          // First normalize all incoming angles, then clamp pitch
+          const normRaw = {
+            x: normalizeAngle(rawRot.x),
+            y: normalizeAngle(rawRot.y),
+            z: normalizeAngle(rawRot.z)
+          };
+          const normRot = {
+            x: clamp(normRaw.x, -89, 89), // restrict pitch to avoid gimbal/inversion
+            y: normRaw.y,
+            z: normRaw.z
+          };
+          setCameraTransform({
+            position: data.camera.position || { x: 0, y: 0, z: 0 },
+            rotation: normRot
+          });
+        }
         document.body.removeChild(script);
       };
       script.onerror = () => {

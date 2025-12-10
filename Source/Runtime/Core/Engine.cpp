@@ -105,28 +105,29 @@ namespace Plume {
         m_LastFrameTime = now;
 
         m_Renderer->BeginFrame();
-        
+
         auto* cmdBuffer = m_Renderer->GetCurrentCommandBuffer();
         if (cmdBuffer) {
-            cmdBuffer->BeginRenderPass();
-            
-            // Configure viewport et scissor
+            // Configure viewport et scissor for the full swapchain/backbuffer before beginning the render pass
             auto* swapChain = m_Renderer->GetSwapChain();
             RHI::Viewport viewport;
             viewport.width = static_cast<float>(swapChain->GetWidth());
             viewport.height = static_cast<float>(swapChain->GetHeight());
             cmdBuffer->SetViewport(viewport);
-            
+
             RHI::Scissor scissor;
             scissor.width = swapChain->GetWidth();
             scissor.height = swapChain->GetHeight();
             cmdBuffer->SetScissor(scissor);
-            
+
+            // Now begin the render pass (clear will respect scissor if enabled)
+            cmdBuffer->BeginRenderPass();
+
             // Delegate to the high-level Renderer which knows how to draw the scene
             if (m_RendererObject) {
                 m_RendererObject->RenderScene(m_Scene.get());
             }
-            
+
             cmdBuffer->EndRenderPass();
         }
         
@@ -165,8 +166,8 @@ namespace Plume {
         if (m_Scene) m_Scene->RotateCamera(delta);
     }
 
-    void Engine::TranslateCameraLocal(const Plume::Vec3& delta) {
-        if (m_Scene) m_Scene->TranslateCameraLocal(delta);
+    void Engine::TranslateCameraLocal(const Plume::Vec3& delta, bool followPitch) {
+        if (m_Scene) m_Scene->TranslateCameraLocal(delta, followPitch);
     }
 
     float Engine::GetFrameTimeMs() const {
