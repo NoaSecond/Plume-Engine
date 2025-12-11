@@ -235,7 +235,7 @@ export function ConsolePanel({ logs, onClear, onExecuteCommand, isOpen, setIsOpe
               if (e.ctrlKey || e.altKey || e.metaKey || e.key === 'Escape') return;
               e.stopPropagation();
             }}
-            placeholder="Entrez une commande (ex: r.ShowHitboxes 1)..."
+            placeholder="Type 'help' to list commands"
             ref={inputRef}
             className="w-full px-2 py-1 text-xs font-mono rounded outline-none"
             style={{

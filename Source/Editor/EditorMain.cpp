@@ -492,6 +492,37 @@ void InitWebView(const std::string& htmlPath) {
                                         if (action == "maximize") { if (IsZoomed(g_app.hwnd)) ShowWindow(g_app.hwnd, SW_RESTORE); else ShowWindow(g_app.hwnd, SW_MAXIMIZE); return S_OK; }
                                         if (action == "close") { g_app.shouldClose = true; PostMessage(g_app.hwnd, WM_CLOSE, 0, 0); return S_OK; }
 
+                                        // Engine control from UI
+                                        if (action == "set-maxfps") {
+                                            int v = j.value("value", -1);
+                                            if (g_app.engine && v >= 0) {
+                                                g_app.engine->SetMaxFPS(v);
+                                                std::string out = "{\"type\":\"result\",\"action\":\"set-maxfps\",\"value\":" + std::to_string(v) + "}";
+                                                std::wstring wides = utf8_to_wstr(out);
+                                                if (g_app.webview) g_app.webview->PostWebMessageAsJson(wides.c_str());
+                                                return S_OK;
+                                            }
+                                            std::string out = "{\"type\":\"error\",\"action\":\"set-maxfps\"}";
+                                            std::wstring wides = utf8_to_wstr(out);
+                                            if (g_app.webview) g_app.webview->PostWebMessageAsJson(wides.c_str());
+                                            return S_OK;
+                                        }
+
+                                        if (action == "set-vsync") {
+                                            bool v = j.value("value", true);
+                                            if (g_app.engine) {
+                                                g_app.engine->SetVSync(v);
+                                                std::string out = "{\"type\":\"result\",\"action\":\"set-vsync\",\"value\":" + std::string(v ? "true" : "false") + "}";
+                                                std::wstring wides = utf8_to_wstr(out);
+                                                if (g_app.webview) g_app.webview->PostWebMessageAsJson(wides.c_str());
+                                                return S_OK;
+                                            }
+                                            std::string out = "{\"type\":\"error\",\"action\":\"set-vsync\"}";
+                                            std::wstring wides = utf8_to_wstr(out);
+                                            if (g_app.webview) g_app.webview->PostWebMessageAsJson(wides.c_str());
+                                            return S_OK;
+                                        }
+
                                         // Viewport bounds update from Web UI
                                         if (action == "viewport-bounds") {
                                             g_app.viewportBounds.x = j.value("x", 0);

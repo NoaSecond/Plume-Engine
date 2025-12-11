@@ -82,12 +82,27 @@ namespace Plume {
     void Engine::Run() {
         auto lastTime = std::chrono::high_resolution_clock::now();
         while (m_IsRunning) {
-            auto currentTime = std::chrono::high_resolution_clock::now();
-            float deltaTime = std::chrono::duration<float>(currentTime - lastTime).count();
-            lastTime = currentTime;
+            auto frameStart = std::chrono::high_resolution_clock::now();
+            float deltaTime = std::chrono::duration<float>(frameStart - lastTime).count();
+            lastTime = frameStart;
             if (m_Scene) m_Scene->OnUpdate(deltaTime);
             RenderFrame();
-            std::this_thread::sleep_for(std::chrono::milliseconds(16));
+
+            // Frame limiting: if VSync is enabled, rely on Present to block; otherwise
+            // sleep to enforce m_MaxFPS if set (>0). We compute elapsed work time and
+            // sleep the remaining time to reach target frame duration.
+            if (!m_VSync && m_MaxFPS > 0) {
+                double targetMs = 1000.0 / static_cast<double>(m_MaxFPS);
+                auto frameEnd = std::chrono::high_resolution_clock::now();
+                double workMs = std::chrono::duration<double, std::milli>(frameEnd - frameStart).count();
+                double sleepMs = targetMs - workMs;
+                if (sleepMs > 0.5) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(static_cast<int>(sleepMs)));
+                }
+            } else {
+                // Small yield to avoid a tight loop when uncapped or relying on Present
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            }
         }
     }
     
@@ -176,5 +191,25 @@ namespace Plume {
 
     float Engine::GetFPS() const {
         return m_FPS;
+    }
+
+    void Engine::SetMaxFPS(int max) {
+        m_MaxFPS = max;
+    }
+
+    int Engine::GetMaxFPS() const {
+        return m_MaxFPS;
+    }
+
+    void Engine::SetVSync(bool on) {
+        m_VSync = on;
+        // If renderer/swapchain supports changing present mode, we could apply here
+        if (m_Renderer) {
+            // try to reconfigure swapchain present mode if supported (no-op default)
+        }
+    }
+
+    bool Engine::GetVSync() const {
+        return m_VSync;
     }
 }

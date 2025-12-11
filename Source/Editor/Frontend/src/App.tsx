@@ -32,6 +32,10 @@ export default function App() {
   const [showProjectSettings, setShowProjectSettings] = useState(false);
   const [renderingAPI, setRenderingAPI] = useState<'DirectX12' | 'Vulkan' | 'OpenGL' | 'Metal'>('OpenGL');
   const [cameraTransform, setCameraTransform] = useState({ position: {x:0, y:-50, z:-150}, rotation: {x:20, y:0, z:0} });
+  const [showFPS, setShowFPS] = useState(false);
+  const [fpsValue, setFpsValue] = useState(0);
+  const [vsyncEnabled, setVsyncEnabled] = useState(true);
+  const [maxFpsCap, setMaxFpsCap] = useState(144);
   const [viewMode, setViewMode] = useState<'Lit' | 'Unlit' | 'Wireframe'>('Lit');
   const requestRef = useRef<number>();
   const previousTimeRef = useRef<number>();
@@ -76,6 +80,10 @@ export default function App() {
         if (data && data.graphicsAPI) {
           setRenderingAPI(data.graphicsAPI);
         }
+        if (data && typeof data.fps === 'number') {
+          setFpsValue(Math.round(data.fps));
+        }
+            // If renderer reports vsync/maxfps in future, sync here (not present currently)
       };
       document.body.appendChild(script);
     };
@@ -218,6 +226,74 @@ export default function App() {
     const parts = raw.replace(/,/g, ' ').split(/\s+/);
     const name = parts[0].toLowerCase();
     const args = parts.slice(1).map(v => Number(v));
+
+    // fps command: query or set FPS overlay visibility
+    if (name === 'fps') {
+      if (args.length === 0) {
+        addLog(`${showFPS ? 1 : 0}`, 'INFO');
+        return;
+      }
+      const v = args[0];
+      if (v === 0) {
+        setShowFPS(false);
+        addLog('FPS display hidden', 'INFO');
+        return;
+      }
+      if (v === 1) {
+        setShowFPS(true);
+        addLog('FPS display shown', 'INFO');
+        return;
+      }
+      addLog("Usage: fps [0|1]", 'ERROR');
+      return;
+    }
+
+    // vsync command: query or set vsync
+    if (name === 'vsync') {
+      if (args.length === 0) {
+        addLog(`${vsyncEnabled ? 1 : 0}`, 'INFO');
+        return;
+      }
+      const v = args[0];
+      if (v === 0) {
+        setVsyncEnabled(false);
+        // notify native
+        if (window.chrome?.webview) window.chrome.webview.postMessage({ action: 'set-vsync', value: false });
+        addLog('VSync disabled', 'INFO');
+        return;
+      }
+      if (v === 1) {
+        setVsyncEnabled(true);
+        if (window.chrome?.webview) window.chrome.webview.postMessage({ action: 'set-vsync', value: true });
+        addLog('VSync enabled', 'INFO');
+        return;
+      }
+      addLog("Usage: vsync [0|1]", 'ERROR');
+      return;
+    }
+
+    // maxfps command: query or set max FPS cap
+    if (name === 'maxfps') {
+      if (args.length === 0) {
+        addLog(`${maxFpsCap}`, 'INFO');
+        return;
+      }
+      const v = args[0];
+      if (v >= 0) {
+        setMaxFpsCap(v);
+        if (window.chrome?.webview) window.chrome.webview.postMessage({ action: 'set-maxfps', value: v });
+        addLog(`Max FPS set to ${v}`, 'INFO');
+        return;
+      }
+      addLog('Usage: maxfps [value >= 0]', 'ERROR');
+      return;
+    }
+
+    // Built-in convenience commands
+    if (name === 'clear') {
+      setLogs([]);
+      return;
+    }
 
     if (name === 'viewport.cam.loc') {
       if (args.length < 3 || !args.slice(0,3).every(Number.isFinite)) {
@@ -455,11 +531,17 @@ export default function App() {
           <span>{entities.length} entities</span>
         </div>
         <div className="flex items-center gap-3">
-          <span style={{ color: theme.colors.accent.primary }}>Plume Engine v0.1 Alpha</span>
+            <span style={{ color: theme.colors.accent.primary }}>Plume Engine v0.1 Alpha</span>
           <span style={{ color: theme.colors.border.default }}>|</span>
-          <span>{theme.displayName}</span>
+            <span>{theme.displayName}</span>
           <span style={{ color: theme.colors.border.default }}>|</span>
-          <span>{renderingAPI}</span>
+            <span>{renderingAPI}</span>
+            {showFPS && (
+              <>
+                <span style={{ color: theme.colors.border.default }}>|</span>
+                <span>FPS: {fpsValue}</span>
+              </>
+            )}
         </div>
       </div>
       {(showAboutModal || isAboutClosing) && (
