@@ -258,13 +258,13 @@ export default function App() {
       if (v === 0) {
         setVsyncEnabled(false);
         // notify native
-        if (window.chrome?.webview) window.chrome.webview.postMessage({ action: 'set-vsync', value: false });
+        if ((window as any).chrome?.webview) (window as any).chrome.webview.postMessage({ action: 'set-vsync', value: false });
         addLog('VSync disabled', 'INFO');
         return;
       }
       if (v === 1) {
         setVsyncEnabled(true);
-        if (window.chrome?.webview) window.chrome.webview.postMessage({ action: 'set-vsync', value: true });
+        if ((window as any).chrome?.webview) (window as any).chrome.webview.postMessage({ action: 'set-vsync', value: true });
         addLog('VSync enabled', 'INFO');
         return;
       }
@@ -281,7 +281,7 @@ export default function App() {
       const v = args[0];
       if (v >= 0) {
         setMaxFpsCap(v);
-        if (window.chrome?.webview) window.chrome.webview.postMessage({ action: 'set-maxfps', value: v });
+        if ((window as any).chrome?.webview) (window as any).chrome.webview.postMessage({ action: 'set-maxfps', value: v });
         addLog(`Max FPS set to ${v}`, 'INFO');
         return;
       }
@@ -302,6 +302,10 @@ export default function App() {
       }
       const [x, y, z] = args;
       setCameraTransform(prev => ({ ...prev, position: { x, y, z } }));
+      // Notify native backend of camera position change so renderer updates
+      if ((window as any).chrome?.webview) {
+        (window as any).chrome.webview.postMessage({ action: 'set-camera', position: { x, y, z } });
+      }
       addLog(`Camera position set to (${x}, ${y}, ${z})`, 'INFO');
       return;
     }
@@ -317,6 +321,10 @@ export default function App() {
       py = normalizeAngle(py);
       pz = normalizeAngle(pz);
       setCameraTransform(prev => ({ ...prev, rotation: { x: px, y: py, z: pz } }));
+      // Notify native backend of camera rotation change so renderer updates
+      if ((window as any).chrome?.webview) {
+        (window as any).chrome.webview.postMessage({ action: 'set-camera', rotation: { x: px, y: py, z: pz } });
+      }
       addLog(`Camera rotation set to (${px}, ${py}, ${pz})`, 'INFO');
       return;
     }

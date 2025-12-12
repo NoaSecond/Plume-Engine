@@ -706,6 +706,41 @@ void InitWebView(const std::string& htmlPath) {
                                             return S_OK;
                                         }
 
+                                        // Set camera transform from UI (position and/or rotation)
+                                        if (action == "set-camera") {
+                                            if (g_app.engine) {
+                                                try {
+                                                    nlohmann::json pos = j.value("position", nlohmann::json::object());
+                                                    nlohmann::json rot = j.value("rotation", nlohmann::json::object());
+                                                    Plume::TransformComponent t;
+                                                    // Initialize t with current camera transform if available
+                                                    Plume::TransformComponent cur;
+                                                    if (g_app.engine->GetActiveScene() && g_app.engine->GetActiveScene()->GetCameraTransform(cur)) {
+                                                        t = cur;
+                                                    } else {
+                                                        t.Position = {0.0f, 0.0f, 0.0f};
+                                                        t.Rotation = {0.0f, 0.0f, 0.0f};
+                                                    }
+
+                                                    if (pos.is_object()) {
+                                                        t.Position.x = pos.value("x", t.Position.x);
+                                                        t.Position.y = pos.value("y", t.Position.y);
+                                                        t.Position.z = pos.value("z", t.Position.z);
+                                                    }
+                                                    if (rot.is_object()) {
+                                                        t.Rotation.x = rot.value("x", t.Rotation.x);
+                                                        t.Rotation.y = rot.value("y", t.Rotation.y);
+                                                        t.Rotation.z = rot.value("z", t.Rotation.z);
+                                                    }
+
+                                                    if (g_app.engine->GetActiveScene()) {
+                                                        g_app.engine->GetActiveScene()->SetCameraTransform(t);
+                                                    }
+                                                } catch(...) {}
+                                            }
+                                            return S_OK;
+                                        }
+
                                         // Helper to send content list for a given path (string)
                                         // If recursive==true, return a hierarchical tree of folders/files with children arrays
                                         std::function<nlohmann::json(const fs::path&)> buildNode;
