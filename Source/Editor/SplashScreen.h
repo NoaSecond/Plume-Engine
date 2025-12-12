@@ -28,6 +28,8 @@ private:
     std::string m_accentColorHex;
     HFONT m_fontTitle;
     HFONT m_fontStatus;
+    HFONT m_fontStatusBold;
+    float m_dpiScale;
     Gdiplus::Image* m_image;
     ULONG_PTR m_gdiplusToken;
 };

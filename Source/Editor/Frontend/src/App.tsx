@@ -80,9 +80,14 @@ export default function App() {
         if (data && data.graphicsAPI) {
           setRenderingAPI(data.graphicsAPI);
         }
-        if (data && typeof data.fps === 'number') {
-          setFpsValue(Math.round(data.fps));
-        }
+          if (data && typeof data.fps === 'number') {
+            setFpsValue(Math.round(data.fps));
+          }
+          if (data && data.uiConfig && typeof data.uiConfig.showFPS !== 'undefined') {
+            const val = !!data.uiConfig.showFPS;
+            setShowFPS(val);
+            addLog(`uiConfig.showFPS = ${val ? 1 : 0}`, 'INFO');
+          }
             // If renderer reports vsync/maxfps in future, sync here (not present currently)
       };
       document.body.appendChild(script);
@@ -90,6 +95,25 @@ export default function App() {
     
     loadSceneData();
     loadRenderingData();
+
+    // If the native side already exported rendering data synchronously (file present),
+    // pick up fps/uiConfig immediately so console commands reflect the correct state.
+    try {
+      const init = (window as any).PLUME_RENDERING_DATA;
+      if (init) {
+        if (init.graphicsAPI) setRenderingAPI(init.graphicsAPI);
+        if (typeof init.fps === 'number') setFpsValue(Math.round(init.fps));
+        if (init.uiConfig && typeof init.uiConfig.showFPS !== 'undefined') setShowFPS(!!init.uiConfig.showFPS);
+        if (init.camera) {
+          const rawRot = init.camera.rotation || { x: 0, y: 0, z: 0 };
+          const clamp = (v:number, a:number, b:number) => Math.max(a, Math.min(b, v));
+          const normalizeAngle = (v:number) => { let a = ((v % 360) + 360) % 360; if (a >= 180) a -= 360; return a; };
+          const normRaw = { x: normalizeAngle(rawRot.x), y: normalizeAngle(rawRot.y), z: normalizeAngle(rawRot.z) };
+          const normRot = { x: clamp(normRaw.x, -89, 89), y: normRaw.y, z: normRaw.z };
+          setCameraTransform({ position: init.camera.position || { x:0,y:0,z:0 }, rotation: normRot });
+        }
+      }
+    } catch(e) {}
     
     // Poll for rendering data updates every 500ms
     const renderingInterval = setInterval(() => {
@@ -103,6 +127,11 @@ export default function App() {
         // Update FPS and sync camera transform from C++ backend
         if (data && typeof data.fps === 'number') {
           setFpsValue(Math.round(data.fps));
+        }
+        if (data && data.uiConfig && typeof data.uiConfig.showFPS !== 'undefined') {
+            const val = !!data.uiConfig.showFPS;
+            setShowFPS(val);
+            addLog(`uiConfig.showFPS (poll) = ${val ? 1 : 0}`, 'INFO');
         }
         
         if (data && data.camera) {

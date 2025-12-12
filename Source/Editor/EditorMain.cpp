@@ -64,6 +64,8 @@ struct AppState {
     // WebView visibility toggle state
     bool webviewVisible = true;
     bool lastCtrlT = false;
+    // Editor configuration loaded from EditorConfig.ini
+    bool showFPS = false;
 };
 
 static AppState g_app;
@@ -126,6 +128,58 @@ void ExportThemeData() {
     }
 }
 
+// Load editor and UI configurations from INI files located at the repository root.
+// This runs during the splash screen so the UI can reflect persistent settings
+// (e.g. showFPS) before the WebView is displayed.
+void LoadConfigurations() {
+    try {
+        // Search common candidate locations for EditorConfig.ini so we can load
+        // config early without depending on g_app.uiFolder being initialized.
+        std::vector<fs::path> candidates;
+        fs::path cwd = fs::current_path();
+        candidates.push_back(cwd / "EditorConfig.ini");                // repo root when running from repo
+        candidates.push_back(cwd / ".." / "EditorConfig.ini");       // bin folder scenario
+        candidates.push_back(cwd / ".." / ".." / "EditorConfig.ini");
+        if (!g_app.uiFolder.empty()) {
+            fs::path uiFolderPath(g_app.uiFolder);
+            candidates.push_back(uiFolderPath.parent_path().parent_path() / "EditorConfig.ini");
+            candidates.push_back(uiFolderPath.parent_path() / "EditorConfig.ini");
+        }
+
+        auto trim = [](std::string s){ size_t a=0; while(a<s.size() && isspace((unsigned char)s[a])) a++; size_t b=s.size(); while(b>a && isspace((unsigned char)s[b-1])) b--; return s.substr(a,b-a); };
+
+        for (const auto& cfg : candidates) {
+            try {
+                if (!fs::exists(cfg)) continue;
+                std::ifstream ifs(cfg.string());
+                if (!ifs.is_open()) continue;
+                std::string line;
+                bool inEditorSection = false;
+                while (std::getline(ifs, line)) {
+                    auto l = line;
+                    while (!l.empty() && (l.back()=='\r' || l.back()=='\n' || l.back()==' ' || l.back()=='\t')) l.pop_back();
+                    size_t p = 0; while (p < l.size() && (l[p]==' '||l[p]=='\t')) ++p; if (p>0) l = l.substr(p);
+                    if (l.empty() || l[0] == ';' || l[0] == '#') continue;
+                    if (l.size() >= 2 && l[0] == '[' && l.back() == ']') {
+                        std::string sec = l.substr(1, l.size()-2);
+                        inEditorSection = (sec == "Editor");
+                        continue;
+                    }
+                    if (!inEditorSection) continue;
+                    auto eq = l.find('='); if (eq == std::string::npos) continue;
+                    std::string key = trim(l.substr(0, eq)); std::string val = trim(l.substr(eq+1));
+                    if (_stricmp(key.c_str(), "fps") == 0) {
+                        try { int v = std::stoi(val); g_app.showFPS = (v != 0); } catch(...) {}
+                    }
+                }
+                ifs.close();
+                // stop after first successful load
+                break;
+            } catch(...) { }
+        }
+    } catch(...) {}
+}
+
 void ExportRenderingData() {
     if (!g_app.engine) return;
     
@@ -162,10 +216,12 @@ void ExportRenderingData() {
         file << "\"graphicsAPI\": \"" << apiName << "\",";
         file << "\"fps\": " << fps << ",";
         file << "\"frameTimeMs\": " << ms << ",";
+        // Export UI config flags (from EditorConfig.ini)
+        file << "\"uiConfig\": {";
+        file << "\"showFPS\": " << (g_app.showFPS ? 1 : 0) << "}" << ",";
         file << "\"camera\": {";
         file << "\"position\": {\"x\": " << camPos.x << ", \"y\": " << camPos.y << ", \"z\": " << camPos.z << "},";
         file << "\"rotation\": {\"x\": " << camRot.x << ", \"y\": " << camRot.y << ", \"z\": " << camRot.z << "}";
-        file << "}";
         file << "};";
         file.close();
         try {
@@ -270,7 +326,6 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             if (hit == HTCLIENT) {
                 POINT pt = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
                 ScreenToClient(hwnd, &pt);
-                
                 // If clicking in the first 32 pixels (header), allow drag
                 if (pt.y >= 0 && pt.y <= 32) {
                     return HTCAPTION;
@@ -1292,7 +1347,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     
     splash.Show();
     splash.UpdateProgress(0.0f, "Initializing Plume Engine...");
-    
+    // Load configurations early so the splash can display progress/status
+    splash.UpdateProgress(0.02f, "Loading configurations...");
+    LoadConfigurations();
+    splash.UpdateProgress(0.04f, "Configurations loaded");
+
     // Initialiser le moteur
     Plume::Engine engine;
     engine.Init();
