@@ -29,6 +29,7 @@ export default function App() {
   const [showPreferences, setShowPreferences] = useState(false);
   const [showPluginManager, setShowPluginManager] = useState(false);
   const [showProjectSettings, setShowProjectSettings] = useState(false);
+  const [renderingAPI, setRenderingAPI] = useState<'DirectX12' | 'Vulkan' | 'OpenGL' | 'Metal'>('OpenGL');
   const [cameraTransform, setCameraTransform] = useState({ position: {x:0, y:-50, z:-150}, rotation: {x:20, y:0, z:0} });
   const [viewMode, setViewMode] = useState<'Lit' | 'Unlit' | 'Wireframe'>('Lit');
   const requestRef = useRef<number>();
@@ -65,8 +66,69 @@ export default function App() {
       };
       document.body.appendChild(script);
     };
+    
+    const loadRenderingData = () => {
+      const script = document.createElement('script');
+      script.src = './rendering_data.js';
+      script.onload = () => {
+        const data = (window as any).PLUME_RENDERING_DATA;
+        if (data && data.graphicsAPI) {
+          setRenderingAPI(data.graphicsAPI);
+        }
+      };
+      document.body.appendChild(script);
+    };
+    
     loadSceneData();
+    loadRenderingData();
+    
+    // Poll for rendering data updates every 500ms
+    const renderingInterval = setInterval(() => {
+      const script = document.createElement('script');
+      script.src = './rendering_data.js?t=' + Date.now();
+      script.onload = () => {
+        const data = (window as any).PLUME_RENDERING_DATA;
+        if (data && data.graphicsAPI) {
+          setRenderingAPI(data.graphicsAPI);
+        }
+        // Sync camera transform from C++ backend
+        if (data && data.camera) {
+          // Normalize and clamp rotation values coming from the native backend
+          const rawRot = data.camera.rotation || { x: 0, y: 0, z: 0 };
+          const clamp = (v:number, a:number, b:number) => Math.max(a, Math.min(b, v));
+          const normalizeAngle = (v:number) => {
+            // Normalize to [-180,180)
+            let a = ((v % 360) + 360) % 360;
+            if (a >= 180) a -= 360;
+            return a;
+          };
+          // First normalize all incoming angles, then clamp pitch
+          const normRaw = {
+            x: normalizeAngle(rawRot.x),
+            y: normalizeAngle(rawRot.y),
+            z: normalizeAngle(rawRot.z)
+          };
+          const normRot = {
+            x: clamp(normRaw.x, -89, 89), // restrict pitch to avoid gimbal/inversion
+            y: normRaw.y,
+            z: normRaw.z
+          };
+          setCameraTransform({
+            position: data.camera.position || { x: 0, y: 0, z: 0 },
+            rotation: normRot
+          });
+        }
+        document.body.removeChild(script);
+      };
+      script.onerror = () => {
+        document.body.removeChild(script);
+      };
+      document.body.appendChild(script);
+    }, 500);
+    
     addLog('Plume Engine Editor initialized', 'INFO');
+    
+    return () => clearInterval(renderingInterval);
   }, [addLog]);
 
   const animate = useCallback((time: number) => {
@@ -170,13 +232,13 @@ export default function App() {
     <div 
       className="h-screen w-full flex flex-col overflow-hidden font-sans select-none"
       style={{ 
-        backgroundColor: theme.colors.bg.primary, 
+        backgroundColor: 'transparent',
         color: theme.colors.text.primary 
       }}
     >
       <Header isPlaying={isPlaying} onSave={() => {}} onAbout={() => setShowAboutModal(true)} onPreferences={() => setShowPreferences(true)} onPlugins={() => setShowPluginManager(true)} onProjectSettings={() => setShowProjectSettings(true)} />
       <Toolbar activeTool={activeTool} setActiveTool={setActiveTool} onSave={() => {}} onDelete={() => {}} isPlaying={isPlaying} onPlay={() => setIsPlaying(true)} onPause={() => setIsPlaying(false)} onStop={() => setIsPlaying(false)} />
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex overflow-hidden" style={{ backgroundColor: 'transparent' }}>
         <Viewport entities={entities} selectedId={selectedId} setSelectedId={setSelectedId} cameraTransform={cameraTransform} setCameraTransform={setCameraTransform} activeTool={activeTool} viewMode={viewMode} setViewMode={setViewMode} onAddEntity={(type) => setEntities([...entities, {id: Date.now().toString(), name: type, type, visible: true, transform: {position:{x:0,y:0,z:0}, rotation:{x:0,y:0,z:0}, scale:{x:1,y:1,z:1}}}])} />
         <div 
           className="w-80 flex flex-col shrink-0 border-l"
@@ -270,7 +332,8 @@ export default function App() {
           <span style={{ color: theme.colors.accent.primary }}>Plume Engine v0.1 Alpha</span>
           <span style={{ color: theme.colors.border.default }}>|</span>
           <span>{theme.displayName}</span>
-
+          <span style={{ color: theme.colors.border.default }}>|</span>
+          <span>{renderingAPI}</span>
         </div>
       </div>
       {(showAboutModal || isAboutClosing) && (

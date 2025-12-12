@@ -1,6 +1,15 @@
 ﻿#include "Engine.h"
+#include <Rendering/RHI/RHIDevice.h>
+#include <Rendering/RHI/RHISwapChain.h>
+#include <Rendering/RHI/RHICommandBuffer.h>
 #include <thread>
 #include <chrono>
+#include <cmath>
+#include <fstream>
+#if defined(_WIN32)
+#include <filesystem>
+#endif
+#include <Rendering/Renderer.h>
 
 namespace Plume {
     Engine::Engine() {}
@@ -15,6 +24,61 @@ namespace Plume {
         m_IsRunning = true;
     }
 
+    void Engine::InitRenderer(void* windowHandle, uint32_t width, uint32_t height, RHI::GraphicsAPI api) {
+        // Store window info for potential reinitialization
+        m_WindowHandle = windowHandle;
+        m_WindowWidth = width;
+        m_WindowHeight = height;
+        m_CurrentAPI = api;
+        
+        // Créer le device avec l'API spécifiée
+        m_Renderer = RHI::RHIDevice::Create(api);
+        if (m_Renderer) {
+            if (!m_Renderer->Initialize(windowHandle, width, height)) {
+                m_Renderer.reset();
+            }
+            else {
+                // Create the higher-level renderer that will draw the scene
+                m_RendererObject = std::make_unique<Plume::Renderer>(m_Renderer.get());
+            }
+        }
+
+        // Log renderer initialization result for diagnostics
+        {
+            std::ofstream diag("plume_diag.txt", std::ios::app);
+            if (diag.is_open()) {
+                diag << "Engine::InitRenderer - api=" << static_cast<int>(m_CurrentAPI) << " renderer=" << (m_Renderer ? "created" : "null") << " width=" << width << " height=" << height << "\n";
+                diag.close();
+            }
+        }
+
+        // Note: WebView2 overlay is owned/created by the Editor application
+        // to avoid multiple WebView2 controllers when running the Editor. The
+        // Engine will render into the provided HWND passed to InitRenderer.
+    }
+
+    void Engine::ReInitRenderer(RHI::GraphicsAPI api) {
+        if (!m_WindowHandle) return;
+        
+        m_CurrentAPI = api;
+        
+        // Shutdown the current renderer if it exists
+        if (m_Renderer) {
+            m_Renderer->Shutdown();
+            m_Renderer.reset();
+        }
+        
+        // Re-initialize with the new API using stored window info
+        m_Renderer = RHI::RHIDevice::Create(api);
+        if (m_Renderer) {
+            if (!m_Renderer->Initialize(m_WindowHandle, m_WindowWidth, m_WindowHeight)) {
+                m_Renderer.reset();
+            }
+        }
+
+    // No editor-owned overlay handling here; Editor manages WebView2.
+    }
+
     void Engine::Run() {
         auto lastTime = std::chrono::high_resolution_clock::now();
         while (m_IsRunning) {
@@ -22,9 +86,95 @@ namespace Plume {
             float deltaTime = std::chrono::duration<float>(currentTime - lastTime).count();
             lastTime = currentTime;
             if (m_Scene) m_Scene->OnUpdate(deltaTime);
+            RenderFrame();
             std::this_thread::sleep_for(std::chrono::milliseconds(16));
         }
     }
     
-    void Engine::Shutdown() { m_IsRunning = false; }
+    void Engine::RenderFrame() {
+        if (!m_Renderer) return;
+
+        // Update frame timing (FPS / ms)
+        auto now = std::chrono::high_resolution_clock::now();
+        if (m_LastFrameTime.time_since_epoch().count() == 0) {
+            m_LastFrameTime = now;
+        }
+        double deltaMs = std::chrono::duration<double, std::milli>(now - m_LastFrameTime).count();
+        m_FrameTimeMs = deltaMs;
+        m_FPS = (deltaMs > 0.0) ? static_cast<float>(1000.0 / deltaMs) : 0.0f;
+        m_LastFrameTime = now;
+
+        m_Renderer->BeginFrame();
+
+        auto* cmdBuffer = m_Renderer->GetCurrentCommandBuffer();
+        if (cmdBuffer) {
+            // Configure viewport et scissor for the full swapchain/backbuffer before beginning the render pass
+            auto* swapChain = m_Renderer->GetSwapChain();
+            RHI::Viewport viewport;
+            viewport.width = static_cast<float>(swapChain->GetWidth());
+            viewport.height = static_cast<float>(swapChain->GetHeight());
+            cmdBuffer->SetViewport(viewport);
+
+            RHI::Scissor scissor;
+            scissor.width = swapChain->GetWidth();
+            scissor.height = swapChain->GetHeight();
+            cmdBuffer->SetScissor(scissor);
+
+            // Now begin the render pass (clear will respect scissor if enabled)
+            cmdBuffer->BeginRenderPass();
+
+            // Delegate to the high-level Renderer which knows how to draw the scene
+            if (m_RendererObject) {
+                m_RendererObject->RenderScene(m_Scene.get());
+            }
+
+            cmdBuffer->EndRenderPass();
+        }
+        
+        m_Renderer->EndFrame();
+        m_Renderer->Present();
+
+        // Diagnostics: write a heartbeat entry every 500ms so we can confirm
+        // that RenderFrame is being executed and the renderer is active.
+        static auto lastHeartbeat = std::chrono::steady_clock::now() - std::chrono::milliseconds(1000);
+        auto hbNow = std::chrono::steady_clock::now();
+        if (std::chrono::duration_cast<std::chrono::milliseconds>(hbNow - lastHeartbeat).count() >= 500) {
+            lastHeartbeat = hbNow;
+            std::ofstream diag("plume_diag.txt", std::ios::app);
+            if (diag.is_open()) {
+                auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(hbNow.time_since_epoch()).count();
+                diag << "RenderFrame heartbeat ms=" << ms << " fps=" << m_FPS << " frameMs=" << m_FrameTimeMs << "\n";
+                diag.close();
+            }
+        }
+    }
+    
+    void Engine::Shutdown() { 
+        if (m_Renderer) {
+            m_Renderer->Shutdown();
+            m_Renderer.reset();
+        }
+        // WebView2 overlay is owned by the Editor; nothing to clean here.
+        m_IsRunning = false; 
+    }
+
+    void Engine::TranslateCamera(const Plume::Vec3& delta) {
+        if (m_Scene) m_Scene->TranslateCamera(delta);
+    }
+
+    void Engine::RotateCamera(const Plume::Vec3& delta) {
+        if (m_Scene) m_Scene->RotateCamera(delta);
+    }
+
+    void Engine::TranslateCameraLocal(const Plume::Vec3& delta, bool followPitch) {
+        if (m_Scene) m_Scene->TranslateCameraLocal(delta, followPitch);
+    }
+
+    float Engine::GetFrameTimeMs() const {
+        return static_cast<float>(m_FrameTimeMs);
+    }
+
+    float Engine::GetFPS() const {
+        return m_FPS;
+    }
 }
