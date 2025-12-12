@@ -100,7 +100,11 @@ export default function App() {
         if (data && data.graphicsAPI) {
           setRenderingAPI(data.graphicsAPI);
         }
-        // Sync camera transform from C++ backend
+        // Update FPS and sync camera transform from C++ backend
+        if (data && typeof data.fps === 'number') {
+          setFpsValue(Math.round(data.fps));
+        }
+        
         if (data && data.camera) {
           // Normalize and clamp rotation values coming from the native backend
           const rawRot = data.camera.rotation || { x: 0, y: 0, z: 0 };
