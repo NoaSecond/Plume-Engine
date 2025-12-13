@@ -112,20 +112,69 @@ export const Gizmo3D: React.FC<Gizmo3DProps> = ({ rotation, size = 80 }) => {
     const gl = rawGl as WebGLRenderingContext;
     glRef.current = gl;
 
-    const vs = `attribute vec3 aPos; attribute vec3 aNormal; uniform mat4 uMVP; uniform mat4 uModel; varying vec3 vNormal; void main(){ vNormal = mat3(uModel) * aNormal; gl_Position = uMVP * vec4(aPos,1.0); }`;
-    const fs = `precision mediump float; varying vec3 vNormal; uniform vec3 uColor; void main(){ vec3 N = normalize(vNormal); vec3 L = normalize(vec3(0.5,0.7,1.0)); float diff = max(dot(N,L), 0.12); vec3 base = uColor * diff; vec3 ambient = uColor * 0.18; gl_FragColor = vec4(base + ambient, 1.0); }`;
+    const vs = `attribute vec3 aPos; attribute vec3 aNormal; uniform mat4 uMVP; uniform mat4 uModel; void main(){ gl_Position = uMVP * vec4(aPos,1.0); }`;
+    const fs = `precision mediump float; uniform vec3 uColor; void main(){ gl_FragColor = vec4(uColor, 1.0); }`;
 
     function compile(src: string, type: number) { const s = gl.createShader(type)!; gl.shaderSource(s, src); gl.compileShader(s); if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) console.error(gl.getShaderInfoLog(s)); return s; }
     const vsh = compile(vs, gl.VERTEX_SHADER), fsh = compile(fs, gl.FRAGMENT_SHADER);
     const prog = gl.createProgram()!; gl.attachShader(prog, vsh); gl.attachShader(prog, fsh); gl.linkProgram(prog); if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) console.error(gl.getProgramInfoLog(prog));
 
-    // build arrow mesh
-    const { positions, normals, indices, totalLen } = createArrowMesh(24, 0.04, 0.48, 0.09, 0.18);
+    // Create sphere mesh for center
+    function createSphereMesh(radius: number, latBands: number, longBands: number) {
+      const positions: number[] = [];
+      const normals: number[] = [];
+      const indices: number[] = [];
+      for (let lat = 0; lat <= latBands; lat++) {
+        const theta = lat * Math.PI / latBands;
+        const sinTheta = Math.sin(theta);
+        const cosTheta = Math.cos(theta);
+        for (let long = 0; long <= longBands; long++) {
+          const phi = long * 2 * Math.PI / longBands;
+          const sinPhi = Math.sin(phi);
+          const cosPhi = Math.cos(phi);
+          const x = radius * sinTheta * cosPhi;
+          const y = radius * cosTheta;
+          const z = radius * sinTheta * sinPhi;
 
-    const posBuf = gl.createBuffer()!; gl.bindBuffer(gl.ARRAY_BUFFER, posBuf); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.STATIC_DRAW);
-    const normBuf = gl.createBuffer()!; gl.bindBuffer(gl.ARRAY_BUFFER, normBuf); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(normals), gl.STATIC_DRAW);
-    const idxBuf = gl.createBuffer()!; gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, idxBuf); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(indices), gl.STATIC_DRAW);
-    buffersRef.current = { posBuf, normBuf, idxBuf, count: indices.length };
+          const ux = sinTheta * cosPhi;
+          const uy = cosTheta;
+          const uz = sinTheta * sinPhi;
+
+          positions.push(x, y, z);
+          normals.push(ux, uy, uz);
+        }
+      }
+      for (let lat = 0; lat < latBands; lat++) {
+        for (let long = 0; long < longBands; long++) {
+          const first = (lat * (longBands + 1)) + long;
+          const second = first + longBands + 1;
+          indices.push(first, second, first + 1);
+          indices.push(second, second + 1, first + 1);
+        }
+      }
+      return { positions, normals, indices };
+    }
+
+    // Generate meshes
+    const arrowMesh = createArrowMesh(24, 0.04, 0.48, 0.09, 0.18);
+    const sphereMesh = createSphereMesh(0.12, 16, 16);
+
+    const totalPositions = [...arrowMesh.positions, ...sphereMesh.positions];
+    const totalNormals = [...arrowMesh.normals, ...sphereMesh.normals];
+    const arrowVertexCount = arrowMesh.positions.length / 3;
+    const sphereIndicesAdjusted = sphereMesh.indices.map(i => i + arrowVertexCount);
+    const totalIndices = [...arrowMesh.indices, ...sphereIndicesAdjusted];
+
+    const posBuf = gl.createBuffer()!; gl.bindBuffer(gl.ARRAY_BUFFER, posBuf); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(totalPositions), gl.STATIC_DRAW);
+    const normBuf = gl.createBuffer()!; gl.bindBuffer(gl.ARRAY_BUFFER, normBuf); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(totalNormals), gl.STATIC_DRAW);
+    const idxBuf = gl.createBuffer()!; gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, idxBuf); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(totalIndices), gl.STATIC_DRAW);
+
+    buffersRef.current = {
+      posBuf, normBuf, idxBuf,
+      arrowCount: arrowMesh.indices.length,
+      sphereCount: sphereMesh.indices.length,
+      sphereOffset: arrowMesh.indices.length * 2
+    };
 
     gl.enable(gl.DEPTH_TEST);
     gl.enable(gl.CULL_FACE);
@@ -155,7 +204,7 @@ export const Gizmo3D: React.FC<Gizmo3DProps> = ({ rotation, size = 80 }) => {
       // Construct View Matrix: T(0,0,-dist) * R(cam)
       // This mimics the camera looking at the gizmo (at origin) from a distance, 
       // but rotating WITH the main camera to show world alignment.
-      const dist = 3.5;
+      const dist = 2.5;
       const camRot = rotationRef.current || { x: 0, y: 0, z: 0 };
       const rx = degToRad(-camRot.x || 0);
       const ry = degToRad(-camRot.y || 0);
@@ -167,25 +216,29 @@ export const Gizmo3D: React.FC<Gizmo3DProps> = ({ rotation, size = 80 }) => {
       rotMat = multiply(rotMat, rotateZ(rz));
 
       const view = multiply(translation(0, 0, -dist), rotMat);
-
-      // Model matrix is just identity for the base frame (arrows are rotated locally)
       const model = identity();
-
       const projView = multiply(proj, view);
 
       function mulMatVec(mat: number[], v: number[]) { const out = [0, 0, 0, 0]; for (let r = 0; r < 4; r++) { let s = 0; for (let c = 0; c < 4; c++) s += mat[c * 4 + r] * v[c]; out[r] = s; } return out; }
 
+      // DRAW CENTER SPHERE
+      const sphereM = multiply(model, scale(1, 1, 1));
+      gl.uniformMatrix4fv(uModel, false, new Float32Array(sphereM));
+      const spheresMVP = multiply(projView, sphereM);
+      gl.uniformMatrix4fv(uMVP, false, new Float32Array(spheresMVP));
+      gl.uniform3f(uColor, 0.8, 0.8, 0.8); // Light gray pivot
+      gl.drawElements(gl.TRIANGLES, buffersRef.current.sphereCount, gl.UNSIGNED_SHORT, buffersRef.current.sphereOffset);
+
       // helper to draw an axis arrow with color and axis rotation
       const drawAxis = (axisRot: number[], axisColor: [number, number, number]) => {
-        // translate arrow so its base is at origin of gizmo and centered along half-length
-        const axisTrans = translation(0, 0, totalLen * 0.5);
-        const axisLocal = multiply(axisTrans, multiply(axisRot, identity()));
+        // No translation! Arrows start at origin
+        const axisLocal = axisRot;
         const m = multiply(model, axisLocal);
         gl.uniformMatrix4fv(uModel, false, new Float32Array(m));
         const mvp = multiply(projView, m);
         gl.uniformMatrix4fv(uMVP, false, new Float32Array(mvp));
         gl.uniform3f(uColor, axisColor[0], axisColor[1], axisColor[2]);
-        gl.drawElements(gl.TRIANGLES, buffersRef.current.count, gl.UNSIGNED_SHORT, 0);
+        gl.drawElements(gl.TRIANGLES, buffersRef.current.arrowCount, gl.UNSIGNED_SHORT, 0);
         return mvp;
       };
 
@@ -198,7 +251,7 @@ export const Gizmo3D: React.FC<Gizmo3DProps> = ({ rotation, size = 80 }) => {
 
       // labels: project tip point for each axis and position DOM spans
       try {
-        const tipObj = [0, 0, totalLen, 1];
+        const tipObj = [0, 0, arrowMesh.totalLen, 1]; // Use arrowMesh.totalLen directly
         const clipX = mulMatVec(mvpX, tipObj);
         const clipY = mulMatVec(mvpY, tipObj);
         const clipZ = mulMatVec(mvpZ, tipObj);
