@@ -1,6 +1,8 @@
+<img src="Assets/Branding/plume_logo.svg" alt="Plume Engine Icon" width="96" height="96" />
+
 # Plume Engine
 
-A lightweight game engine with C++ backend and React frontend.
+Game engine combining C++ performance with a modern React-powered editor for rapid, creative development.
 
 ## Features
 
@@ -22,26 +24,7 @@ A lightweight game engine with C++ backend and React frontend.
 - **Hot-Reload UI**: Development-friendly workflow
 
 ### Rendering Architecture Update
-- **Composition Hardware (Overlay) (Recommended)**: The project now uses a hardware composition overlay approach for UI integration. 3D rendering happens in a native window (HWND) using the engine's RHI backends while the modern HTML UI is displayed by a WebView2 control placed above the renderer with transparent background. This abandons previous attempts at sharing GPU textures between processes or subsystems (shared textures/shared handles). See `VULKAN_INTEGRATION.md` for details.
-
-## Project Structure
-
-```
-PlumeEngine/
-├── Assets/
-│   ├── Branding/          # Logos, splash screens (SVG)
-│   └── Icons/             # Application icons
-├── Bin/                   # Build outputs
-├── Build/                 # CMake build directory
-├── Source/
-│   ├── Editor/            # Editor application
-│   │   ├── Frontend/      # React UI
-│   │   └── EditorMain.cpp
-│   ├── Launcher/          # Launcher application
-│   └── Runtime/           # Engine core
-└── THEMES.md              # Theme system documentation
-
-```
+- **Composition Hardware (Overlay) (Recommended)**: The project now uses a hardware composition overlay approach for UI integration. 3D rendering happens in a native window (HWND) using the engine's RHI backends while the modern HTML UI is displayed by a WebView2 control placed above the renderer with transparent background. This abandons previous attempts at sharing GPU textures between processes or subsystems (shared textures/shared handles).
 
 ## Build Instructions
 
@@ -86,30 +69,6 @@ Navigate to `Bin/Release` and launch `PlumeEditor.exe`.
 - CMake 3.20+
 - Visual Studio 2019+ (Windows)
 - WebView2 Runtime
-
-## Themes
-
-Plume Engine features a comprehensive theme system with 3 official themes designed for different workflows. See [THEMES.md](THEMES.md) for complete documentation.
-
-## Roadmap
-
-Following the project specifications:
-
-- [x] Theme system (3 official themes with Hot-Reload)
-- [x] Branding assets (SVG logos and splash screen)
-- [x] Console panel with filtering
-- [x] Rendering system (RHI abstraction)
-- [x] Vulkan backend (optional, with SDK)
-- [x] OpenGL backend (always available)
-- [x] DirectX 12 backend (Windows 10+)
-- [x] Metal backend (macOS/iOS)
-- [ ] Vertex buffers and mesh rendering
-- [ ] Shader system (SPIR-V, GLSL, HLSL)
-- [ ] Splash screen integration in C++
-- [ ] Complete layout panels
-- [ ] Launcher application
-- [ ] Input system
-- [ ] Physics integration (PhysX)
 
 ## Created by Noa Second
 
