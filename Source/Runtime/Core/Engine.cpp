@@ -43,14 +43,7 @@ namespace Plume {
             }
         }
 
-        // Log renderer initialization result for diagnostics
-        {
-            std::ofstream diag("plume_diag.txt", std::ios::app);
-            if (diag.is_open()) {
-                diag << "Engine::InitRenderer - api=" << static_cast<int>(m_CurrentAPI) << " renderer=" << (m_Renderer ? "created" : "null") << " width=" << width << " height=" << height << "\n";
-                diag.close();
-            }
-        }
+        // Diagnostics suppressed (retain only INI-loading diagnostics)
 
         // Note: WebView2 overlay is owned/created by the Editor application
         // to avoid multiple WebView2 controllers when running the Editor. The
@@ -82,12 +75,27 @@ namespace Plume {
     void Engine::Run() {
         auto lastTime = std::chrono::high_resolution_clock::now();
         while (m_IsRunning) {
-            auto currentTime = std::chrono::high_resolution_clock::now();
-            float deltaTime = std::chrono::duration<float>(currentTime - lastTime).count();
-            lastTime = currentTime;
+            auto frameStart = std::chrono::high_resolution_clock::now();
+            float deltaTime = std::chrono::duration<float>(frameStart - lastTime).count();
+            lastTime = frameStart;
             if (m_Scene) m_Scene->OnUpdate(deltaTime);
             RenderFrame();
-            std::this_thread::sleep_for(std::chrono::milliseconds(16));
+
+            // Frame limiting: if VSync is enabled, rely on Present to block; otherwise
+            // sleep to enforce m_MaxFPS if set (>0). We compute elapsed work time and
+            // sleep the remaining time to reach target frame duration.
+            if (!m_VSync && m_MaxFPS > 0) {
+                double targetMs = 1000.0 / static_cast<double>(m_MaxFPS);
+                auto frameEnd = std::chrono::high_resolution_clock::now();
+                double workMs = std::chrono::duration<double, std::milli>(frameEnd - frameStart).count();
+                double sleepMs = targetMs - workMs;
+                if (sleepMs > 0.5) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(static_cast<int>(sleepMs)));
+                }
+            } else {
+                // Small yield to avoid a tight loop when uncapped or relying on Present
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            }
         }
     }
     
@@ -134,19 +142,7 @@ namespace Plume {
         m_Renderer->EndFrame();
         m_Renderer->Present();
 
-        // Diagnostics: write a heartbeat entry every 500ms so we can confirm
-        // that RenderFrame is being executed and the renderer is active.
-        static auto lastHeartbeat = std::chrono::steady_clock::now() - std::chrono::milliseconds(1000);
-        auto hbNow = std::chrono::steady_clock::now();
-        if (std::chrono::duration_cast<std::chrono::milliseconds>(hbNow - lastHeartbeat).count() >= 500) {
-            lastHeartbeat = hbNow;
-            std::ofstream diag("plume_diag.txt", std::ios::app);
-            if (diag.is_open()) {
-                auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(hbNow.time_since_epoch()).count();
-                diag << "RenderFrame heartbeat ms=" << ms << " fps=" << m_FPS << " frameMs=" << m_FrameTimeMs << "\n";
-                diag.close();
-            }
-        }
+        // Heartbeat diagnostics suppressed (retain only INI-loading diagnostics)
     }
     
     void Engine::Shutdown() { 
@@ -176,5 +172,25 @@ namespace Plume {
 
     float Engine::GetFPS() const {
         return m_FPS;
+    }
+
+    void Engine::SetMaxFPS(int max) {
+        m_MaxFPS = max;
+    }
+
+    int Engine::GetMaxFPS() const {
+        return m_MaxFPS;
+    }
+
+    void Engine::SetVSync(bool on) {
+        m_VSync = on;
+        // If renderer/swapchain supports changing present mode, we could apply here
+        if (m_Renderer) {
+            // try to reconfigure swapchain present mode if supported (no-op default)
+        }
+    }
+
+    bool Engine::GetVSync() const {
+        return m_VSync;
     }
 }

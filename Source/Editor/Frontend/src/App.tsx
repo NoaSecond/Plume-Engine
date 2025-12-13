@@ -11,6 +11,7 @@ import { PluginManager } from './components/panels/PluginManager';
 import { ProjectSettings } from './components/modals/ProjectSettings';
 import { PlumeLogo } from './components/ui/PlumeLogo';
 import { DEFAULT_SCENE } from './data/constants';
+import { COMMANDS } from './data/commands';
 import { Entity, LogEntry, ToolType } from './types';
 import { useTheme } from './ThemeContext';
 
@@ -31,6 +32,11 @@ export default function App() {
   const [showProjectSettings, setShowProjectSettings] = useState(false);
   const [renderingAPI, setRenderingAPI] = useState<'DirectX12' | 'Vulkan' | 'OpenGL' | 'Metal'>('OpenGL');
   const [cameraTransform, setCameraTransform] = useState({ position: {x:0, y:-50, z:-150}, rotation: {x:20, y:0, z:0} });
+  const [showFPS, setShowFPS] = useState(false);
+  const [fpsValue, setFpsValue] = useState(0);
+  const showFPSRef = useRef<boolean>(showFPS);
+  const [vsyncEnabled, setVsyncEnabled] = useState(true);
+  const [maxFpsCap, setMaxFpsCap] = useState(144);
   const [viewMode, setViewMode] = useState<'Lit' | 'Unlit' | 'Wireframe'>('Lit');
   const requestRef = useRef<number>();
   const previousTimeRef = useRef<number>();
@@ -44,12 +50,34 @@ export default function App() {
     }, 180);
   };
 
-  const addLog = useCallback((msg: string, level: 'INFO' | 'WARN' | 'ERROR') => {
+  const addLog = useCallback((msg: string, level: 'INFO' | 'WARN' | 'ERROR' | 'USER') => {
     const time = new Date().toLocaleTimeString('en-US', { hour12: false });
     setLogs(prev => [...prev.slice(-99), { id: Date.now(), time, level, msg }]);
   }, []);
 
   useEffect(() => {
+    // Listen to messages from native (WebView2 PostWebMessage)
+    const handleNativeMessage = (e: any) => {
+      try {
+        const data = (e && e.data) ? e.data : (e && e.detail) ? e.detail : e;
+        if (!data) return;
+        const action = data.action;
+        if (action === 'ui_config' && data.uiConfig) {
+          if (typeof data.uiConfig.showFPS !== 'undefined') {
+            const val = !!data.uiConfig.showFPS;
+            setShowFPS(val);
+            showFPSRef.current = val;
+          }
+          if (typeof data.uiConfig.vsync !== 'undefined') {
+            setVsyncEnabled(!!data.uiConfig.vsync);
+          }
+          if (typeof data.uiConfig.maxFPS !== 'undefined') {
+            setMaxFpsCap(data.uiConfig.maxFPS);
+          }
+        }
+      } catch(e) {}
+    };
+    try { if ((window as any).chrome?.webview) (window as any).chrome.webview.addEventListener('message', handleNativeMessage); else window.addEventListener('message', handleNativeMessage as any); } catch(e) {}
     const loadSceneData = () => {
       const script = document.createElement('script');
       script.src = './scene_data.js'; 
@@ -75,12 +103,52 @@ export default function App() {
         if (data && data.graphicsAPI) {
           setRenderingAPI(data.graphicsAPI);
         }
+          if (data && typeof data.fps === 'number') {
+            setFpsValue(Math.round(data.fps));
+          }
+          if (data && data.uiConfig) {
+            if (typeof data.uiConfig.showFPS !== 'undefined') {
+              const val = !!data.uiConfig.showFPS;
+              setShowFPS(val);
+              showFPSRef.current = val;
+            }
+            if (typeof data.uiConfig.vsync !== 'undefined') {
+              setVsyncEnabled(!!data.uiConfig.vsync);
+            }
+            if (typeof data.uiConfig.maxFPS !== 'undefined') {
+              setMaxFpsCap(data.uiConfig.maxFPS);
+            }
+          }
+            // If renderer reports vsync/maxfps in future, sync here (not present currently)
       };
       document.body.appendChild(script);
     };
     
     loadSceneData();
     loadRenderingData();
+
+    // If the native side already exported rendering data synchronously (file present),
+    // pick up fps/uiConfig immediately so console commands reflect the correct state.
+    try {
+      const init = (window as any).PLUME_RENDERING_DATA;
+        if (init) {
+        if (init.graphicsAPI) setRenderingAPI(init.graphicsAPI);
+        if (typeof init.fps === 'number') setFpsValue(Math.round(init.fps));
+        if (init.uiConfig && typeof init.uiConfig.showFPS !== 'undefined') {
+          const val = !!init.uiConfig.showFPS;
+          setShowFPS(val);
+          showFPSRef.current = val;
+        }
+        if (init.camera) {
+          const rawRot = init.camera.rotation || { x: 0, y: 0, z: 0 };
+          const clamp = (v:number, a:number, b:number) => Math.max(a, Math.min(b, v));
+          const normalizeAngle = (v:number) => { let a = ((v % 360) + 360) % 360; if (a >= 180) a -= 360; return a; };
+          const normRaw = { x: normalizeAngle(rawRot.x), y: normalizeAngle(rawRot.y), z: normalizeAngle(rawRot.z) };
+          const normRot = { x: clamp(normRaw.x, -89, 89), y: normRaw.y, z: normRaw.z };
+          setCameraTransform({ position: init.camera.position || { x:0,y:0,z:0 }, rotation: normRot });
+        }
+      }
+    } catch(e) {}
     
     // Poll for rendering data updates every 500ms
     const renderingInterval = setInterval(() => {
@@ -91,7 +159,24 @@ export default function App() {
         if (data && data.graphicsAPI) {
           setRenderingAPI(data.graphicsAPI);
         }
-        // Sync camera transform from C++ backend
+        // Update FPS and sync camera transform from C++ backend
+        if (data && typeof data.fps === 'number') {
+          setFpsValue(Math.round(data.fps));
+        }
+        if (data && data.uiConfig && typeof data.uiConfig.showFPS !== 'undefined') {
+            const val = !!data.uiConfig.showFPS;
+            if (val !== showFPSRef.current) {
+              showFPSRef.current = val;
+              setShowFPS(val);
+            } else {
+              setShowFPS(val);
+            }
+        }
+        if (data && data.uiConfig) {
+            if (typeof data.uiConfig.vsync !== 'undefined') setVsyncEnabled(!!data.uiConfig.vsync);
+            if (typeof data.uiConfig.maxFPS !== 'undefined') setMaxFpsCap(data.uiConfig.maxFPS);
+        }
+        
         if (data && data.camera) {
           // Normalize and clamp rotation values coming from the native backend
           const rawRot = data.camera.rotation || { x: 0, y: 0, z: 0 };
@@ -130,6 +215,198 @@ export default function App() {
     
     return () => clearInterval(renderingInterval);
   }, [addLog]);
+
+  const normalizeAngle = (v:number) => {
+    let a = ((v % 360) + 360) % 360;
+    if (a >= 180) a -= 360;
+    return a;
+  };
+
+  const handleExecuteCommand = (cmd: string) => {
+    const raw = cmd.trim();
+    if (!raw) return;
+    addLog(`> ${raw}`, 'USER');
+
+    // Support help requests like `help <name>` or `help <prefix>` (ex: `help viewport` or `help viewport.cam`)
+    const helpPrefixMatch = raw.match(/^(help|\?|commands)\s+([a-z0-9_.-]+)$/i);
+    if (helpPrefixMatch) {
+      const prefix = helpPrefixMatch[2].toLowerCase();
+
+      // If there's an exact command with that name, show its detailed help
+      const exact = COMMANDS[prefix];
+      if (exact) {
+        addLog(`${prefix}: ${exact.description}`, 'INFO');
+        addLog(`${exact.usage}`, 'INFO');
+        return;
+      }
+
+      // Otherwise treat as a prefix and list immediate children (groups and leaf commands)
+      const keys = Object.keys(COMMANDS);
+      const normalized = prefix.replace(/^\.+|\.+$/g, '');
+      const matched = keys.filter(k => k === normalized || k.startsWith(normalized + '.'));
+      if (matched.length === 0) {
+        addLog(`No commands under ${prefix}`, 'WARN');
+        return;
+      }
+
+      addLog(`Commands under '${prefix}':`, 'INFO');
+      const children = new Set<string>();
+      for (const k of matched) {
+        if (k === normalized) {
+          children.add('');
+        } else {
+          const rest = k.slice(normalized.length + 1);
+          const next = rest.split('.')[0];
+          children.add(next);
+        }
+      }
+
+      // For each child, show whether it's a subgroup (with count) or a leaf command (with usage)
+      Array.from(children).sort().forEach((child) => {
+        if (child === '') {
+          const info = COMMANDS[normalized];
+          if (info) addLog(`${normalized}: ${info.usage} — ${info.description}`, 'INFO');
+          return;
+        }
+        const full = normalized + '.' + child;
+        const isLeaf = !!COMMANDS[full];
+        const descendantCount = keys.filter(k => k === full || k.startsWith(full + '.')).length;
+        if (isLeaf) {
+          const info = COMMANDS[full];
+          addLog(`${full}: ${info.usage} — ${info.description}`, 'INFO');
+        }
+        // Only show a count for groups that actually contain more than the leaf itself
+        if (descendantCount > 1) {
+          addLog(`${full}/ (${descendantCount})`, 'INFO');
+        }
+      });
+      return;
+    }
+
+    
+
+    // If user asks for a general help / commands list (top-level prefixes)
+    if (/^(help|\?|commands)$/i.test(raw)) {
+      addLog('Top-level command prefixes:', 'INFO');
+      const keys = Object.keys(COMMANDS);
+      const top = Array.from(new Set(keys.map(k => k.split('.')[0]))).sort();
+      top.forEach(t => {
+        const count = keys.filter(k => k === t || k.startsWith(t + '.')).length;
+        addLog(`${t}/ (${count})`, 'INFO');
+      });
+      addLog("Note: to see child commands of a prefix use e.g. 'help viewport' or 'help viewport.cam'", 'INFO');
+      return;
+    }
+
+    // replace commas with spaces and split
+    const parts = raw.replace(/,/g, ' ').split(/\s+/);
+    const name = parts[0].toLowerCase();
+    const args = parts.slice(1).map(v => Number(v));
+
+    // fps command: query or set FPS overlay visibility
+    if (name === 'fps') {
+      if (args.length === 0) {
+        addLog(`${showFPS ? 1 : 0}`, 'INFO');
+        return;
+      }
+      const v = args[0];
+      if (v === 0) {
+        setShowFPS(false);
+        addLog('FPS display hidden', 'INFO');
+        return;
+      }
+      if (v === 1) {
+        setShowFPS(true);
+        addLog('FPS display shown', 'INFO');
+        return;
+      }
+      addLog("Usage: fps [0|1]", 'ERROR');
+      return;
+    }
+
+    // vsync command: query or set vsync
+    if (name === 'vsync') {
+      if (args.length === 0) {
+        addLog(`${vsyncEnabled ? 1 : 0}`, 'INFO');
+        return;
+      }
+      const v = args[0];
+      if (v === 0) {
+        setVsyncEnabled(false);
+        // notify native
+        if ((window as any).chrome?.webview) (window as any).chrome.webview.postMessage({ action: 'set-vsync', value: false });
+        addLog('VSync disabled', 'INFO');
+        return;
+      }
+      if (v === 1) {
+        setVsyncEnabled(true);
+        if ((window as any).chrome?.webview) (window as any).chrome.webview.postMessage({ action: 'set-vsync', value: true });
+        addLog('VSync enabled', 'INFO');
+        return;
+      }
+      addLog("Usage: vsync [0|1]", 'ERROR');
+      return;
+    }
+
+    // maxfps command: query or set max FPS cap
+    if (name === 'maxfps') {
+      if (args.length === 0) {
+        addLog(`${maxFpsCap}`, 'INFO');
+        return;
+      }
+      const v = args[0];
+      if (v >= 0) {
+        setMaxFpsCap(v);
+        if ((window as any).chrome?.webview) (window as any).chrome.webview.postMessage({ action: 'set-maxfps', value: v });
+        addLog(`Max FPS set to ${v}`, 'INFO');
+        return;
+      }
+      addLog('Usage: maxfps [value >= 0]', 'ERROR');
+      return;
+    }
+
+    // Built-in convenience commands
+    if (name === 'clear') {
+      setLogs([]);
+      return;
+    }
+
+    if (name === 'viewport.cam.loc') {
+      if (args.length < 3 || !args.slice(0,3).every(Number.isFinite)) {
+        addLog('Usage: viewport.cam.loc x y z', 'ERROR');
+        return;
+      }
+      const [x, y, z] = args;
+      setCameraTransform(prev => ({ ...prev, position: { x, y, z } }));
+      // Notify native backend of camera position change so renderer updates
+      if ((window as any).chrome?.webview) {
+        (window as any).chrome.webview.postMessage({ action: 'set-camera', position: { x, y, z } });
+      }
+      addLog(`Camera position set to (${x}, ${y}, ${z})`, 'INFO');
+      return;
+    }
+
+    if (name === 'viewport.cam.rot') {
+      if (args.length < 3 || !args.slice(0,3).every(Number.isFinite)) {
+        addLog('Usage: viewport.cam.rot pitch yaw roll', 'ERROR');
+        return;
+      }
+      let [px, py, pz] = args;
+      // Normalize angles and clamp pitch to avoid flipping
+      px = Math.max(-89, Math.min(89, normalizeAngle(px)));
+      py = normalizeAngle(py);
+      pz = normalizeAngle(pz);
+      setCameraTransform(prev => ({ ...prev, rotation: { x: px, y: py, z: pz } }));
+      // Notify native backend of camera rotation change so renderer updates
+      if ((window as any).chrome?.webview) {
+        (window as any).chrome.webview.postMessage({ action: 'set-camera', rotation: { x: px, y: py, z: pz } });
+      }
+      addLog(`Camera rotation set to (${px}, ${py}, ${pz})`, 'INFO');
+      return;
+    }
+
+    addLog(`Unknown command: ${name}`, 'WARN');
+  };
 
   const animate = useCallback((time: number) => {
     if (previousTimeRef.current !== undefined) {
@@ -185,8 +462,17 @@ export default function App() {
   useEffect(() => { requestRef.current = requestAnimationFrame(animate); return () => { if (requestRef.current) cancelAnimationFrame(requestRef.current); }; }, [animate]);
 
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => { 
-      keysPressed.current[e.code] = true; 
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // If the user is typing in a text input/textarea/contenteditable, ignore
+      // regular keys so the viewport camera doesn't react. Allow shortcuts
+      // (Ctrl/Alt/Meta) and Escape to still work.
+      const active = document.activeElement as HTMLElement | null;
+      const isTyping = !!active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable);
+      if (isTyping && !(e.ctrlKey || e.altKey || e.metaKey) && e.key !== 'Escape') {
+        return;
+      }
+
+      keysPressed.current[e.code] = true;
       
       // Handle Escape key to close modals and drawers
       if (e.key === 'Escape') {
@@ -288,7 +574,7 @@ export default function App() {
       <ConsolePanel 
         logs={logs} 
         onClear={() => setLogs([])} 
-        onExecuteCommand={(cmd) => addLog(`> ${cmd}`, 'INFO')}
+        onExecuteCommand={(cmd) => handleExecuteCommand(cmd)}
         isOpen={showConsole}
         setIsOpen={setShowConsole}
       />
@@ -329,11 +615,17 @@ export default function App() {
           <span>{entities.length} entities</span>
         </div>
         <div className="flex items-center gap-3">
-          <span style={{ color: theme.colors.accent.primary }}>Plume Engine v0.1 Alpha</span>
+            <span style={{ color: theme.colors.accent.primary }}>Plume Engine v0.1 Alpha</span>
           <span style={{ color: theme.colors.border.default }}>|</span>
-          <span>{theme.displayName}</span>
+            <span>{theme.displayName}</span>
           <span style={{ color: theme.colors.border.default }}>|</span>
-          <span>{renderingAPI}</span>
+            <span>{renderingAPI}</span>
+            {showFPS && (
+              <>
+                <span style={{ color: theme.colors.border.default }}>|</span>
+                <span>FPS: {fpsValue}</span>
+              </>
+            )}
         </div>
       </div>
       {(showAboutModal || isAboutClosing) && (

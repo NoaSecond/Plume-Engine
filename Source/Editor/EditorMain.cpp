@@ -64,6 +64,10 @@ struct AppState {
     // WebView visibility toggle state
     bool webviewVisible = true;
     bool lastCtrlT = false;
+    // Editor configuration loaded from EditorConfig.ini
+    bool showFPS = false;
+    bool vsync = true;
+    int maxFPS = 144;
 };
 
 static AppState g_app;
@@ -117,13 +121,88 @@ void ExportThemeData() {
         file << "\"primary\": \"#9C27B0\""; // Nebula Midnight accent color
         file << "}";
         file << "}";
-        file << "};";
+        file << "}};";
         file.close();
         try {
             if (fs::exists(dataPath)) fs::remove(dataPath);
             fs::rename(tempPath, dataPath);
         } catch(...) {}
     }
+}
+
+// Load editor and UI configurations from INI files located at the repository root.
+// This runs during the splash screen so the UI can reflect persistent settings
+// (e.g. showFPS) before the WebView is displayed.
+void LoadConfigurations() {
+    try {
+        // Search common candidate locations for EditorConfig.ini so we can load
+        // config early without depending on g_app.uiFolder being initialized.
+        std::vector<fs::path> candidates;
+        fs::path cwd = fs::current_path();
+        // Also try executable directory and its parents
+    #ifdef _WIN32
+        char exeBuf[MAX_PATH]; exeBuf[0] = '\0';
+        if (GetModuleFileNameA(NULL, exeBuf, MAX_PATH) > 0) {
+            fs::path exePath = fs::path(std::string(exeBuf));
+            fs::path exeDir = exePath.parent_path();
+            candidates.push_back(exeDir / "EditorConfig.ini");
+            candidates.push_back(exeDir.parent_path() / "EditorConfig.ini");
+            candidates.push_back(exeDir.parent_path().parent_path() / "EditorConfig.ini");
+        }
+    #endif
+        // Fallbacks relative to current working directory
+        candidates.push_back(cwd / "EditorConfig.ini");                // repo root when running from repo
+        candidates.push_back(cwd / ".." / "EditorConfig.ini");       // bin folder scenario
+        candidates.push_back(cwd / ".." / ".." / "EditorConfig.ini");
+        if (!g_app.uiFolder.empty()) {
+            fs::path uiFolderPath(g_app.uiFolder);
+            candidates.push_back(uiFolderPath.parent_path().parent_path() / "EditorConfig.ini");
+            candidates.push_back(uiFolderPath.parent_path() / "EditorConfig.ini");
+        }
+
+        auto trim = [](std::string s){ size_t a=0; while(a<s.size() && isspace((unsigned char)s[a])) a++; size_t b=s.size(); while(b>a && isspace((unsigned char)s[b-1])) b--; return s.substr(a,b-a); };
+
+        std::vector<std::string> diag;
+        for (const auto& cfg : candidates) {
+            diag.push_back(std::string("Checking: ") + cfg.string());
+            try {
+                if (!fs::exists(cfg)) continue;
+                diag.push_back(std::string("Found: ") + cfg.string());
+                std::ifstream ifs(cfg.string());
+                if (!ifs.is_open()) continue;
+                std::string line;
+                bool inEditorSection = false;
+                while (std::getline(ifs, line)) {
+                    auto l = line;
+                    while (!l.empty() && (l.back()=='\r' || l.back()=='\n' || l.back()==' ' || l.back()=='\t')) l.pop_back();
+                    size_t p = 0; while (p < l.size() && (l[p]==' '||l[p]=='\t')) ++p; if (p>0) l = l.substr(p);
+                    if (l.empty() || l[0] == ';' || l[0] == '#') continue;
+                    if (l.size() >= 2 && l[0] == '[' && l.back() == ']') {
+                        std::string sec = l.substr(1, l.size()-2);
+                        inEditorSection = (sec == "Editor");
+                        continue;
+                    }
+                    if (!inEditorSection) continue;
+                    auto eq = l.find('='); if (eq == std::string::npos) continue;
+                    std::string key = trim(l.substr(0, eq)); std::string val = trim(l.substr(eq+1));
+                    if (_stricmp(key.c_str(), "fps") == 0) {
+                        try { int v = std::stoi(val); g_app.showFPS = (v != 0); } catch(...) {}
+                    } else if (_stricmp(key.c_str(), "vsync") == 0) {
+                        try { int v = std::stoi(val); g_app.vsync = (v != 0); } catch(...) {}
+                    } else if (_stricmp(key.c_str(), "maxfps") == 0) {
+                        try { int v = std::stoi(val); g_app.maxFPS = v; } catch(...) {}
+                    }
+                }
+                ifs.close();
+                diag.push_back(std::string("Loaded config: ") + cfg.string());
+                // stop after first successful load
+                // diagnostics suppressed (removed per cleanup request)
+                break;
+            } catch(...) { }
+        }
+        // if nothing loaded, dump diagnostics of checked candidates
+        // diagnostics suppressed (removed per cleanup request)
+    } catch(...) {}
 }
 
 void ExportRenderingData() {
@@ -162,11 +241,15 @@ void ExportRenderingData() {
         file << "\"graphicsAPI\": \"" << apiName << "\",";
         file << "\"fps\": " << fps << ",";
         file << "\"frameTimeMs\": " << ms << ",";
+        // Export UI config flags (from EditorConfig.ini)
+        file << "\"uiConfig\": {";
+        file << "\"showFPS\": " << (g_app.showFPS ? 1 : 0) << ",";
+        file << "\"vsync\": " << (g_app.vsync ? 1 : 0) << ",";
+        file << "\"maxFPS\": " << g_app.maxFPS << "}" << ",";
         file << "\"camera\": {";
-        file << "\"position\": {\"x\": " << camPos.x << ", \"y\": " << camPos.y << ", \"z\": " << camPos.z << "},";
-        file << "\"rotation\": {\"x\": " << camRot.x << ", \"y\": " << camRot.y << ", \"z\": " << camRot.z << "}";
-        file << "}";
-        file << "};";
+            file << "\"position\": {\"x\": " << camPos.x << ", \"y\": " << camPos.y << ", \"z\": " << camPos.z << "},"; 
+                file << "\"rotation\": {\"x\": " << camRot.x << ", \"y\": " << camRot.y << ", \"z\": " << camRot.z << "}"; 
+            file << "}};";
         file.close();
         try {
             if (fs::exists(dataPath)) fs::remove(dataPath);
@@ -270,7 +353,6 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             if (hit == HTCLIENT) {
                 POINT pt = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
                 ScreenToClient(hwnd, &pt);
-                
                 // If clicking in the first 32 pixels (header), allow drag
                 if (pt.y >= 0 && pt.y <= 32) {
                     return HTCAPTION;
@@ -474,11 +556,18 @@ void InitWebView(const std::string& htmlPath) {
                                         std::string action = j.value("action", std::string());
                                             // Diagnostic messages from the page (transparency / DOM ready checks)
                                             if (action == "plume_dom_ready" || action == "plume_dom_heartbeat") {
-                                                std::ofstream diag("plume_diag.txt", std::ios::app);
-                                                if (diag.is_open()) {
-                                                    diag << "WebMessage received: " << action << "\n";
-                                                    diag.close();
-                                                }
+                                                // Received DOM-ready / heartbeat from the UI. Send UI config.
+                                                try {
+                                                    nlohmann::json out;
+                                                    out["action"] = "ui_config";
+                                                    out["uiConfig"] = nlohmann::json::object();
+                                                    out["uiConfig"]["showFPS"] = g_app.showFPS ? 1 : 0;
+                                                    out["uiConfig"]["vsync"] = g_app.vsync ? 1 : 0;
+                                                    out["uiConfig"]["maxFPS"] = g_app.maxFPS;
+                                                    std::string s = out.dump();
+                                                    std::wstring wides = utf8_to_wstr(s);
+                                                    if (g_app.webview) g_app.webview->PostWebMessageAsJson(wides.c_str());
+                                                } catch(...) {}
                                                 return S_OK;
                                             }
 
@@ -491,6 +580,37 @@ void InitWebView(const std::string& htmlPath) {
                                         if (action == "minimize") { ShowWindow(g_app.hwnd, SW_MINIMIZE); return S_OK; }
                                         if (action == "maximize") { if (IsZoomed(g_app.hwnd)) ShowWindow(g_app.hwnd, SW_RESTORE); else ShowWindow(g_app.hwnd, SW_MAXIMIZE); return S_OK; }
                                         if (action == "close") { g_app.shouldClose = true; PostMessage(g_app.hwnd, WM_CLOSE, 0, 0); return S_OK; }
+
+                                        // Engine control from UI
+                                        if (action == "set-maxfps") {
+                                            int v = j.value("value", -1);
+                                            if (g_app.engine && v >= 0) {
+                                                g_app.engine->SetMaxFPS(v);
+                                                std::string out = "{\"type\":\"result\",\"action\":\"set-maxfps\",\"value\":" + std::to_string(v) + "}";
+                                                std::wstring wides = utf8_to_wstr(out);
+                                                if (g_app.webview) g_app.webview->PostWebMessageAsJson(wides.c_str());
+                                                return S_OK;
+                                            }
+                                            std::string out = "{\"type\":\"error\",\"action\":\"set-maxfps\"}";
+                                            std::wstring wides = utf8_to_wstr(out);
+                                            if (g_app.webview) g_app.webview->PostWebMessageAsJson(wides.c_str());
+                                            return S_OK;
+                                        }
+
+                                        if (action == "set-vsync") {
+                                            bool v = j.value("value", true);
+                                            if (g_app.engine) {
+                                                g_app.engine->SetVSync(v);
+                                                std::string out = "{\"type\":\"result\",\"action\":\"set-vsync\",\"value\":" + std::string(v ? "true" : "false") + "}";
+                                                std::wstring wides = utf8_to_wstr(out);
+                                                if (g_app.webview) g_app.webview->PostWebMessageAsJson(wides.c_str());
+                                                return S_OK;
+                                            }
+                                            std::string out = "{\"type\":\"error\",\"action\":\"set-vsync\"}";
+                                            std::wstring wides = utf8_to_wstr(out);
+                                            if (g_app.webview) g_app.webview->PostWebMessageAsJson(wides.c_str());
+                                            return S_OK;
+                                        }
 
                                         // Viewport bounds update from Web UI
                                         if (action == "viewport-bounds") {
@@ -532,23 +652,7 @@ void InitWebView(const std::string& htmlPath) {
                                             int windowHeightPx = static_cast<int>(roundf(clientHeight * scale));
                                             int glY = windowHeightPx - vpY - vpH;
 
-                                            // Diagnostic: write viewport conversion details (CSS -> device pixels)
-                                            {
-                                                std::ofstream diag("plume_diag.txt", std::ios::app);
-                                                if (diag.is_open()) {
-                                                    diag << "DiagViewportBounds raw: x=" << g_app.viewportBounds.x << " y=" << g_app.viewportBounds.y
-                                                         << " w=" << g_app.viewportBounds.width << " h=" << g_app.viewportBounds.height
-                                                         << " dpi=" << dpi << " scale=" << scale << " vpX=" << vpX << " vpY=" << vpY
-                                                         << " vpW=" << vpW << " vpH=" << vpH << " windowHeightPx=" << windowHeightPx
-                                                         << " glY=" << glY;
-                                                    if (g_app.engine && g_app.engine->GetRenderer()) {
-                                                        Plume::RHI::RHISwapChain* swap = g_app.engine->GetRenderer()->GetSwapChain();
-                                                        if (swap) diag << " swap=" << swap->GetWidth() << "x" << swap->GetHeight();
-                                                    }
-                                                    diag << "\n";
-                                                    diag.close();
-                                                }
-                                            }
+                                            // Viewport conversion diagnostics suppressed (INI-related logs only remain)
 
                                                 // Resize the renderer swapchain to the viewport device-pixel size
                                                 if (g_app.engine && g_app.engine->GetRenderer()) {
@@ -663,12 +767,40 @@ void InitWebView(const std::string& htmlPath) {
                                                     for (const auto& k : keys) g_app.pressedKeys.insert(k);
                                                 } catch(...) {}
                                                 // Diagnostic: log receipt of camera-input messages
+                                                // Camera-input diagnostics suppressed
+                                            }
+                                            return S_OK;
+                                        }
+
+                                        // Set camera transform from UI (position and/or rotation)
+                                        if (action == "set-camera") {
+                                            if (g_app.engine) {
                                                 try {
-                                                    std::ofstream ofs("plume_diag.txt", std::ios::app);
-                                                    if (ofs.is_open()) {
-                                                        auto now = std::chrono::system_clock::now();
-                                                        std::time_t tt = std::chrono::system_clock::to_time_t(now);
-                                                        ofs << "Diag: camera-input received keys=" << keys.size() << " time=" << std::ctime(&tt);
+                                                    nlohmann::json pos = j.value("position", nlohmann::json::object());
+                                                    nlohmann::json rot = j.value("rotation", nlohmann::json::object());
+                                                    Plume::TransformComponent t;
+                                                    // Initialize t with current camera transform if available
+                                                    Plume::TransformComponent cur;
+                                                    if (g_app.engine->GetActiveScene() && g_app.engine->GetActiveScene()->GetCameraTransform(cur)) {
+                                                        t = cur;
+                                                    } else {
+                                                        t.Position = {0.0f, 0.0f, 0.0f};
+                                                        t.Rotation = {0.0f, 0.0f, 0.0f};
+                                                    }
+
+                                                    if (pos.is_object()) {
+                                                        t.Position.x = pos.value("x", t.Position.x);
+                                                        t.Position.y = pos.value("y", t.Position.y);
+                                                        t.Position.z = pos.value("z", t.Position.z);
+                                                    }
+                                                    if (rot.is_object()) {
+                                                        t.Rotation.x = rot.value("x", t.Rotation.x);
+                                                        t.Rotation.y = rot.value("y", t.Rotation.y);
+                                                        t.Rotation.z = rot.value("z", t.Rotation.z);
+                                                    }
+
+                                                    if (g_app.engine->GetActiveScene()) {
+                                                        g_app.engine->GetActiveScene()->SetCameraTransform(t);
                                                     }
                                                 } catch(...) {}
                                             }
@@ -1163,14 +1295,7 @@ void InitWebView(const std::string& htmlPath) {
                                 g_app.webview->add_NavigationCompleted(
                                     Callback<ICoreWebView2NavigationCompletedEventHandler>(
                                         [](ICoreWebView2* sender, ICoreWebView2NavigationCompletedEventArgs* args) -> HRESULT {
-                                            // Log NavigationCompleted for diagnostics
-                                            {
-                                                std::ofstream diag("plume_diag.txt", std::ios::app);
-                                                if (diag.is_open()) {
-                                                    diag << "WebView NavigationCompleted\n";
-                                                    diag.close();
-                                                }
-                                            }
+                                            // NavigationCompleted diagnostics suppressed
                                             // Ensure the page DOM is transparent
                                             if (g_app.webview) {
                                                 LPWSTR script = L"(function(){document.documentElement.style.background='transparent';document.body.style.background='transparent';document.body.style.backgroundColor='transparent';document.documentElement.style.backgroundColor='transparent';})();";
@@ -1226,11 +1351,20 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     
     splash.Show();
     splash.UpdateProgress(0.0f, "Initializing Plume Engine...");
-    
+    // Load configurations early so the splash can display progress/status
+    splash.UpdateProgress(0.02f, "Loading configurations...");
+    LoadConfigurations();
+    splash.UpdateProgress(0.04f, "Configurations loaded");
+
     // Initialiser le moteur
     Plume::Engine engine;
     engine.Init();
     g_app.engine = &engine;
+    // Apply configuration flags loaded earlier from EditorConfig.ini
+    try {
+        g_app.engine->SetVSync(g_app.vsync);
+        g_app.engine->SetMaxFPS(g_app.maxFPS);
+    } catch(...) {}
     // Start a background input thread that polls the pressed keys and applies
     // continuous camera translation at ~60Hz while the app runs.
             std::thread([](){
@@ -1308,14 +1442,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
     g_app.uiFolder = resolvedUiFolder;
 
-    // Log resolved UI folder for diagnostics
-    {
-        std::ofstream diag("plume_diag.txt", std::ios::app);
-        if (diag.is_open()) {
-            diag << "Resolved UI folder: " << g_app.uiFolder << "\n";
-            diag.close();
-        }
-    }
+    // Resolved UI folder (diagnostics suppressed)
     splash.UpdateProgress(0.55f, "Exporting data...");
     ExportSceneData();
     ExportPluginData();
@@ -1357,14 +1484,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     uint32_t w = static_cast<uint32_t>(rc.right - rc.left);
     uint32_t h = static_cast<uint32_t>(rc.bottom - rc.top);
     
-    // Log window size used for renderer init
-    {
-        std::ofstream diag("plume_diag.txt", std::ios::app);
-        if (diag.is_open()) {
-            diag << "Initializing renderer with main window size: " << w << "x" << h << "\n";
-            diag.close();
-        }
-    }
+    // Renderer init window size logging suppressed
     
     engine.InitRenderer(reinterpret_cast<void*>(g_app.hwnd), w, h, engine.GetCurrentGraphicsAPI());
     

@@ -42,6 +42,11 @@ namespace RHI {
         // Performance stats
         float GetFrameTimeMs() const;
         float GetFPS() const;
+        // Performance control
+        void SetMaxFPS(int max);
+        int GetMaxFPS() const;
+        void SetVSync(bool on);
+        bool GetVSync() const;
     private:
         bool m_IsRunning = false;
         std::unique_ptr<Scene> m_Scene;
@@ -56,5 +61,7 @@ namespace RHI {
         double m_FrameTimeMs = 0.0;
         float m_FPS = 0.0f;
         std::chrono::high_resolution_clock::time_point m_LastFrameTime;
+        int m_MaxFPS = 60;
+        bool m_VSync = true;
     };
 }
