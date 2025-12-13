@@ -649,37 +649,31 @@ void InitWebView(const std::string& htmlPath) {
                                             int vpW = static_cast<int>(roundf(g_app.viewportBounds.width * scale));
                                             int vpH = static_cast<int>(roundf(g_app.viewportBounds.height * scale));
 
-                                            int windowHeightPx = static_cast<int>(roundf(clientHeight * scale));
+                                            int clientWidth = clientRect.right - clientRect.left;
+                                            int windowWidthPx = clientWidth;
+                                            int windowHeightPx = clientHeight;
                                             int glY = windowHeightPx - vpY - vpH;
 
                                             // Viewport conversion diagnostics suppressed (INI-related logs only remain)
 
-                                                // Resize the renderer swapchain to the viewport device-pixel size
+                                                // Resize the renderer swapchain to the full window size (device pixels)
+                                                // This ensures we can render at the correct offset (vpX, glY) defined by the UI
                                                 if (g_app.engine && g_app.engine->GetRenderer()) {
                                                     Plume::RHI::RHISwapChain* swap = g_app.engine->GetRenderer()->GetSwapChain();
 
-                                                    if (swap && (swap->GetWidth() != (uint32_t)vpW || 
-                                                                 swap->GetHeight() != (uint32_t)vpH)) {
-                                                        swap->Resize((uint32_t)vpW, (uint32_t)vpH);
-                                                    }
-
-                                                    // Use the actual swapchain size to avoid off-by-one margins
-                                                    uint32_t actualW = vpW;
-                                                    uint32_t actualH = vpH;
-                                                    if (swap) {
-                                                        actualW = swap->GetWidth();
-                                                        actualH = swap->GetHeight();
+                                                    if (swap && (swap->GetWidth() != (uint32_t)windowWidthPx || 
+                                                                 swap->GetHeight() != (uint32_t)windowHeightPx)) {
+                                                        swap->Resize((uint32_t)windowWidthPx, (uint32_t)windowHeightPx);
                                                     }
 
                                                     if (g_app.engine->GetRendererObject()) {
-                                                        // Ajout d'une marge à gauche et en bas
-                                                        constexpr int marginLeft = 32; // px
-                                                        constexpr int marginBottom = 32; // px
+                                                        // Set the viewport region to matches the web UI element exactly
+                                                        // No hardcoded margins
                                                         g_app.engine->GetRendererObject()->SetViewportRegion(
-                                                            marginLeft,
-                                                            marginBottom,
-                                                            static_cast<int>(actualW) - marginLeft,
-                                                            static_cast<int>(actualH) - marginBottom
+                                                            vpX,
+                                                            glY,
+                                                            vpW,
+                                                            vpH
                                                         );
                                                     }
                                                 } else {
