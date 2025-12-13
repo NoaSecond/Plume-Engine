@@ -64,71 +64,6 @@ namespace Plume {
         }
     }
 
-    void Scene::TranslateCameraLocal(const Vec3& localDelta, bool followPitch) {
-        for (auto& e : m_Registry) {
-            if (e.Type.Type == EntityType::Camera) {
-                // Convert rotation (degrees) to radians
-                float pitch = e.Transform.Rotation.x * 3.14159265f / 180.0f;
-                float yaw   = e.Transform.Rotation.y * 3.14159265f / 180.0f;
-
-
-                // Compute forward vector (full, including pitch) and a yaw-only
-                // forward vector used for horizontal movement so that pressing
-                // forward/back doesn't move the camera up/down when looking up/down.
-                float cp = cosf(pitch);
-                float sp = sinf(pitch);
-                float cy = cosf(yaw);
-                float sy = sinf(yaw);
-                Vec3 forward; // full forward including pitch (used for computing orientation)
-                forward.x = -cp * sy;
-                forward.y = sp;
-                forward.z = -cp * cy;
-                // yaw-only forward (horizontal plane)
-                Vec3 forwardYaw;
-                forwardYaw.x = -sy;
-                forwardYaw.y = 0.0f;
-                forwardYaw.z = -cy;
-
-                // Right = normalize(cross(worldUp, forwardYaw)) -- use yaw-only forward
-                // so strafing is parallel to the ground plane when camera is pitched.
-                Vec3 upWorld{0.0f, 1.0f, 0.0f};
-                Vec3 right;
-                right.x = upWorld.y * forwardYaw.z - upWorld.z * forwardYaw.y;
-                right.y = upWorld.z * forwardYaw.x - upWorld.x * forwardYaw.z;
-                right.z = upWorld.x * forwardYaw.y - upWorld.y * forwardYaw.x;
-                // normalize right
-                float rlen = sqrtf(right.x*right.x + right.y*right.y + right.z*right.z);
-                if (rlen > 1e-6f) { right.x /= rlen; right.y /= rlen; right.z /= rlen; }
-
-
-                // For vertical movement (Q/E) use world up so Q/E always move
-                // along the global Y axis. For forward/back, choose between
-                // yaw-only forward or full forward depending on followPitch flag.
-                Vec3 usedForward = followPitch ? forward : forwardYaw;
-                // local Z is negative for forward input (frontend uses -moveSpeed for forward).
-                // The computed `usedForward` points along the world's forward direction
-                // relative to the camera orientation, and multiplying it directly by
-                // localDelta.z produces the correct world-space displacement.
-                // Map local Z so that pressing "forward" (which the frontend encodes
-                // as a negative localDelta.z) moves the camera toward its forward
-                // vector. We therefore subtract usedForward * localDelta.z.
-                // Invert vertical control so positive localDelta.y moves camera up
-                // in world-space according to the expected input convention.
-                Vec3 worldDelta;
-                // Fix left/right: apply negative of the computed right vector so
-                // positive localDelta.x moves to the camera's right direction.
-                worldDelta.x = -right.x * localDelta.x - upWorld.x * localDelta.y - usedForward.x * localDelta.z;
-                worldDelta.y = -right.y * localDelta.x - upWorld.y * localDelta.y - usedForward.y * localDelta.z;
-                worldDelta.z = -right.z * localDelta.x - upWorld.z * localDelta.y - usedForward.z * localDelta.z;
-
-                e.Transform.Position.x += worldDelta.x;
-                e.Transform.Position.y += worldDelta.y;
-                e.Transform.Position.z += worldDelta.z;
-                return;
-            }
-        }
-    }
-
     // --- Minimal Math Helpers ---
     struct Mat3 {
         float m[3][3];
@@ -148,6 +83,14 @@ namespace Plume {
         }
         return R;
     }
+    
+    Vec3 Multiply(const Mat3& M, const Vec3& v) {
+        Vec3 r;
+        r.x = M.m[0][0]*v.x + M.m[0][1]*v.y + M.m[0][2]*v.z;
+        r.y = M.m[1][0]*v.x + M.m[1][1]*v.y + M.m[1][2]*v.z;
+        r.z = M.m[2][0]*v.x + M.m[2][1]*v.y + M.m[2][2]*v.z;
+        return r;
+    }
 
     Mat3 Mat3FromEulerYXZ(const Vec3& rot) {
         float rad = 3.14159265f / 180.0f;
@@ -159,7 +102,7 @@ namespace Plume {
         Mat3 Ry = Mat3::Identity(); Ry.m[0][0]=cy; Ry.m[0][2]=sy;  Ry.m[2][0]=-sy; Ry.m[2][2]=cy;
         Mat3 Rz = Mat3::Identity(); Rz.m[0][0]=cz; Rz.m[0][1]=-sz; Rz.m[1][0]=sz; Rz.m[1][1]=cz;
 
-        // Order Y * X * Z
+        // Structure of Y*X*Z
         Mat3 R = Multiply(Ry, Rx);
         R = Multiply(R, Rz);
         return R;
@@ -199,37 +142,89 @@ namespace Plume {
         return rot;
     }
 
+    Mat3 Transpose(const Mat3& M) {
+        Mat3 R;
+        for(int i=0;i<3;i++) for(int j=0;j<3;j++) R.m[i][j] = M.m[j][i];
+        return R;
+    }
+
+    void Scene::TranslateCameraLocal(const Vec3& localDelta, bool followPitch) {
+        for (auto& e : m_Registry) {
+            if (e.Type.Type == EntityType::Camera) {
+                // Fully View-Relative Movement
+                // 1. Get Camera Rotation Matrix
+                Mat3 R = Mat3FromEulerYXZ(e.Transform.Rotation);
+                
+                // 2. Transform the local movement vector into world space
+                // Input conventions (from EditorMain.cpp):
+                // Z/S (Forward/Back) -> +/- delta.z (where "Forward" is -Z in local space)
+                // Q/D (Left/Right)   -> +/- delta.x (Right is +X)
+                // Ctrl/Shift (Up/Dn) -> +/- delta.y (Up is +Y)
+                
+                // However, the input delta.z is usually sent as:
+                // Forward (Z key) -> delta.z -= 0.1
+                // Back (S key)    -> delta.z += 0.1
+                // So "Forward" is Negative Z.
+                
+                // Local Delta Vector:
+                // x = Right (+), y = Up (+), z = Back (+) (since forward is negative)
+                
+                // We just multiply R * localDelta.
+                // If the user presses Z (delta.z = -0.1), that's movement along local -Z (Forward).
+                // R * (0, 0, -0.1) gives the world forward vector scaled by 0.1.
+                
+                Vec3 worldDelta = Multiply(R, localDelta);
+                
+                e.Transform.Position.x += worldDelta.x;
+                e.Transform.Position.y += worldDelta.y;
+                e.Transform.Position.z += worldDelta.z;
+                
+                return;
+            }
+        }
+    }
+
+
+
     void Scene::RotateCamera(const Vec3& delta) {
         for (auto& e : m_Registry) {
             if (e.Type.Type == EntityType::Camera) {
-                // Stabilized 6DOF: 
-                // 1. Apply Local Yaw/Pitch (Screen Relative)
-                // 2. Overwrite Roll with Manual Input (Drift Prevention)
+                // Unlimited Pitch (Looping) + Stabilized Roll
                 
-                float oldRoll = e.Transform.Rotation.z;
+                // 1. Calculate Target Roll (Manual Only)
+                float targetRoll = e.Transform.Rotation.z + delta.z;
                 
-                // 1. Get current rotation matrix
+                // 2. Compute Stabilized Orientation Matrix
+                // Start with current, apply Local Yaw/Pitch
                 Mat3 currentRot = Mat3FromEulerYXZ(e.Transform.Rotation);
-                
-                // 2. Compute delta matrices (Local)
                 Mat3 dYaw   = FromAxisAngle({0,1,0}, delta.y); // Local Yaw
                 Mat3 dPitch = FromAxisAngle({1,0,0}, delta.x); // Local Pitch
                 
-                // 3. Apply Rotations: Current * Yaw * Pitch
+                // Apply changes locally: Current * Yaw * Pitch
                 Mat3 newRot = Multiply(currentRot, dYaw);
                 newRot = Multiply(newRot, dPitch);
                 
-                // 4. Extract Euler
-                Vec3 euler = EulerYXZFromMat3(newRot);
+                // 3. Unroll (remove target Roll) to extract Pitch/Yaw
+                // We assume: M_final = Ry * Rx * Rz(targetRoll)
+                // So: Ry * Rx = M_final * Inv(Rz(targetRoll))
+                Mat3 invRoll = Transpose(FromAxisAngle({0,0,1}, targetRoll));
+                Mat3 noRollMat = Multiply(newRot, invRoll);
                 
-                // 5. Stabilize Roll
-                euler.z = oldRoll + delta.z;
+                // 4. Extract Pitch/Yaw from Ry*Rx using atan2 (Unlimited range)
+                float rad2deg = 180.0f / 3.14159265f;
+                // Pitch (x) around local X. Ry*Rx[1][2] = -sx, [1][1] = cx
+                float pitch = atan2f(-noRollMat.m[1][2], noRollMat.m[1][1]) * rad2deg;
+                // Yaw (y) around global Y. Ry*Rx[2][0] = -sy, [0][0] = cy
+                float yaw = atan2f(-noRollMat.m[2][0], noRollMat.m[0][0]) * rad2deg;
                 
-                // 6. Clamp Pitch
-                if (euler.x > 90.0f) euler.x = 90.0f;
-                if (euler.x < -90.0f) euler.x = -90.0f;
+                e.Transform.Rotation.x = pitch;
+                e.Transform.Rotation.y = yaw;
+                e.Transform.Rotation.z = targetRoll;
                 
-                e.Transform.Rotation = euler;
+                // 5. No Clamping (Requested)
+                // if (e.Transform.Rotation.x > 90.0f) e.Transform.Rotation.x = 90.0f;
+                // if (e.Transform.Rotation.x < -90.0f) e.Transform.Rotation.x = -90.0f;
+                
                 return;
             }
         }

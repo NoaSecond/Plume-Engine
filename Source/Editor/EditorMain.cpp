@@ -1375,8 +1375,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
                     else if (k == "s" || k == "arrowdown") { moveDelta.z += 0.1f; hasMove = true; }
                     else if (k == "q" || k == "arrowleft") { moveDelta.x -= 0.1f; hasMove = true; }
                     else if (k == "d" || k == "arrowright") { moveDelta.x += 0.1f; hasMove = true; }
-                    else if (k == "control") { moveDelta.y += 0.1f; hasMove = true; }
-                    else if (k == "shift") { moveDelta.y -= 0.1f; hasMove = true; }
+                    else if (k == "control") { moveDelta.y -= 0.1f; hasMove = true; }
+                    else if (k == "shift") { moveDelta.y += 0.1f; hasMove = true; }
                     else if (k == "a") { rotDelta.z += 1.0f; hasRot = true; }
                     else if (k == "e") { rotDelta.z -= 1.0f; hasRot = true; }
                 }

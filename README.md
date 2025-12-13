@@ -75,15 +75,13 @@ Navigate to `Bin/Release` and launch `PlumeEditor.exe`.
 The Plume Engine Editor features a stabilized 6DOF camera system.
 
 - **ZQSD**: Move Horizontally (Forward / Left / Backward / Right) relative to the camera view.
-- **Left Ctrl**: Move Up (World Vertical).
-- **Left Shift**: Move Down (World Vertical).
+- **Left Shift**: Move Up (Screen Vertical).
+- **Left Ctrl**: Move Down (Screen Vertical).
 - **A / E**: Roll Camera (Left / Right).
 - **Mouse**: Look around.
   - **Yaw** (Left/Right) is Global (around the World Up axis) to prevent drifting.
   - **Pitch** (Up/Down) is Local (relative to the screen).
   - **Roll** (Tilt) is Manual (via keys) and stable.
-
-*Note: Pitch is limited to +/- 90 degrees to prevent flipping.*
 
 ## Created by Noa Second
 
