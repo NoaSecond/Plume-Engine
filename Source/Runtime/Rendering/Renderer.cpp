@@ -62,60 +62,7 @@ namespace Plume {
         scissor.height = m_ViewportHeight;
         cmdBuffer->SetScissor(scissor);
 
-        // Periodic diagnostics (append to plume_diag.txt once per second)
-        static auto s_lastDiag = std::chrono::steady_clock::now() - std::chrono::seconds(2);
-        auto now = std::chrono::steady_clock::now();
-        if (std::chrono::duration_cast<std::chrono::milliseconds>(now - s_lastDiag).count() >= 1000) {
-            s_lastDiag = now;
-            std::ofstream diag("plume_diag.txt", std::ios::app);
-            if (diag.is_open()) {
-                diag << "RenderState: rendererViewport members: x=" << m_ViewportX << " y=" << m_ViewportY
-                     << " w=" << m_ViewportWidth << " h=" << m_ViewportHeight << "\n";
-                // swapchain size
-                if (m_Device) {
-                    auto* swap = m_Device->GetSwapChain();
-                    if (swap) diag << "RenderState: swapchain: " << swap->GetWidth() << "x" << swap->GetHeight() << "\n";
-                }
-
-                // GL viewport and scissor
-#ifdef _WIN32
-                GLint glvp[4] = {0,0,0,0};
-                glGetIntegerv(GL_VIEWPORT, glvp);
-                GLint scbox[4] = {0,0,0,0};
-                glGetIntegerv(GL_SCISSOR_BOX, scbox);
-                diag << "RenderState: GL viewport: " << glvp[0] << "," << glvp[1] << "," << glvp[2] << "," << glvp[3] << "\n";
-                diag << "RenderState: GL scissor: " << scbox[0] << "," << scbox[1] << "," << scbox[2] << "," << scbox[3] << "\n";
-                // GL capabilities
-                diag << "RenderState: GL capabilities: scissor=" << (glIsEnabled(GL_SCISSOR_TEST) ? "1" : "0")
-                     << " depth=" << (glIsEnabled(GL_DEPTH_TEST) ? "1" : "0")
-                     << " cull=" << (glIsEnabled(GL_CULL_FACE) ? "1" : "0") << "\n";
-#endif
-
-                // Camera transform and projection estimation
-                TransformComponent camT;
-                if (m_Scene && m_Scene->GetCameraTransform(camT)) {
-                    diag << "RenderState: Camera pos=" << camT.Position.x << "," << camT.Position.y << "," << camT.Position.z
-                         << " rot=" << camT.Rotation.x << "," << camT.Rotation.y << "," << camT.Rotation.z << "\n";
-                } else {
-                    diag << "RenderState: Camera none\n";
-                }
-
-                // Compute and log projection params used in RenderGrid
-                float aspect = (float)m_ViewportWidth / (float)m_ViewportHeight;
-                const float PI = 3.14159265358979323846f;
-                float fov = 60.0f;
-                float fovRad = fov * PI / 180.0f;
-                float nearPlane = 0.1f;
-                float farPlane = 1000.0f;
-                float top = tanf(fovRad * 0.5f) * nearPlane;
-                float right = top * aspect;
-                diag << "RenderState: Projection fov=" << fov << " near=" << nearPlane << " far=" << farPlane
-                     << " aspect=" << aspect << " top=" << top << " right=" << right << "\n";
-
-                diag << "---\n";
-                diag.close();
-            }
-        }
+        // Diagnostics logging removed (only INI/load-related diagnostics are kept)
         
         // Render grid and gizmo
         RenderGrid(cmdBuffer);

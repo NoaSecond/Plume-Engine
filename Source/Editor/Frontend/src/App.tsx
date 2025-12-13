@@ -34,6 +34,7 @@ export default function App() {
   const [cameraTransform, setCameraTransform] = useState({ position: {x:0, y:-50, z:-150}, rotation: {x:20, y:0, z:0} });
   const [showFPS, setShowFPS] = useState(false);
   const [fpsValue, setFpsValue] = useState(0);
+  const showFPSRef = useRef<boolean>(showFPS);
   const [vsyncEnabled, setVsyncEnabled] = useState(true);
   const [maxFpsCap, setMaxFpsCap] = useState(144);
   const [viewMode, setViewMode] = useState<'Lit' | 'Unlit' | 'Wireframe'>('Lit');
@@ -49,12 +50,34 @@ export default function App() {
     }, 180);
   };
 
-  const addLog = useCallback((msg: string, level: 'INFO' | 'WARN' | 'ERROR') => {
+  const addLog = useCallback((msg: string, level: 'INFO' | 'WARN' | 'ERROR' | 'USER') => {
     const time = new Date().toLocaleTimeString('en-US', { hour12: false });
     setLogs(prev => [...prev.slice(-99), { id: Date.now(), time, level, msg }]);
   }, []);
 
   useEffect(() => {
+    // Listen to messages from native (WebView2 PostWebMessage)
+    const handleNativeMessage = (e: any) => {
+      try {
+        const data = (e && e.data) ? e.data : (e && e.detail) ? e.detail : e;
+        if (!data) return;
+        const action = data.action;
+        if (action === 'ui_config' && data.uiConfig) {
+          if (typeof data.uiConfig.showFPS !== 'undefined') {
+            const val = !!data.uiConfig.showFPS;
+            setShowFPS(val);
+            showFPSRef.current = val;
+          }
+          if (typeof data.uiConfig.vsync !== 'undefined') {
+            setVsyncEnabled(!!data.uiConfig.vsync);
+          }
+          if (typeof data.uiConfig.maxFPS !== 'undefined') {
+            setMaxFpsCap(data.uiConfig.maxFPS);
+          }
+        }
+      } catch(e) {}
+    };
+    try { if ((window as any).chrome?.webview) (window as any).chrome.webview.addEventListener('message', handleNativeMessage); else window.addEventListener('message', handleNativeMessage as any); } catch(e) {}
     const loadSceneData = () => {
       const script = document.createElement('script');
       script.src = './scene_data.js'; 
@@ -83,10 +106,18 @@ export default function App() {
           if (data && typeof data.fps === 'number') {
             setFpsValue(Math.round(data.fps));
           }
-          if (data && data.uiConfig && typeof data.uiConfig.showFPS !== 'undefined') {
-            const val = !!data.uiConfig.showFPS;
-            setShowFPS(val);
-            addLog(`uiConfig.showFPS = ${val ? 1 : 0}`, 'INFO');
+          if (data && data.uiConfig) {
+            if (typeof data.uiConfig.showFPS !== 'undefined') {
+              const val = !!data.uiConfig.showFPS;
+              setShowFPS(val);
+              showFPSRef.current = val;
+            }
+            if (typeof data.uiConfig.vsync !== 'undefined') {
+              setVsyncEnabled(!!data.uiConfig.vsync);
+            }
+            if (typeof data.uiConfig.maxFPS !== 'undefined') {
+              setMaxFpsCap(data.uiConfig.maxFPS);
+            }
           }
             // If renderer reports vsync/maxfps in future, sync here (not present currently)
       };
@@ -100,10 +131,14 @@ export default function App() {
     // pick up fps/uiConfig immediately so console commands reflect the correct state.
     try {
       const init = (window as any).PLUME_RENDERING_DATA;
-      if (init) {
+        if (init) {
         if (init.graphicsAPI) setRenderingAPI(init.graphicsAPI);
         if (typeof init.fps === 'number') setFpsValue(Math.round(init.fps));
-        if (init.uiConfig && typeof init.uiConfig.showFPS !== 'undefined') setShowFPS(!!init.uiConfig.showFPS);
+        if (init.uiConfig && typeof init.uiConfig.showFPS !== 'undefined') {
+          const val = !!init.uiConfig.showFPS;
+          setShowFPS(val);
+          showFPSRef.current = val;
+        }
         if (init.camera) {
           const rawRot = init.camera.rotation || { x: 0, y: 0, z: 0 };
           const clamp = (v:number, a:number, b:number) => Math.max(a, Math.min(b, v));
@@ -130,8 +165,16 @@ export default function App() {
         }
         if (data && data.uiConfig && typeof data.uiConfig.showFPS !== 'undefined') {
             const val = !!data.uiConfig.showFPS;
-            setShowFPS(val);
-            addLog(`uiConfig.showFPS (poll) = ${val ? 1 : 0}`, 'INFO');
+            if (val !== showFPSRef.current) {
+              showFPSRef.current = val;
+              setShowFPS(val);
+            } else {
+              setShowFPS(val);
+            }
+        }
+        if (data && data.uiConfig) {
+            if (typeof data.uiConfig.vsync !== 'undefined') setVsyncEnabled(!!data.uiConfig.vsync);
+            if (typeof data.uiConfig.maxFPS !== 'undefined') setMaxFpsCap(data.uiConfig.maxFPS);
         }
         
         if (data && data.camera) {
@@ -182,7 +225,7 @@ export default function App() {
   const handleExecuteCommand = (cmd: string) => {
     const raw = cmd.trim();
     if (!raw) return;
-    addLog(`> ${raw}`, 'INFO');
+    addLog(`> ${raw}`, 'USER');
 
     // Support help requests like `help <name>` or `help <prefix>` (ex: `help viewport` or `help viewport.cam`)
     const helpPrefixMatch = raw.match(/^(help|\?|commands)\s+([a-z0-9_.-]+)$/i);

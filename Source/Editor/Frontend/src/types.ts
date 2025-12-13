@@ -14,7 +14,7 @@ export type Entity = {
 export type LogEntry = {
   id: number;
   time: string;
-  level: 'INFO' | 'WARN' | 'ERROR';
+  level: 'INFO' | 'WARN' | 'ERROR' | 'USER';
   msg: string;
 };
 export type ToolType = 'select' | 'move' | 'rotate' | 'scale';

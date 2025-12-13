@@ -79,6 +79,8 @@ export function ConsolePanel({ logs, onClear, onExecuteCommand, isOpen, setIsOpe
     switch (level) {
       case 'INFO':
         return theme.colors.text.primary;
+      case 'USER':
+        return theme.colors.accent.primary;
       case 'WARN':
         return theme.colors.status.warning;
       case 'ERROR':
@@ -176,11 +178,12 @@ export function ConsolePanel({ logs, onClear, onExecuteCommand, isOpen, setIsOpe
               className="flex gap-2 py-0.5 hover:bg-opacity-10"
               style={{
                 color: getLogColor(log.level),
+                userSelect: 'text', WebkitUserSelect: 'text', MozUserSelect: 'text'
               }}
             >
-              <span style={{ color: theme.colors.text.muted }}>[{log.time}]</span>
-              <span className="font-semibold">[{log.level}]</span>
-              <span>{log.msg}</span>
+              <span style={{ color: theme.colors.text.muted, userSelect: 'text' }}>[{log.time}]</span>
+              <span className="font-semibold" style={{ userSelect: 'text' }}>[{log.level}]</span>
+              <span style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', userSelect: 'text' }}>{log.msg}</span>
             </div>
           ))
         )}

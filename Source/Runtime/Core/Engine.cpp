@@ -43,14 +43,7 @@ namespace Plume {
             }
         }
 
-        // Log renderer initialization result for diagnostics
-        {
-            std::ofstream diag("plume_diag.txt", std::ios::app);
-            if (diag.is_open()) {
-                diag << "Engine::InitRenderer - api=" << static_cast<int>(m_CurrentAPI) << " renderer=" << (m_Renderer ? "created" : "null") << " width=" << width << " height=" << height << "\n";
-                diag.close();
-            }
-        }
+        // Diagnostics suppressed (retain only INI-loading diagnostics)
 
         // Note: WebView2 overlay is owned/created by the Editor application
         // to avoid multiple WebView2 controllers when running the Editor. The
@@ -149,19 +142,7 @@ namespace Plume {
         m_Renderer->EndFrame();
         m_Renderer->Present();
 
-        // Diagnostics: write a heartbeat entry every 500ms so we can confirm
-        // that RenderFrame is being executed and the renderer is active.
-        static auto lastHeartbeat = std::chrono::steady_clock::now() - std::chrono::milliseconds(1000);
-        auto hbNow = std::chrono::steady_clock::now();
-        if (std::chrono::duration_cast<std::chrono::milliseconds>(hbNow - lastHeartbeat).count() >= 500) {
-            lastHeartbeat = hbNow;
-            std::ofstream diag("plume_diag.txt", std::ios::app);
-            if (diag.is_open()) {
-                auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(hbNow.time_since_epoch()).count();
-                diag << "RenderFrame heartbeat ms=" << ms << " fps=" << m_FPS << " frameMs=" << m_FrameTimeMs << "\n";
-                diag.close();
-            }
-        }
+        // Heartbeat diagnostics suppressed (retain only INI-loading diagnostics)
     }
     
     void Engine::Shutdown() { 
