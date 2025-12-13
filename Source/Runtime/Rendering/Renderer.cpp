@@ -106,9 +106,9 @@ namespace Plume {
         glLoadIdentity();
         
         // Apply camera rotation (in reverse order: yaw then pitch)
+        glRotatef(-camTransform.Rotation.z, 0.0f, 0.0f, 1.0f); // roll
         glRotatef(-camTransform.Rotation.x, 1.0f, 0.0f, 0.0f); // pitch
         glRotatef(-camTransform.Rotation.y, 0.0f, 1.0f, 0.0f); // yaw
-        glRotatef(-camTransform.Rotation.z, 0.0f, 0.0f, 1.0f); // roll
         
         // Apply camera position (translate in opposite direction)
         glTranslatef(-camTransform.Position.x, -camTransform.Position.y, -camTransform.Position.z);

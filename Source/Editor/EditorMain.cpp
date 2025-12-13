@@ -1365,21 +1365,25 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         const std::chrono::milliseconds tick(16);
         while (!g_app.shouldClose.load()) {
             Plume::Vec3 moveDelta{0,0,0};
-            bool has = false;
+            Plume::Vec3 rotDelta{0,0,0};
+            bool hasMove = false;
+            bool hasRot = false;
             {
                 std::lock_guard<std::mutex> lk(g_app.keysMutex);
                 for (const auto& k : g_app.pressedKeys) {
-                    if (k == "w" || k == "arrowup") { moveDelta.z -= 0.1f; has = true; }
-                    else if (k == "s" || k == "arrowdown") { moveDelta.z += 0.1f; has = true; }
-                    else if (k == "a" || k == "arrowleft") { moveDelta.x -= 0.1f; has = true; }
-                    else if (k == "d" || k == "arrowright") { moveDelta.x += 0.1f; has = true; }
-                    else if (k == "q") { moveDelta.y -= 0.1f; has = true; }
-                    else if (k == "e") { moveDelta.y += 0.1f; has = true; }
+                    if (k == "z" || k == "arrowup") { moveDelta.z -= 0.1f; hasMove = true; }
+                    else if (k == "s" || k == "arrowdown") { moveDelta.z += 0.1f; hasMove = true; }
+                    else if (k == "q" || k == "arrowleft") { moveDelta.x -= 0.1f; hasMove = true; }
+                    else if (k == "d" || k == "arrowright") { moveDelta.x += 0.1f; hasMove = true; }
+                    else if (k == "control") { moveDelta.y += 0.1f; hasMove = true; }
+                    else if (k == "shift") { moveDelta.y -= 0.1f; hasMove = true; }
+                    else if (k == "a") { rotDelta.z += 1.0f; hasRot = true; }
+                    else if (k == "e") { rotDelta.z -= 1.0f; hasRot = true; }
                 }
             }
-            if (has && g_app.engine) {
-                // Fly camera: always follow pitch
-                g_app.engine->TranslateCameraLocal(moveDelta, true);
+            if (g_app.engine) {
+                if (hasMove) g_app.engine->TranslateCameraLocal(moveDelta, true);
+                if (hasRot) g_app.engine->RotateCamera(rotDelta);
             }
             std::this_thread::sleep_for(tick);
         }
