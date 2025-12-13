@@ -6,10 +6,16 @@
 #include <memory>
 #include <Rendering/Renderer.h>
 
+#ifndef PLUME_API
 #if defined(_WIN32)
-    #define PLUME_API __declspec(dllexport)
+    #ifdef PLUME_EXPORT
+        #define PLUME_API __declspec(dllexport)
+    #else
+        #define PLUME_API __declspec(dllimport)
+    #endif
 #else
     #define PLUME_API
+#endif
 #endif
 
 

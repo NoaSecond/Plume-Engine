@@ -2,6 +2,7 @@
 #include <memory>
 #include <vector>
 
+#ifndef PLUME_API
 #if defined(_WIN32)
     #ifdef PLUME_EXPORT
         #define PLUME_API __declspec(dllexport)
@@ -10,6 +11,7 @@
     #endif
 #else
     #define PLUME_API
+#endif
 #endif
 
 namespace Plume {

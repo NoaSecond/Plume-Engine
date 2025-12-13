@@ -129,12 +129,107 @@ namespace Plume {
         }
     }
 
+    // --- Minimal Math Helpers ---
+    struct Mat3 {
+        float m[3][3];
+        static Mat3 Identity() {
+            Mat3 r;
+            for(int i=0;i<3;i++) for(int j=0;j<3;j++) r.m[i][j] = (i==j?1.0f:0.0f);
+            return r;
+        }
+    };
+
+    Mat3 Multiply(const Mat3& A, const Mat3& B) {
+        Mat3 R;
+        for(int r=0; r<3; r++) {
+            for(int c=0; c<3; c++) {
+                R.m[r][c] = A.m[r][0]*B.m[0][c] + A.m[r][1]*B.m[1][c] + A.m[r][2]*B.m[2][c];
+            }
+        }
+        return R;
+    }
+
+    Mat3 Mat3FromEulerYXZ(const Vec3& rot) {
+        float rad = 3.14159265f / 180.0f;
+        float cx = cosf(rot.x * rad), sx = sinf(rot.x * rad);
+        float cy = cosf(rot.y * rad), sy = sinf(rot.y * rad);
+        float cz = cosf(rot.z * rad), sz = sinf(rot.z * rad);
+
+        Mat3 Rx = Mat3::Identity(); Rx.m[1][1]=cx; Rx.m[1][2]=-sx; Rx.m[2][1]=sx; Rx.m[2][2]=cx;
+        Mat3 Ry = Mat3::Identity(); Ry.m[0][0]=cy; Ry.m[0][2]=sy;  Ry.m[2][0]=-sy; Ry.m[2][2]=cy;
+        Mat3 Rz = Mat3::Identity(); Rz.m[0][0]=cz; Rz.m[0][1]=-sz; Rz.m[1][0]=sz; Rz.m[1][1]=cz;
+
+        // Order Y * X * Z
+        Mat3 R = Multiply(Ry, Rx);
+        R = Multiply(R, Rz);
+        return R;
+    }
+
+    Mat3 FromAxisAngle(const Vec3& axis, float angleMin) {
+        float rad = 3.14159265f / 180.0f * angleMin;
+        float c = cosf(rad);
+        float s = sinf(rad);
+        float t = 1.0f - c;
+        float x = axis.x, y = axis.y, z = axis.z;
+        
+        Mat3 m;
+        m.m[0][0] = t*x*x + c;   m.m[0][1] = t*x*y - z*s; m.m[0][2] = t*x*z + y*s;
+        m.m[1][0] = t*x*y + z*s; m.m[1][1] = t*y*y + c;   m.m[1][2] = t*y*z - x*s;
+        m.m[2][0] = t*x*z - y*s; m.m[2][1] = t*y*z + x*s; m.m[2][2] = t*z*z + c;
+        return m;
+    }
+
+    Vec3 EulerYXZFromMat3(const Mat3& m) {
+        Vec3 rot;
+        float rad2deg = 180.0f / 3.14159265f;
+        float sx = -m.m[1][2];
+        if (sx > 0.9999f) {
+            rot.x = 90.0f;
+            rot.y = atan2f(m.m[2][0], m.m[2][2]) * rad2deg;
+            rot.z = 0.0f;
+        } else if (sx < -0.9999f) {
+            rot.x = -90.0f;
+            rot.y = atan2f(m.m[2][0], m.m[2][2]) * rad2deg;
+            rot.z = 0.0f;
+        } else {
+            rot.x = asinf(sx) * rad2deg;
+            rot.y = atan2f(m.m[0][2], m.m[2][2]) * rad2deg;
+            rot.z = atan2f(m.m[1][0], m.m[1][1]) * rad2deg;
+        }
+        return rot;
+    }
+
     void Scene::RotateCamera(const Vec3& delta) {
         for (auto& e : m_Registry) {
             if (e.Type.Type == EntityType::Camera) {
-                e.Transform.Rotation.x += delta.x;
-                e.Transform.Rotation.y += delta.y;
-                e.Transform.Rotation.z += delta.z;
+                // Stabilized 6DOF: 
+                // 1. Apply Local Yaw/Pitch (Screen Relative)
+                // 2. Overwrite Roll with Manual Input (Drift Prevention)
+                
+                float oldRoll = e.Transform.Rotation.z;
+                
+                // 1. Get current rotation matrix
+                Mat3 currentRot = Mat3FromEulerYXZ(e.Transform.Rotation);
+                
+                // 2. Compute delta matrices (Local)
+                Mat3 dYaw   = FromAxisAngle({0,1,0}, delta.y); // Local Yaw
+                Mat3 dPitch = FromAxisAngle({1,0,0}, delta.x); // Local Pitch
+                
+                // 3. Apply Rotations: Current * Yaw * Pitch
+                Mat3 newRot = Multiply(currentRot, dYaw);
+                newRot = Multiply(newRot, dPitch);
+                
+                // 4. Extract Euler
+                Vec3 euler = EulerYXZFromMat3(newRot);
+                
+                // 5. Stabilize Roll
+                euler.z = oldRoll + delta.z;
+                
+                // 6. Clamp Pitch
+                if (euler.x > 90.0f) euler.x = 90.0f;
+                if (euler.x < -90.0f) euler.x = -90.0f;
+                
+                e.Transform.Rotation = euler;
                 return;
             }
         }
