@@ -1,9 +1,8 @@
 ﻿import { useState, useEffect, useRef, useCallback } from 'react';
 import { Header } from './components/layout/Header';
-import { Toolbar } from './components/layout/Toolbar';
-import { Viewport } from './components/viewport/Viewport';
-import { OutlinerPanel } from './components/panels/OutlinerPanel';
-import { DetailsPanel } from './components/panels/DetailsPanel';
+import { TabSystem, Tab } from './components/layout/TabSystem';
+import { SceneEditor } from './components/editors/SceneEditor';
+import { StaticMeshEditor } from './components/editors/StaticMeshEditor';
 import { ContentBrowserPanel } from './components/panels/ContentBrowserPanel';
 import { ConsolePanel } from './components/panels/ConsolePanel';
 import { EditorPreferences } from './components/panels/EditorPreferences';
@@ -33,11 +32,50 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showAboutModal, setShowAboutModal] = useState(false);
   const [isAboutClosing, setIsAboutClosing] = useState(false);
-  const [showPreferences, setShowPreferences] = useState(false);
-  const [showPluginManager, setShowPluginManager] = useState(false);
-  const [showProjectSettings, setShowProjectSettings] = useState(false);
+  // Modal states removed
   const [renderingAPI, setRenderingAPI] = useState<'DirectX12' | 'Vulkan' | 'OpenGL' | 'Metal'>('OpenGL');
   const [cameraTransform, setCameraTransform] = useState({ position: { x: 0, y: -50, z: -150 }, rotation: { x: 20, y: 0, z: 0 } });
+
+  // Tab System State
+  const [tabs, setTabs] = useState<Tab[]>(() => {
+    const saved = localStorage.getItem('plume_editor_tabs');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        // Ensure scene is always there? Or trust storage. 
+        // Let's ensure at least Basic Scene is present if array is empty, though logic below handles that.
+        return parsed.length > 0 ? parsed : [{ id: 'scene', title: 'Main Scene', type: 'scene', closable: false }];
+      } catch (e) {
+        console.error("Failed to load tabs", e);
+      }
+    }
+    return [{ id: 'scene', title: 'Main Scene', type: 'scene', closable: false }];
+  });
+
+  const [activeTabId, setActiveTabId] = useState<string>(() => {
+    return localStorage.getItem('plume_editor_active_tab') || 'scene';
+  });
+
+  // Save tabs effect
+  useEffect(() => {
+    localStorage.setItem('plume_editor_tabs', JSON.stringify(tabs));
+  }, [tabs]);
+
+  // Save active tab effect
+  useEffect(() => {
+    localStorage.setItem('plume_editor_active_tab', activeTabId);
+  }, [activeTabId]);
+
+  const handleOpenTab = (type: Tab['type'], title: string) => {
+    const existingTab = tabs.find(t => t.type === type);
+    if (existingTab) {
+      setActiveTabId(existingTab.id);
+    } else {
+      const newTabId = `${type}-${Date.now()}`;
+      setTabs(prev => [...prev, { id: newTabId, title, type, closable: true }]);
+      setActiveTabId(newTabId);
+    }
+  };
 
   // Settings
   const [showFPS, setShowFPS] = useState(false);
@@ -90,7 +128,13 @@ export default function App() {
 
         if (action === 'plugin-list') {
           if (data.plugins) {
-            setPlugins(data.plugins);
+            const enrichedPlugins = data.plugins.map((p: any) => {
+              if (p.name === 'Discord Rich Presence' && !p.author) {
+                return { ...p, author: 'Plume Engine Team' };
+              }
+              return p;
+            });
+            setPlugins(enrichedPlugins);
             addLog(`Loaded ${data.plugins.length} plugins`, 'INFO');
           }
         }
@@ -333,6 +377,7 @@ export default function App() {
     const args = parts.slice(1).map(v => Number(v));
 
     if (name === 'fps') {
+      // ... same fps logic ...
       if (args.length === 0) {
         addLog(`${showFPS ? 1 : 0}`, 'INFO');
         return;
@@ -352,6 +397,7 @@ export default function App() {
       return;
     }
 
+    // ... vsync, maxfps, clear logs logic ... I'm keeping your existing command handling logic
     if (name === 'vsync') {
       if (args.length === 0) {
         addLog(`${vsyncEnabled ? 1 : 0}`, 'INFO');
@@ -392,6 +438,16 @@ export default function App() {
 
     if (name === 'clear') {
       setLogs([]);
+      return;
+    }
+
+    // Command to open Static Mesh Tab for testing
+    if (name === 'openmesh') {
+      const meshName = parts[1] || 'New Mesh';
+      const newTabId = `mesh-${Date.now()}`;
+      setTabs(prev => [...prev, { id: newTabId, title: meshName, type: 'static-mesh', data: { entityId: meshName }, closable: true }]);
+      setActiveTabId(newTabId);
+      addLog(`Opened Static Mesh Editor: ${meshName}`, 'INFO');
       return;
     }
 
@@ -493,18 +549,6 @@ export default function App() {
       keysPressed.current[e.code] = true;
 
       if (e.key === 'Escape') {
-        if (showPreferences) {
-          setShowPreferences(false);
-          return;
-        }
-        if (showPluginManager) {
-          setShowPluginManager(false);
-          return;
-        }
-        if (showProjectSettings) {
-          setShowProjectSettings(false);
-          return;
-        }
         if (showContentBrowser) {
           setShowContentBrowser(false);
           return;
@@ -525,9 +569,22 @@ export default function App() {
     const handleKeyUp = (e: KeyboardEvent) => { keysPressed.current[e.code] = false; };
     window.addEventListener('keydown', handleKeyDown); window.addEventListener('keyup', handleKeyUp);
     return () => { window.removeEventListener('keydown', handleKeyDown); window.removeEventListener('keyup', handleKeyUp); };
-  }, [showPreferences, showPluginManager, showProjectSettings, showContentBrowser]);
+  }, [showContentBrowser]);
 
-  const selectedEntity = entities.find(e => e.id === selectedId);
+  const handleTabClose = (id: string) => {
+    const newTabs = tabs.filter(t => t.id !== id);
+    setTabs(newTabs);
+    if (activeTabId === id && newTabs.length > 0) {
+      setActiveTabId(newTabs[newTabs.length - 1].id);
+    }
+  };
+
+  const handleTabReorder = (fromIndex: number, toIndex: number) => {
+    const newTabs = [...tabs];
+    const [movedTab] = newTabs.splice(fromIndex, 1);
+    newTabs.splice(toIndex, 0, movedTab);
+    setTabs(newTabs);
+  };
 
   return (
     <div
@@ -537,55 +594,156 @@ export default function App() {
         color: theme.colors.text.primary
       }}
     >
-      <Header isPlaying={isPlaying} onSave={() => { }} onAbout={() => setShowAboutModal(true)} onPreferences={() => setShowPreferences(true)} onPlugins={() => setShowPluginManager(true)} onProjectSettings={() => setShowProjectSettings(true)} />
-      <Toolbar activeTool={activeTool} setActiveTool={setActiveTool} onSave={() => { }} onDelete={() => { }} isPlaying={isPlaying} onPlay={() => setIsPlaying(true)} onPause={() => setIsPlaying(false)} onStop={() => setIsPlaying(false)} />
-      <div className="flex-1 flex overflow-hidden" style={{ backgroundColor: 'transparent' }}>
-        <Viewport entities={entities} selectedId={selectedId} setSelectedId={setSelectedId} cameraTransform={cameraTransform} setCameraTransform={setCameraTransform} activeTool={activeTool} viewMode={viewMode} setViewMode={setViewMode} onAddEntity={(type) => setEntities([...entities, { id: Date.now().toString(), name: type, type, visible: true, transform: { position: { x: 0, y: 0, z: 0 }, rotation: { x: 0, y: 0, z: 0 }, scale: { x: 1, y: 1, z: 1 } } }])} />
-        <div
-          className="w-80 flex flex-col shrink-0 border-l"
-          style={{
-            backgroundColor: theme.colors.bg.secondary,
-            borderColor: theme.colors.border.default
-          }}
-        >
-          <OutlinerPanel
-            entities={entities}
-            selectedId={selectedId}
-            setSelectedId={setSelectedId}
-            onAddEntity={(type) => {
-              const newEntity: Entity = {
-                id: Date.now().toString(),
-                name: type,
-                type,
-                visible: true,
-                transform: {
-                  position: { x: 0, y: 0, z: 0 },
-                  rotation: { x: 0, y: 0, z: 0 },
-                  scale: { x: 1, y: 1, z: 1 }
-                }
-              };
-              setEntities([...entities, newEntity]);
-            }}
-            setEntities={setEntities}
-            onDuplicate={(ent) => {
-              const newEntity: Entity = {
-                ...ent,
-                id: Date.now().toString(),
-                name: `${ent.name}_Copy`
-              };
-              setEntities([...entities, newEntity]);
-            }}
-            onDelete={(id) => {
-              setEntities(entities.filter(e => e.id !== id));
-              if (selectedId === id) {
-                setSelectedId(null);
-              }
-            }}
-          />
-          <DetailsPanel selectedEntity={selectedEntity} setEntities={setEntities} />
-        </div>
+      <Header
+        isPlaying={isPlaying}
+        onSave={() => { }}
+        onAbout={() => setShowAboutModal(true)}
+        onPreferences={() => handleOpenTab('editor-preferences', 'Editor Preferences')}
+        onPlugins={() => handleOpenTab('plugin-manager', 'Plugin Manager')}
+        onProjectSettings={() => handleOpenTab('project-settings', 'Project Settings')}
+      />
+
+      {/* Tab System Area */}
+      <TabSystem
+        tabs={tabs}
+        activeTabId={activeTabId}
+        onTabClick={setActiveTabId}
+        onTabClose={handleTabClose}
+        onReorder={handleTabReorder}
+      >
+        {/* Children unused in this prop pattern, we render content below */}
+      </TabSystem>
+
+      {/* Main Content Area - switching based on active tab */}
+      <div className="flex-1 flex overflow-hidden relative" style={{ backgroundColor: 'transparent' }}>
+        {tabs.map(tab => {
+          // We can either mount/unmount or hide/show. For 3D contexts, preserving the DOM (hide/show) is often better to avoid re-initializing WebGL contexts if they are attached to the DOM.
+          // However, our SceneEditor passes state down. If we unmount, state in App is preserved, but SceneEditor internal state (if any) resets.
+          // Let's use display: none for now to support quick switching.
+          const isActive = tab.id === activeTabId;
+          return (
+            <div key={tab.id} className="w-full h-full absolute inset-0" style={{ display: isActive ? 'block' : 'none' }}>
+              {tab.type === 'scene' && (
+                <SceneEditor
+                  activeTool={activeTool}
+                  setActiveTool={setActiveTool}
+                  onSave={() => { }}
+                  onDelete={() => {
+                    if (selectedId) {
+                      setEntities(entities.filter(e => e.id !== selectedId));
+                      setSelectedId(null);
+                    }
+                  }}
+                  isPlaying={isPlaying}
+                  onPlay={() => setIsPlaying(true)}
+                  onPause={() => setIsPlaying(false)}
+                  onStop={() => setIsPlaying(false)}
+                  entities={entities}
+                  setEntities={setEntities}
+                  selectedId={selectedId}
+                  setSelectedId={setSelectedId}
+                  cameraTransform={cameraTransform}
+                  setCameraTransform={setCameraTransform}
+                  viewMode={viewMode}
+                  setViewMode={setViewMode}
+                  onAddEntity={(type) => setEntities([...entities, { id: Date.now().toString(), name: type, type, visible: true, transform: { position: { x: 0, y: 0, z: 0 }, rotation: { x: 0, y: 0, z: 0 }, scale: { x: 1, y: 1, z: 1 } } }])}
+                  onDuplicate={(ent) => {
+                    const newEntity = { ...ent, id: Date.now().toString(), name: `${ent.name}_Copy` };
+                    setEntities([...entities, newEntity]);
+                  }}
+                  onDeleteEntity={(id) => {
+                    setEntities(entities.filter(e => e.id !== id));
+                    if (selectedId === id) setSelectedId(null);
+                  }}
+                  controlsEnabled={!showContentBrowser && !showConsole}
+                />
+              )}
+              {tab.type === 'static-mesh' && (
+                <StaticMeshEditor
+                  entityId={tab.data?.entityId || 'Unknown'}
+                  onClose={() => handleTabClose(tab.id)}
+                />
+              )}
+              {tab.type === 'editor-preferences' && (
+                <EditorPreferences
+                  isOpen={true} // Ignored by component
+                  onClose={() => handleTabClose(tab.id)}
+                />
+              )}
+              {tab.type === 'project-settings' && (
+                <ProjectSettings
+                  isOpen={true} // Ignored by component
+                  onClose={() => handleTabClose(tab.id)}
+                />
+              )}
+              {tab.type === 'plugin-manager' && (
+                <PluginManager
+                  isOpen={true}
+                  onClose={() => handleTabClose(tab.id)}
+                  plugins={plugins}
+                  onTogglePlugin={(id, enabled) => {
+                    if ((window as any).chrome?.webview) {
+                      (window as any).chrome.webview.postMessage({ action: 'toggle-plugin', id, enabled });
+                      // Optimistic update
+                      setPlugins(prev => prev.map(p => p.id === id ? { ...p, enabled } : p));
+                    }
+                  }}
+                />
+              )}
+            </div>
+          );
+        })}
       </div>
-      <ContentBrowserPanel show={showContentBrowser} onClose={() => setShowContentBrowser(false)} onLog={addLog} searchQuery={searchQuery} setSearchQuery={setSearchQuery} />
+
+      {/* Backdrop for Panels */}
+      {(showContentBrowser || showConsole) && (
+        <div
+          className="fixed inset-0 z-40 bg-transparent"
+          onClick={() => {
+            setShowContentBrowser(false);
+            setShowConsole(false);
+          }}
+        />
+      )}
+
+      <ContentBrowserPanel
+        show={showContentBrowser}
+        onClose={() => setShowContentBrowser(false)}
+        onLog={addLog}
+        searchQuery={searchQuery}
+        setSearchQuery={setSearchQuery}
+        onOpenAsset={(asset) => {
+          // Identify Asset Types
+          const nameLower = asset.name.toLowerCase();
+          const type = asset.type ? asset.type : '';
+
+          let tabType: 'static-mesh' | 'texture' | 'sound' | null = null;
+
+          if (type === 'StaticMesh' || nameLower.endsWith('.fbx') || nameLower.endsWith('.obj') || nameLower.endsWith('.ply')) tabType = 'static-mesh';
+          else if (type === 'Texture' || nameLower.endsWith('.png') || nameLower.endsWith('.jpg') || nameLower.endsWith('.tga')) tabType = 'texture';
+          else if (type === 'SoundWave' || nameLower.endsWith('.wav') || nameLower.endsWith('.mp3')) tabType = 'sound';
+
+          if (tabType) {
+            const tabId = `${tabType}-${asset.id}`;
+            setTabs(prev => {
+              if (prev.find(t => t.id === tabId)) return prev;
+              const title = asset.name.replace(/\.(plumeasset|plume_mesh|fbx|obj|gltf|glb|png|jpg|jpeg|tga|bmp|wav|mp3|ogg)$/i, '');
+              return [...prev, {
+                id: tabId,
+                title: title,
+                type: tabType as any,
+                data: { entityId: asset.name, assetId: asset.id },
+                closable: true
+              }];
+            });
+            setActiveTabId(tabId);
+            addLog(`Opened asset: ${asset.name}`, 'INFO');
+            setShowContentBrowser(false);
+          } else {
+            addLog(`Cannot open asset type: ${asset.type}`, 'WARN');
+          }
+        }}
+      />
       <ConsolePanel
         logs={logs}
         onClear={() => setLogs([])}
@@ -593,20 +751,8 @@ export default function App() {
         isOpen={showConsole}
         setIsOpen={setShowConsole}
       />
-      <EditorPreferences isOpen={showPreferences} onClose={() => setShowPreferences(false)} />
-      <PluginManager
-        isOpen={showPluginManager}
-        onClose={() => setShowPluginManager(false)}
-        plugins={plugins}
-        onTogglePlugin={(id, enabled) => {
-          if ((window as any).chrome?.webview) {
-            (window as any).chrome.webview.postMessage({ action: 'toggle-plugin', id, enabled });
-            // Optimistic update
-            setPlugins(prev => prev.map(p => p.id === id ? { ...p, enabled } : p));
-          }
-        }}
-      />
-      <ProjectSettings isOpen={showProjectSettings} onClose={() => setShowProjectSettings(false)} />
+
+      {/* Footer / Status Bar - Persistent */}
       <div
         className="h-6 border-t flex items-center justify-between px-2 text-[10px]"
         style={{

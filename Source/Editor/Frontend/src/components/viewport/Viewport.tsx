@@ -10,8 +10,10 @@ interface ViewportProps {
   setCameraTransform: React.Dispatch<React.SetStateAction<{ position: { x: number; y: number; z: number }; rotation: { x: number; y: number; z: number } }>>;
   activeTool: ToolType; viewMode: 'Lit' | 'Unlit' | 'Wireframe'; setViewMode: (mode: 'Lit' | 'Unlit' | 'Wireframe') => void;
   onAddEntity: (type: Entity['type'], subType?: string) => void;
+  showToolbar?: boolean;
+  controlsEnabled?: boolean;
 }
-export const Viewport: React.FC<ViewportProps> = ({ entities, selectedId, setSelectedId, cameraTransform, setCameraTransform, activeTool, viewMode, setViewMode, onAddEntity }) => {
+export const Viewport: React.FC<ViewportProps> = ({ entities, selectedId, setSelectedId, cameraTransform, setCameraTransform, activeTool, viewMode, setViewMode, onAddEntity, showToolbar = true, controlsEnabled = true }) => {
   const { theme } = useTheme();
   const [showViewModeMenu, setShowViewModeMenu] = useState(false);
   const isRightMouseDownRef = useRef(false);
@@ -24,6 +26,9 @@ export const Viewport: React.FC<ViewportProps> = ({ entities, selectedId, setSel
     const updateViewportDimensions = () => {
       if (!viewportRef.current) return;
       const rect = viewportRef.current.getBoundingClientRect();
+
+      // Only send updates if the viewport is visible and has dimension
+      if (rect.width <= 0 || rect.height <= 0) return;
 
       // @ts-ignore - WebView2 API
       if (window.chrome?.webview) {
@@ -53,12 +58,27 @@ export const Viewport: React.FC<ViewportProps> = ({ entities, selectedId, setSel
     };
   }, []);
 
+  // Clear controls when disabled
+  useEffect(() => {
+    if (!controlsEnabled) {
+      keysPressed.current.clear();
+      // @ts-ignore - WebView2 API
+      if (window.chrome?.webview) {
+        // @ts-ignore
+        window.chrome.webview.postMessage({
+          action: 'camera-input',
+          keys: []
+        });
+      }
+    }
+  }, [controlsEnabled]);
+
   // Send camera-input continuously while keys are held (allows smooth movement when holding arrows/WASD)
   useEffect(() => {
     let rafId: number = 0;
     const tick = () => {
       try {
-        if (keysPressed.current.size > 0) {
+        if (controlsEnabled && keysPressed.current.size > 0) {
           // @ts-ignore - WebView2 API
           if (window.chrome?.webview) {
             // @ts-ignore
@@ -73,11 +93,12 @@ export const Viewport: React.FC<ViewportProps> = ({ entities, selectedId, setSel
     };
     rafId = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(rafId);
-  }, []);
+  }, [controlsEnabled]);
 
   // Send keyboard input to C++ for camera movement
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (!controlsEnabled) return;
       const key = e.key.toLowerCase();
       if (!keysPressed.current.has(key)) {
         keysPressed.current.add(key);
@@ -93,15 +114,18 @@ export const Viewport: React.FC<ViewportProps> = ({ entities, selectedId, setSel
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
+      // Always handle key up to prevent stuck keys if controls get disabled while pressed
       const key = e.key.toLowerCase();
-      keysPressed.current.delete(key);
-      // @ts-ignore - WebView2 API
-      if (window.chrome?.webview) {
-        // @ts-ignore
-        window.chrome.webview.postMessage({
-          action: 'camera-input',
-          keys: Array.from(keysPressed.current)
-        });
+      if (keysPressed.current.has(key)) {
+        keysPressed.current.delete(key);
+        // @ts-ignore - WebView2 API
+        if (window.chrome?.webview) {
+          // @ts-ignore
+          window.chrome.webview.postMessage({
+            action: 'camera-input',
+            keys: Array.from(keysPressed.current)
+          });
+        }
       }
     };
 
@@ -112,9 +136,10 @@ export const Viewport: React.FC<ViewportProps> = ({ entities, selectedId, setSel
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, []);
+  }, [controlsEnabled]);
 
   const handleViewportMouseDown = (e: React.MouseEvent) => {
+    if (!controlsEnabled) return;
     if (e.button === 2) { // Right mouse button
       isRightMouseDownRef.current = true;
       e.currentTarget.requestPointerLock();
@@ -130,6 +155,7 @@ export const Viewport: React.FC<ViewportProps> = ({ entities, selectedId, setSel
     }
   };
   const handleViewportMouseUp = (e: React.MouseEvent) => {
+    // Always handle mouse up for cleanup
     if (e.button === 2) {
       isRightMouseDownRef.current = false;
       document.exitPointerLock();
@@ -145,6 +171,7 @@ export const Viewport: React.FC<ViewportProps> = ({ entities, selectedId, setSel
     }
   };
   const handleViewportMouseMove = (e: React.MouseEvent) => {
+    if (!controlsEnabled) return;
     if (isRightMouseDownRef.current && (e.movementX !== 0 || e.movementY !== 0)) {
       const rotX = -e.movementY * 0.15;
       const rotY = -e.movementX * 0.15;
@@ -174,68 +201,70 @@ export const Viewport: React.FC<ViewportProps> = ({ entities, selectedId, setSel
   const selectedEntity = entities.find(e => e.id === selectedId);
   return (
     <div className="flex-1 flex overflow-hidden">
-      <div
-        className="w-10 flex flex-col items-center py-2 space-y-2 shrink-0 z-30 relative"
-        style={{
-          backgroundColor: theme.colors.bg.primary,
-          borderRight: `1px solid ${theme.colors.border.default}`
-        }}
-      >
-        <div className="relative">
-          <IconButton icon={Box} title="Place Static Mesh" active={activeLeftMenu === 'mesh'} onClick={() => setActiveLeftMenu(activeLeftMenu === 'mesh' ? null : 'mesh')} />
-          {activeLeftMenu === 'mesh' && (
-            <div
-              className="absolute left-full top-0 ml-2 rounded shadow-xl w-32 py-1 z-50 flex flex-col"
-              style={{
-                backgroundColor: theme.colors.bg.secondary,
-                border: `1px solid ${theme.colors.border.default}`
-              }}
-            >
-              <button
-                className="text-xs text-left px-3 py-1.5 flex items-center transition-colors"
-                style={{ color: theme.colors.text.primary }}
-                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.colors.accent.primary}
-                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                onClick={() => onAddEntity('Mesh', 'Cube')}
+      {showToolbar && (
+        <div
+          className="w-10 flex flex-col items-center py-2 space-y-2 shrink-0 z-30 relative"
+          style={{
+            backgroundColor: theme.colors.bg.primary,
+            borderRight: `1px solid ${theme.colors.border.default}`
+          }}
+        >
+          <div className="relative">
+            <IconButton icon={Box} title="Place Static Mesh" active={activeLeftMenu === 'mesh'} onClick={() => setActiveLeftMenu(activeLeftMenu === 'mesh' ? null : 'mesh')} />
+            {activeLeftMenu === 'mesh' && (
+              <div
+                className="absolute left-full top-0 ml-2 rounded shadow-xl w-32 py-1 z-50 flex flex-col"
+                style={{
+                  backgroundColor: theme.colors.bg.secondary,
+                  border: `1px solid ${theme.colors.border.default}`
+                }}
               >
-                <Box size={12} className="mr-2" /> Cube
-              </button>
-              <button
-                className="text-xs text-left px-3 py-1.5 flex items-center transition-colors"
-                style={{ color: theme.colors.text.primary }}
-                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.colors.accent.primary}
-                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                onClick={() => onAddEntity('Mesh', 'Sphere')}
+                <button
+                  className="text-xs text-left px-3 py-1.5 flex items-center transition-colors"
+                  style={{ color: theme.colors.text.primary }}
+                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.colors.accent.primary}
+                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                  onClick={() => onAddEntity('Mesh', 'Cube')}
+                >
+                  <Box size={12} className="mr-2" /> Cube
+                </button>
+                <button
+                  className="text-xs text-left px-3 py-1.5 flex items-center transition-colors"
+                  style={{ color: theme.colors.text.primary }}
+                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.colors.accent.primary}
+                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                  onClick={() => onAddEntity('Mesh', 'Sphere')}
+                >
+                  <Circle size={12} className="mr-2" /> Sphere
+                </button>
+              </div>
+            )}
+          </div>
+          <div className="relative">
+            <IconButton icon={Lightbulb} title="Place Light" active={activeLeftMenu === 'light'} onClick={() => setActiveLeftMenu(activeLeftMenu === 'light' ? null : 'light')} />
+            {activeLeftMenu === 'light' && (
+              <div
+                className="absolute left-full top-0 ml-2 rounded shadow-xl w-36 py-1 z-50 flex flex-col"
+                style={{
+                  backgroundColor: theme.colors.bg.secondary,
+                  border: `1px solid ${theme.colors.border.default}`
+                }}
               >
-                <Circle size={12} className="mr-2" /> Sphere
-              </button>
-            </div>
-          )}
+                <button
+                  className="text-xs text-left px-3 py-1.5 flex items-center transition-colors"
+                  style={{ color: theme.colors.text.primary }}
+                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.colors.accent.primary}
+                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                  onClick={() => onAddEntity('Light', 'Directional')}
+                >
+                  <Sun size={12} className="mr-2" /> Directional
+                </button>
+              </div>
+            )}
+          </div>
+          <IconButton icon={Camera} onClick={() => onAddEntity('Camera')} />
         </div>
-        <div className="relative">
-          <IconButton icon={Lightbulb} title="Place Light" active={activeLeftMenu === 'light'} onClick={() => setActiveLeftMenu(activeLeftMenu === 'light' ? null : 'light')} />
-          {activeLeftMenu === 'light' && (
-            <div
-              className="absolute left-full top-0 ml-2 rounded shadow-xl w-36 py-1 z-50 flex flex-col"
-              style={{
-                backgroundColor: theme.colors.bg.secondary,
-                border: `1px solid ${theme.colors.border.default}`
-              }}
-            >
-              <button
-                className="text-xs text-left px-3 py-1.5 flex items-center transition-colors"
-                style={{ color: theme.colors.text.primary }}
-                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.colors.accent.primary}
-                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                onClick={() => onAddEntity('Light', 'Directional')}
-              >
-                <Sun size={12} className="mr-2" /> Directional
-              </button>
-            </div>
-          )}
-        </div>
-        <IconButton icon={Camera} onClick={() => onAddEntity('Camera')} />
-      </div>
+      )}
       <div
         ref={viewportRef}
         className="flex-1 relative flex flex-col overflow-hidden"

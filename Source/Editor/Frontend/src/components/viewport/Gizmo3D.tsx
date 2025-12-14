@@ -112,7 +112,7 @@ export const Gizmo3D: React.FC<Gizmo3DProps> = ({ rotation, size = 80 }) => {
     const gl = rawGl as WebGLRenderingContext;
     glRef.current = gl;
 
-    const vs = `attribute vec3 aPos; attribute vec3 aNormal; uniform mat4 uMVP; uniform mat4 uModel; void main(){ gl_Position = uMVP * vec4(aPos,1.0); }`;
+    const vs = `attribute vec3 aPos; uniform mat4 uMVP; uniform mat4 uModel; void main(){ gl_Position = uMVP * vec4(aPos,1.0); }`;
     const fs = `precision mediump float; uniform vec3 uColor; void main(){ gl_FragColor = vec4(uColor, 1.0); }`;
 
     function compile(src: string, type: number) { const s = gl.createShader(type)!; gl.shaderSource(s, src); gl.compileShader(s); if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) console.error(gl.getShaderInfoLog(s)); return s; }
@@ -122,7 +122,6 @@ export const Gizmo3D: React.FC<Gizmo3DProps> = ({ rotation, size = 80 }) => {
     // Create sphere mesh for center
     function createSphereMesh(radius: number, latBands: number, longBands: number) {
       const positions: number[] = [];
-      const normals: number[] = [];
       const indices: number[] = [];
       for (let lat = 0; lat <= latBands; lat++) {
         const theta = lat * Math.PI / latBands;
@@ -136,12 +135,7 @@ export const Gizmo3D: React.FC<Gizmo3DProps> = ({ rotation, size = 80 }) => {
           const y = radius * cosTheta;
           const z = radius * sinTheta * sinPhi;
 
-          const ux = sinTheta * cosPhi;
-          const uy = cosTheta;
-          const uz = sinTheta * sinPhi;
-
           positions.push(x, y, z);
-          normals.push(ux, uy, uz);
         }
       }
       for (let lat = 0; lat < latBands; lat++) {
@@ -152,7 +146,7 @@ export const Gizmo3D: React.FC<Gizmo3DProps> = ({ rotation, size = 80 }) => {
           indices.push(second, second + 1, first + 1);
         }
       }
-      return { positions, normals, indices };
+      return { positions, indices };
     }
 
     // Generate meshes
@@ -160,17 +154,15 @@ export const Gizmo3D: React.FC<Gizmo3DProps> = ({ rotation, size = 80 }) => {
     const sphereMesh = createSphereMesh(0.12, 16, 16);
 
     const totalPositions = [...arrowMesh.positions, ...sphereMesh.positions];
-    const totalNormals = [...arrowMesh.normals, ...sphereMesh.normals];
     const arrowVertexCount = arrowMesh.positions.length / 3;
     const sphereIndicesAdjusted = sphereMesh.indices.map(i => i + arrowVertexCount);
     const totalIndices = [...arrowMesh.indices, ...sphereIndicesAdjusted];
 
     const posBuf = gl.createBuffer()!; gl.bindBuffer(gl.ARRAY_BUFFER, posBuf); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(totalPositions), gl.STATIC_DRAW);
-    const normBuf = gl.createBuffer()!; gl.bindBuffer(gl.ARRAY_BUFFER, normBuf); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(totalNormals), gl.STATIC_DRAW);
     const idxBuf = gl.createBuffer()!; gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, idxBuf); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(totalIndices), gl.STATIC_DRAW);
 
     buffersRef.current = {
-      posBuf, normBuf, idxBuf,
+      posBuf, idxBuf,
       arrowCount: arrowMesh.indices.length,
       sphereCount: sphereMesh.indices.length,
       sphereOffset: arrowMesh.indices.length * 2
@@ -192,10 +184,8 @@ export const Gizmo3D: React.FC<Gizmo3DProps> = ({ rotation, size = 80 }) => {
       const uModel = gl.getUniformLocation(prog, 'uModel')!;
       const uColor = gl.getUniformLocation(prog, 'uColor')!;
       const aPos = gl.getAttribLocation(prog, 'aPos');
-      const aNormal = gl.getAttribLocation(prog, 'aNormal');
 
       gl.bindBuffer(gl.ARRAY_BUFFER, posBuf); gl.enableVertexAttribArray(aPos); gl.vertexAttribPointer(aPos, 3, gl.FLOAT, false, 0, 0);
-      gl.bindBuffer(gl.ARRAY_BUFFER, normBuf); gl.enableVertexAttribArray(aNormal); gl.vertexAttribPointer(aNormal, 3, gl.FLOAT, false, 0, 0);
       gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, idxBuf);
 
       const aspect = canvas.width / canvas.height;
@@ -272,7 +262,7 @@ export const Gizmo3D: React.FC<Gizmo3DProps> = ({ rotation, size = 80 }) => {
 
     render();
 
-    return () => { cancelAnimationFrame(ra); try { if (posBuf) gl.deleteBuffer(posBuf); if (normBuf) gl.deleteBuffer(normBuf); if (idxBuf) gl.deleteBuffer(idxBuf); } catch (e) { } };
+    return () => { cancelAnimationFrame(ra); try { if (posBuf) gl.deleteBuffer(posBuf); if (idxBuf) gl.deleteBuffer(idxBuf); } catch (e) { } };
   }, []);
 
   const wrapperStyle: React.CSSProperties = { position: 'relative', width: size + 'px', height: size + 'px', pointerEvents: 'none' };
