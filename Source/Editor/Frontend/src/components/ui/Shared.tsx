@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { LucideIcon, FileCode, Folder, Image as ImageIcon, Box, Music, File } from 'lucide-react';
+import { LucideIcon, FileCode, Folder, Image as ImageIcon, Box, Music, File, Globe, Layers, Bone, Film } from 'lucide-react';
 import { useTheme } from '../../ThemeContext';
 
 interface IconButtonProps {
@@ -145,29 +145,47 @@ export const AssetTile = ({ id, name, type, selected = false, onClick, onDoubleC
 
   if (type === 'folder') {
     Icon = Folder;
-    color = "#eab308"; // yellow-500 
+    color = "#eab308"; // yellow-500
   }
 
   const lowerType = type ? type.toLowerCase() : '';
   const lowerName = name ? name.toLowerCase() : '';
 
-  if (lowerType === 'script' || lowerName.endsWith('.ts') || lowerName.endsWith('.js')) {
-    Icon = FileCode;
-    color = "#22c55e"; // green-500
+  // Specific Asset Types
+  if (lowerType === 'staticmesh' || lowerType === 'mesh' || lowerName.endsWith('.plume_mesh') || lowerName.endsWith('.fbx') || lowerName.endsWith('.obj')) {
+    Icon = Box;
+    color = "#5DE2E7"; // StaticMesh
   }
   else if (lowerType === 'texture' || lowerType === 'image' || lowerName.endsWith('.png') || lowerName.endsWith('.jpg') || lowerName.endsWith('.tga')) {
     Icon = ImageIcon;
-    color = "#f87171"; // red-400
-  }
-  else if (lowerType === 'staticmesh' || lowerType === 'mesh' || lowerName.endsWith('.plume_mesh') || lowerName.endsWith('.fbx') || lowerName.endsWith('.obj')) {
-    Icon = Box;
-    color = "#60a5fa"; // blue-400
+    color = "#D05C5E"; // Texture
   }
   else if (lowerType === 'soundwave' || lowerType === 'sound' || lowerName.endsWith('.wav') || lowerName.endsWith('.mp3')) {
     Icon = Music;
-    color = "#a855f7"; // purple-500
+    color = "#CC6CE7"; // Sound
+  }
+  else if (lowerType === 'material' || lowerName.endsWith('.plumematerial')) {
+    Icon = Layers;
+    color = "#7DDA58"; // Material
+  }
+  else if (lowerType === 'level' || lowerType === 'map' || lowerName.endsWith('.plumemap') || lowerName.endsWith('.map')) {
+    Icon = Globe;
+    color = "#FE9900"; // Level
+  }
+  else if (lowerType === 'skeletalmesh' || lowerName.endsWith('.plumeskel')) {
+    Icon = Bone;
+    color = "#FFECA1"; // SkeletalMesh
+  }
+  else if (lowerType === 'animationsequence' || lowerType === 'anim' || lowerName.endsWith('.plumeanim')) {
+    Icon = Film;
+    color = "#BFD641"; // AnimationSequence
+  }
+  else if (lowerType === 'script' || lowerName.endsWith('.ts') || lowerName.endsWith('.js')) {
+    Icon = FileCode;
+    color = "#22c55e"; // green-500 for scripts
   }
 
+  // Plume meta files
   if (name === '.plume_meta' || name.endsWith('.plume_meta')) {
     Icon = FileCode;
     color = theme.colors.accent.secondary;
@@ -184,7 +202,7 @@ export const AssetTile = ({ id, name, type, selected = false, onClick, onDoubleC
     }
   } catch (e) { }
 
-  const displayName = name.replace(/\.(plumeasset|plume_mesh|fbx|obj|gltf|glb|png|jpg|jpeg|tga|bmp|wav|mp3|ogg)$/i, '');
+  const displayName = name.replace(/\.(plumeasset|plume_mesh|fbx|obj|gltf|glb|png|jpg|jpeg|tga|bmp|wav|mp3|ogg|plumematerial|plumemap|plumeskel|plumeanim)$/i, '');
 
   return (
     <div
@@ -220,7 +238,13 @@ export const AssetTile = ({ id, name, type, selected = false, onClick, onDoubleC
           e.currentTarget.style.borderColor = theme.colors.border.default;
         }}
       >
-        <Icon size={32} style={{ color: finalColor }} fill={type === 'folder' ? 'none' : (name === '.plume_meta' || name.endsWith('.plume_meta') ? finalColor : undefined)} stroke={type === 'folder' ? finalColor : (name === '.plume_meta' || name.endsWith('.plume_meta') ? finalColor : undefined)} strokeWidth={type === 'folder' || name === '.plume_meta' || name.endsWith('.plume_meta') ? '1.5' : undefined} />
+        <Icon
+          size={32}
+          color={finalColor}
+          fill={type === 'folder' ? 'none' : (name === '.plume_meta' || name.endsWith('.plume_meta') ? finalColor : "none")}
+          stroke={type === 'folder' ? finalColor : (name === '.plume_meta' || name.endsWith('.plume_meta') ? finalColor : finalColor)}
+          strokeWidth={type === 'folder' || name === '.plume_meta' || name.endsWith('.plume_meta') ? 1.5 : 2}
+        />
       </div>
       <span
         className="text-[10px] text-center break-words w-full truncate px-1 rounded"

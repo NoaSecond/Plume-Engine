@@ -31,12 +31,13 @@ interface SceneEditorProps {
     // Outliner Props
     onDuplicate: (ent: Entity) => void;
     onDeleteEntity: (id: string) => void;
+    controlsEnabled?: boolean;
 }
 
 export const SceneEditor: React.FC<SceneEditorProps> = ({
     activeTool, setActiveTool, onSave, onDelete, isPlaying, onPlay, onPause, onStop,
     entities, setEntities, selectedId, setSelectedId, cameraTransform, setCameraTransform,
-    viewMode, setViewMode, onAddEntity, onDuplicate, onDeleteEntity
+    viewMode, setViewMode, onAddEntity, onDuplicate, onDeleteEntity, controlsEnabled = true
 }) => {
     const { theme } = useTheme();
     const selectedEntity = entities.find(e => e.id === selectedId);
@@ -64,6 +65,7 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({
                     viewMode={viewMode}
                     setViewMode={setViewMode}
                     onAddEntity={onAddEntity}
+                    controlsEnabled={controlsEnabled}
                 />
                 <div
                     className="w-80 flex flex-col shrink-0 border-l"

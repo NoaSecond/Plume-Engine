@@ -628,6 +628,7 @@ export default function App() {
                     setEntities(entities.filter(e => e.id !== id));
                     if (selectedId === id) setSelectedId(null);
                   }}
+                  controlsEnabled={!showContentBrowser && !showConsole}
                 />
               )}
               {tab.type === 'static-mesh' && (
@@ -640,6 +641,17 @@ export default function App() {
           );
         })}
       </div>
+
+      {/* Backdrop for Panels */}
+      {(showContentBrowser || showConsole) && (
+        <div
+          className="fixed inset-0 z-40 bg-transparent"
+          onClick={() => {
+            setShowContentBrowser(false);
+            setShowConsole(false);
+          }}
+        />
+      )}
 
       <ContentBrowserPanel
         show={showContentBrowser}

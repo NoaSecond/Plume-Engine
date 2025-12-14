@@ -889,14 +889,36 @@ void InitWebView(const std::string& htmlPath) {
                                             // Handle .plumeasset files specifically
                                             if (!fs::is_directory(p) && p.extension() == ".plumeasset") {
                                                 try {
-                                                    std::ifstream ifs(p.string());
+                                                    std::ifstream ifs(p.string(), std::ios::binary);
                                                     if (ifs.is_open()) {
-                                                        nlohmann::json assetJson;
-                                                        ifs >> assetJson;
-                                                        if (assetJson.contains("type")) {
-                                                            type = assetJson["type"].get<std::string>();
+                                                        char magic[5] = {0};
+                                                        ifs.read(magic, 4);
+                                                        if (std::string(magic) == "PLAS") {
+                                                            // Packed Format
+                                                            uint32_t ver = 0;
+                                                            uint32_t len = 0;
+                                                            ifs.read(reinterpret_cast<char*>(&ver), 4);
+                                                            ifs.read(reinterpret_cast<char*>(&len), 4);
+                                                            if (len > 0) {
+                                                                std::string metaStr; 
+                                                                metaStr.resize(len);
+                                                                ifs.read(&metaStr[0], len);
+                                                                nlohmann::json assetJson = nlohmann::json::parse(metaStr);
+                                                                if (assetJson.contains("type")) {
+                                                                    type = assetJson["type"].get<std::string>();
+                                                                }
+                                                                it["meta"] = assetJson;
+                                                            }
+                                                        } else {
+                                                            // Legacy JSON Format
+                                                            ifs.seekg(0);
+                                                            nlohmann::json assetJson;
+                                                            ifs >> assetJson;
+                                                            if (assetJson.contains("type")) {
+                                                                type = assetJson["type"].get<std::string>();
+                                                            }
+                                                            it["meta"] = assetJson;
                                                         }
-                                                        it["meta"] = assetJson;
                                                     }
                                                 } catch(...) {}
                                             } else if (fs::is_directory(p)) {
@@ -1210,12 +1232,6 @@ void InitWebView(const std::string& htmlPath) {
                                                             fs::path src(filePath);
                                                             if (!fs::exists(src)) continue;
                                                             
-                                                            // Copy source file first
-                                                            fs::path destFile = contentDir / fileName;
-                                                            if (!fs::exists(destFile)) {
-                                                                fs::copy_file(src, destFile, fs::copy_options::overwrite_existing);
-                                                            }
-                                                            
                                                             // Determine Asset Type
                                                             std::string ext = src.extension().string();
                                                             for (auto& c : ext) c = std::tolower(c);
@@ -1236,7 +1252,7 @@ void InitWebView(const std::string& htmlPath) {
                                                             }
                                                             
                                                             if (!assetType.empty()) {
-                                                                // Create .plumeasset file
+                                                                // Create .plumeasset file with embedded data
                                                                 std::string assetName = fs::path(fileName).stem().string();
                                                                 
                                                                 nlohmann::json meta;
@@ -1244,15 +1260,37 @@ void InitWebView(const std::string& htmlPath) {
                                                                 meta["source"] = fileName;
                                                                 
                                                                 fs::path assetFile = contentDir / (assetName + ".plumeasset");
-                                                                std::ofstream ofs(assetFile.string());
+                                                                std::ofstream ofs(assetFile.string(), std::ios::binary);
                                                                 if (ofs.is_open()) {
-                                                                    ofs << meta.dump(2);
-                                                                    ofs.close();
-                                                                    createdAssets.push_back(assetName + ".plumeasset");
-                                                                    importedCount++;
+                                                                    // Read source file into buffer
+                                                                    std::ifstream srcIfs(src.string(), std::ios::binary | std::ios::ate);
+                                                                    std::streamsize size = srcIfs.tellg();
+                                                                    srcIfs.seekg(0, std::ios::beg);
+                                                                    std::vector<char> buffer(size);
+                                                                    if (srcIfs.read(buffer.data(), size)) {
+                                                                        // Header: PLAS
+                                                                        ofs.write("PLAS", 4);
+                                                                        // Version: 1 (uint32)
+                                                                        uint32_t ver = 1;
+                                                                        ofs.write(reinterpret_cast<char*>(&ver), 4);
+                                                                        // JSON Meta
+                                                                        std::string metaStr = meta.dump(2);
+                                                                        uint32_t metaLen = (uint32_t)metaStr.size();
+                                                                        ofs.write(reinterpret_cast<char*>(&metaLen), 4);
+                                                                        ofs.write(metaStr.data(), metaLen);
+                                                                        // Payload
+                                                                        ofs.write(buffer.data(), buffer.size());
+                                                                        
+                                                                        createdAssets.push_back(assetName + ".plumeasset");
+                                                                        importedCount++;
+                                                                    }
                                                                 }
                                                             } else {
-                                                                // Just a generic file import
+                                                                // Generic file - copy as is
+                                                                fs::path destFile = contentDir / fileName;
+                                                                if (!fs::exists(destFile)) {
+                                                                    fs::copy_file(src, destFile, fs::copy_options::overwrite_existing);
+                                                                }
                                                                 createdAssets.push_back(fileName);
                                                                 importedCount++;
                                                             }
@@ -1312,12 +1350,6 @@ void InitWebView(const std::string& htmlPath) {
                                                             fs::path src(filePath);
                                                             if (!fs::exists(src)) continue;
                                                             
-                                                            // Copy source file first
-                                                            fs::path destFile = contentDir / fileName;
-                                                            if (!fs::exists(destFile)) {
-                                                                fs::copy_file(src, destFile, fs::copy_options::overwrite_existing);
-                                                            }
-                                                            
                                                             // Determine Asset Type
                                                             std::string ext = src.extension().string();
                                                             for (auto& c : ext) c = std::tolower(c);
@@ -1338,25 +1370,45 @@ void InitWebView(const std::string& htmlPath) {
                                                             }
                                                             
                                                             if (!assetType.empty()) {
-                                                                // Create .plumeasset file
-                                                                std::string assetName = fs::path(fileName).stem().string(); // No source extension in asset name ?
-                                                                // Usually asset name matches source name but with .plumeasset extension
-                                                                // e.g. MyMesh.fbx -> MyMesh.plumeasset (user sees MyMesh)
+                                                                // Create .plumeasset file with embedded data
+                                                                std::string assetName = fs::path(fileName).stem().string();
                                                                 
                                                                 nlohmann::json meta;
                                                                 meta["type"] = assetType;
                                                                 meta["source"] = fileName;
                                                                 
                                                                 fs::path assetFile = contentDir / (assetName + ".plumeasset");
-                                                                std::ofstream ofs(assetFile.string());
+                                                                std::ofstream ofs(assetFile.string(), std::ios::binary);
                                                                 if (ofs.is_open()) {
-                                                                    ofs << meta.dump(2);
-                                                                    ofs.close();
-                                                                    createdAssets.push_back(assetName + ".plumeasset");
-                                                                    importedCount++;
+                                                                    // Read source file into buffer
+                                                                    std::ifstream srcIfs(src.string(), std::ios::binary | std::ios::ate);
+                                                                    std::streamsize size = srcIfs.tellg();
+                                                                    srcIfs.seekg(0, std::ios::beg);
+                                                                    std::vector<char> buffer(size);
+                                                                    if (srcIfs.read(buffer.data(), size)) {
+                                                                        // Header: PLAS
+                                                                        ofs.write("PLAS", 4);
+                                                                        // Version: 1 (uint32)
+                                                                        uint32_t ver = 1;
+                                                                        ofs.write(reinterpret_cast<char*>(&ver), 4);
+                                                                        // JSON Meta
+                                                                        std::string metaStr = meta.dump(2);
+                                                                        uint32_t metaLen = (uint32_t)metaStr.size();
+                                                                        ofs.write(reinterpret_cast<char*>(&metaLen), 4);
+                                                                        ofs.write(metaStr.data(), metaLen);
+                                                                        // Payload
+                                                                        ofs.write(buffer.data(), buffer.size());
+                                                                        
+                                                                        createdAssets.push_back(assetName + ".plumeasset");
+                                                                        importedCount++;
+                                                                    }
                                                                 }
                                                             } else {
-                                                                // Just a generic file import
+                                                                // Generic file - copy as is
+                                                                fs::path destFile = contentDir / fileName;
+                                                                if (!fs::exists(destFile)) {
+                                                                    fs::copy_file(src, destFile, fs::copy_options::overwrite_existing);
+                                                                }
                                                                 createdAssets.push_back(fileName);
                                                                 importedCount++;
                                                             }

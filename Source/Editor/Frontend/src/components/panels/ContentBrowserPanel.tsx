@@ -823,27 +823,78 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
               }
             }}
           >
-            {(searchQuery ? assets.filter(a => a.name.toLowerCase().includes(searchQuery.toLowerCase())) : assets).map(a => (
-              a.id === editingId ? (
-                <div key={a.id} className="flex flex-col items-center p-2 rounded cursor-pointer group w-24">
-                  <div
-                    className="w-16 h-16 rounded mb-2 flex items-center justify-center border shadow-sm relative overflow-hidden"
-                    style={{ backgroundColor: theme.colors.bg.secondary, borderColor: theme.colors.border.default }}
-                  >
-                    {a.type === 'folder' ? (
-                      <Folder size={32} style={{ color: a.meta?.color ? (a.meta.color.startsWith('#') ? a.meta.color : ('#' + a.meta.color)) : '#eab308' }} />
-                    ) : (
-                      <File size={32} style={{ color: theme.colors.text.secondary }} />
-                    )}
-                  </div>
-                  <input
-                    autoFocus
-                    value={editingValue}
-                    onChange={(e) => setEditingValue(e.target.value)}
-                    onKeyDown={(e) => {
-                      e.stopPropagation();
-                      if (e.key === 'Enter') {
-                        // commit
+            {(() => {
+              const hiddenSources = new Set<string>();
+              assets.forEach(a => {
+                const meta = a.meta as any;
+                if (a.name.endsWith('.plumeasset') && meta?.source) {
+                  hiddenSources.add(meta.source);
+                }
+              });
+              const visible = assets.filter(a => !hiddenSources.has(a.name) && a.name !== '.plume_meta' && !a.name.endsWith('.plume_meta'));
+              const list = searchQuery ? visible.filter(a => a.name.toLowerCase().includes(searchQuery.toLowerCase())) : visible;
+              return list.map(a => (
+                a.id === editingId ? (
+                  <div key={a.id} className="flex flex-col items-center p-2 rounded cursor-pointer group w-24">
+                    <div
+                      className="w-16 h-16 rounded mb-2 flex items-center justify-center border shadow-sm relative overflow-hidden"
+                      style={{ backgroundColor: theme.colors.bg.secondary, borderColor: theme.colors.border.default }}
+                    >
+                      {a.type === 'folder' ? (
+                        <Folder size={32} style={{ color: a.meta?.color ? (a.meta.color.startsWith('#') ? a.meta.color : ('#' + a.meta.color)) : '#eab308' }} />
+                      ) : (
+                        <File size={32} style={{ color: theme.colors.text.secondary }} />
+                      )}
+                    </div>
+                    <input
+                      autoFocus
+                      value={editingValue}
+                      onChange={(e) => setEditingValue(e.target.value)}
+                      onKeyDown={(e) => {
+                        e.stopPropagation();
+                        if (e.key === 'Enter') {
+                          // commit
+                          const newName = editingValue.trim() || 'New Folder';
+
+                          // Update assets and preserve meta
+                          setAssets(prev => prev.map(it => it.id === a.id ? { ...it, name: newName, meta: { ...it.meta } } : it));
+
+                          // Update folderTree if it's a folder
+                          if (a.type === 'folder' && a.path) {
+                            const updateFolderName = (nodes: any[], targetPath: string, newName: string): any[] => {
+                              return nodes.map(node => {
+                                if (node.path === targetPath) {
+                                  return { ...node, name: newName, meta: { ...node.meta } };
+                                }
+                                if (node.children && node.children.length > 0) {
+                                  return { ...node, children: updateFolderName(node.children, targetPath, newName) };
+                                }
+                                return node;
+                              });
+                            };
+                            setFolderTree(prev => updateFolderName(prev, a.path!, newName));
+                          }
+
+                          setEditingId(null);
+                          const __webview = (window as any).chrome?.webview;
+                          if (!a.path) {
+                            // placeholder -> create folder under currentPath
+                            if (__webview) __webview.postMessage({ action: 'create-folder', name: newName, path: currentPath });
+                          } else {
+                            // existing item -> rename
+                            if (__webview) __webview.postMessage({ action: 'rename', path: a.path, name: newName });
+                          }
+                          // request a fresh listing
+                          if (__webview) __webview.postMessage({ action: 'list-content', path: currentPath });
+                        } else if (e.key === 'Escape') {
+                          // cancel inline edit
+                          setEditingId(null);
+                          // if it was a placeholder, remove it
+                          if (!a.path) setAssets(prev => prev.filter(it => it.id !== a.id));
+                        }
+                      }}
+                      onBlur={() => {
+                        // commit on blur
                         const newName = editingValue.trim() || 'New Folder';
 
                         // Update assets and preserve meta
@@ -868,72 +919,32 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
                         setEditingId(null);
                         const __webview = (window as any).chrome?.webview;
                         if (!a.path) {
-                          // placeholder -> create folder under currentPath
                           if (__webview) __webview.postMessage({ action: 'create-folder', name: newName, path: currentPath });
                         } else {
-                          // existing item -> rename
                           if (__webview) __webview.postMessage({ action: 'rename', path: a.path, name: newName });
                         }
-                        // request a fresh listing
                         if (__webview) __webview.postMessage({ action: 'list-content', path: currentPath });
-                      } else if (e.key === 'Escape') {
-                        // cancel inline edit
-                        setEditingId(null);
-                        // if it was a placeholder, remove it
-                        if (!a.path) setAssets(prev => prev.filter(it => it.id !== a.id));
-                      }
-                    }}
-                    onBlur={() => {
-                      // commit on blur
-                      const newName = editingValue.trim() || 'New Folder';
-
-                      // Update assets and preserve meta
-                      setAssets(prev => prev.map(it => it.id === a.id ? { ...it, name: newName, meta: { ...it.meta } } : it));
-
-                      // Update folderTree if it's a folder
-                      if (a.type === 'folder' && a.path) {
-                        const updateFolderName = (nodes: any[], targetPath: string, newName: string): any[] => {
-                          return nodes.map(node => {
-                            if (node.path === targetPath) {
-                              return { ...node, name: newName, meta: { ...node.meta } };
-                            }
-                            if (node.children && node.children.length > 0) {
-                              return { ...node, children: updateFolderName(node.children, targetPath, newName) };
-                            }
-                            return node;
-                          });
-                        };
-                        setFolderTree(prev => updateFolderName(prev, a.path!, newName));
-                      }
-
-                      setEditingId(null);
-                      const __webview = (window as any).chrome?.webview;
-                      if (!a.path) {
-                        if (__webview) __webview.postMessage({ action: 'create-folder', name: newName, path: currentPath });
-                      } else {
-                        if (__webview) __webview.postMessage({ action: 'rename', path: a.path, name: newName });
-                      }
-                      if (__webview) __webview.postMessage({ action: 'list-content', path: currentPath });
-                    }}
-                    className="text-[10px] text-center break-words w-full px-1 rounded"
-                    style={{ backgroundColor: 'transparent', color: theme.colors.text.primary, border: `1px solid ${theme.colors.border.default}`, outline: 'none' }}
-                  />
-                </div>
-              ) : (
-                <AssetTile key={a.id} id={a.id} name={a.name} type={a.type} meta={(a as any).meta} selected={selectedIds.has(a.id)} onClick={(e) => handleAssetClick(e, a.id)} onDoubleClick={() => { if (a.type === 'folder') openFolder(a as any); else if (onOpenAsset) onOpenAsset(a); }} onContextMenu={(_e, info) => {
-                  // If right-clicking on an unselected item, select only it
-                  if (!selectedIds.has(a.id)) {
-                    setSelectedIds(new Set([a.id]));
-                    setLastSelectedId(a.id);
-                  }
-                  setCtxX(_e.clientX);
-                  setCtxY(_e.clientY);
-                  setCtxType(info.type === 'folder' ? 'folder' : 'asset');
-                  setCtxTarget(a);
-                  setCtxVisible(true);
-                }} />
-              )
-            ))}
+                      }}
+                      className="text-[10px] text-center break-words w-full px-1 rounded"
+                      style={{ backgroundColor: 'transparent', color: theme.colors.text.primary, border: `1px solid ${theme.colors.border.default}`, outline: 'none' }}
+                    />
+                  </div>
+                ) : (
+                  <AssetTile key={a.id} id={a.id} name={a.name} type={a.type} meta={(a as any).meta} selected={selectedIds.has(a.id)} onClick={(e) => handleAssetClick(e, a.id)} onDoubleClick={() => { if (a.type === 'folder') openFolder(a as any); else if (onOpenAsset) onOpenAsset(a); }} onContextMenu={(_e, info) => {
+                    // If right-clicking on an unselected item, select only it
+                    if (!selectedIds.has(a.id)) {
+                      setSelectedIds(new Set([a.id]));
+                      setLastSelectedId(a.id);
+                    }
+                    setCtxX(_e.clientX);
+                    setCtxY(_e.clientY);
+                    setCtxType(info.type === 'folder' ? 'folder' : 'asset');
+                    setCtxTarget(a);
+                    setCtxVisible(true);
+                  }} />
+                )
+              ));
+            })()}
           </div>
         </div>
         {ctxVisible && ctxType && (
