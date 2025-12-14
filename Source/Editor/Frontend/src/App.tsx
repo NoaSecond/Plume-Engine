@@ -552,6 +552,13 @@ export default function App() {
     }
   };
 
+  const handleTabReorder = (fromIndex: number, toIndex: number) => {
+    const newTabs = [...tabs];
+    const [movedTab] = newTabs.splice(fromIndex, 1);
+    newTabs.splice(toIndex, 0, movedTab);
+    setTabs(newTabs);
+  };
+
   return (
     <div
       className="h-screen w-full flex flex-col overflow-hidden font-sans select-none"
@@ -575,6 +582,7 @@ export default function App() {
         activeTabId={activeTabId}
         onTabClick={setActiveTabId}
         onTabClose={handleTabClose}
+        onReorder={handleTabReorder}
       >
         {/* Children unused in this prop pattern, we render content below */}
       </TabSystem>
@@ -640,26 +648,32 @@ export default function App() {
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
         onOpenAsset={(asset) => {
-          // Identify Static Meshes. The backend type might be 'StaticMesh' or we check extension for raw files.
-          // Adjust logic as needed based on actual backend types.
+          // Identify Asset Types
           const nameLower = asset.name.toLowerCase();
-          const isMesh = asset.type === 'StaticMesh' || nameLower.endsWith('.fbx') || nameLower.endsWith('.obj') || nameLower.endsWith('.gltf');
+          const type = asset.type ? asset.type : '';
 
-          if (isMesh) {
-            const tabId = `mesh-${asset.id}`;
+          let tabType: 'static-mesh' | 'texture' | 'sound' | null = null;
+
+          if (type === 'StaticMesh' || nameLower.endsWith('.fbx') || nameLower.endsWith('.obj') || nameLower.endsWith('.ply')) tabType = 'static-mesh';
+          else if (type === 'Texture' || nameLower.endsWith('.png') || nameLower.endsWith('.jpg') || nameLower.endsWith('.tga')) tabType = 'texture';
+          else if (type === 'SoundWave' || nameLower.endsWith('.wav') || nameLower.endsWith('.mp3')) tabType = 'sound';
+
+          if (tabType) {
+            const tabId = `${tabType}-${asset.id}`;
             setTabs(prev => {
               if (prev.find(t => t.id === tabId)) return prev;
+              const title = asset.name.replace(/\.(plumeasset|plume_mesh|fbx|obj|gltf|glb|png|jpg|jpeg|tga|bmp|wav|mp3|ogg)$/i, '');
               return [...prev, {
                 id: tabId,
-                title: asset.name,
-                type: 'static-mesh',
+                title: title,
+                type: tabType as any,
                 data: { entityId: asset.name, assetId: asset.id },
                 closable: true
               }];
             });
             setActiveTabId(tabId);
             addLog(`Opened asset: ${asset.name}`, 'INFO');
-            setShowContentBrowser(false); // Auto-close browser? Optional.
+            setShowContentBrowser(false);
           } else {
             addLog(`Cannot open asset type: ${asset.type}`, 'WARN');
           }

@@ -41,18 +41,7 @@ export const StaticMeshEditor: React.FC<StaticMeshEditorProps> = ({ entityId, on
 
     return (
         <div className="flex flex-col h-full w-full">
-            <div
-                className="h-8 flex items-center px-4 border-b shrink-0 text-xs"
-                style={{
-                    backgroundColor: theme.colors.bg.secondary,
-                    borderColor: theme.colors.border.default,
-                    color: theme.colors.text.primary
-                }}
-            >
-                <span>Static Mesh Editor: {entityId}</span>
-                <div className="flex-1" />
-                <button onClick={onClose} className="hover:text-red-400">Close</button>
-            </div>
+
 
             <div className="flex-1 flex overflow-hidden">
                 <Viewport
@@ -65,6 +54,7 @@ export const StaticMeshEditor: React.FC<StaticMeshEditorProps> = ({ entityId, on
                     viewMode={viewMode}
                     setViewMode={setViewMode}
                     onAddEntity={() => { }} // Disabled in mesh editor
+                    showToolbar={false}
                 />
                 <div
                     className="w-80 flex flex-col shrink-0 border-l"

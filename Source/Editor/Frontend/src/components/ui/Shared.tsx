@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { LucideIcon, FileCode, Folder, Image as ImageIcon, Box } from 'lucide-react';
+import { LucideIcon, FileCode, Folder, Image as ImageIcon, Box, Music, File } from 'lucide-react';
 import { useTheme } from '../../ThemeContext';
 
 interface IconButtonProps {
@@ -12,10 +12,10 @@ interface IconButtonProps {
 }
 export const IconButton: React.FC<IconButtonProps> = ({ icon: Icon, active = false, onClick, title, className = "", fill }) => {
   const { theme } = useTheme();
-  
+
   return (
-    <button 
-      onClick={onClick} 
+    <button
+      onClick={onClick}
       title={title}
       className={`p-1.5 rounded transition-colors ${className}`}
       style={{
@@ -46,7 +46,7 @@ interface MenuBarItemProps {
 export const MenuBarItem: React.FC<MenuBarItemProps> = ({ label, items, onAction }) => {
   const { theme } = useTheme();
   const [isOpen, setIsOpen] = useState(false);
-  
+
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     setIsOpen(!isOpen);
@@ -55,39 +55,39 @@ export const MenuBarItem: React.FC<MenuBarItemProps> = ({ label, items, onAction
       document.dispatchEvent(new CustomEvent('closeAllMenus', { detail: { except: label } }));
     }
   };
-  
+
   const handleItemClick = (item: string) => {
     onAction?.(item);
     setIsOpen(false);
   };
-  
-  // �couter les �v�nements globaux
+
+  // couter les vnements globaux
   useEffect(() => {
     const handleCloseAllMenus = (event: CustomEvent) => {
       if (event.detail.except !== label) {
         setIsOpen(false);
       }
     };
-    
+
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as HTMLElement;
       if (!target.closest('.menu-item-container')) {
         setIsOpen(false);
       }
     };
-    
+
     document.addEventListener('closeAllMenus', handleCloseAllMenus as EventListener);
     document.addEventListener('click', handleClickOutside);
-    
+
     return () => {
       document.removeEventListener('closeAllMenus', handleCloseAllMenus as EventListener);
       document.removeEventListener('click', handleClickOutside);
     };
   }, [label]);
-  
+
   return (
     <div className="menu-item-container relative">
-      <div 
+      <div
         className="menu-label px-3 py-1 text-xs cursor-pointer select-none transition-colors duration-150"
         onClick={handleClick}
         style={{
@@ -103,7 +103,7 @@ export const MenuBarItem: React.FC<MenuBarItemProps> = ({ label, items, onAction
         {label}
       </div>
       {isOpen && (
-        <div 
+        <div
           className="menu-dropdown absolute left-0 top-full w-48 shadow-xl z-50 flex flex-col rounded-md overflow-hidden"
           style={{
             backgroundColor: theme.colors.bg.secondary,
@@ -113,9 +113,9 @@ export const MenuBarItem: React.FC<MenuBarItemProps> = ({ label, items, onAction
           }}
         >
           {items.map((item, i) => (
-            <div 
-              key={i} 
-              onClick={() => handleItemClick(item)} 
+            <div
+              key={i}
+              onClick={() => handleItemClick(item)}
               className="px-4 py-1.5 text-xs flex justify-between group cursor-pointer transition-colors duration-150"
               style={{
                 color: theme.colors.text.primary
@@ -140,35 +140,39 @@ export const MenuBarItem: React.FC<MenuBarItemProps> = ({ label, items, onAction
 
 export const AssetTile = ({ id, name, type, selected = false, onClick, onDoubleClick, onContextMenu, meta }: { id?: string, name: string, type: string, selected?: boolean, onClick?: (e: React.MouseEvent) => void, onDoubleClick?: (e: React.MouseEvent) => void, onContextMenu?: (e: React.MouseEvent, info: { name: string, type: string }) => void, meta?: any }) => {
   const { theme } = useTheme();
-  let Icon = FileCode;
-  let color = "#8b5cf6"; // violet-500 - default color for files
-  
-  if (type === 'folder') { 
-    Icon = Folder; 
+  let Icon = File;
+  let color = "#9ca3af"; // gray-400
+
+  if (type === 'folder') {
+    Icon = Folder;
     color = "#eab308"; // yellow-500 
   }
-  if (type === 'script') { 
-    Icon = FileCode; 
+
+  const lowerType = type ? type.toLowerCase() : '';
+  const lowerName = name ? name.toLowerCase() : '';
+
+  if (lowerType === 'script' || lowerName.endsWith('.ts') || lowerName.endsWith('.js')) {
+    Icon = FileCode;
     color = "#22c55e"; // green-500
   }
-  if (type === 'texture') { 
-    Icon = ImageIcon; 
+  else if (lowerType === 'texture' || lowerType === 'image' || lowerName.endsWith('.png') || lowerName.endsWith('.jpg') || lowerName.endsWith('.tga')) {
+    Icon = ImageIcon;
     color = "#f87171"; // red-400
   }
-  if (type === 'mesh') { 
-    Icon = Box; 
-    color = "#60a5fa"; // blue-400
-  }
-  if (name === '.plume_meta' || name.endsWith('.plume_meta')) {
-    Icon = FileCode;
-    color = theme.colors.accent.secondary; // Utilise la couleur accent du thème
-  }
-  if (name.endsWith('.plume_mesh')) {
+  else if (lowerType === 'staticmesh' || lowerType === 'mesh' || lowerName.endsWith('.plume_mesh') || lowerName.endsWith('.fbx') || lowerName.endsWith('.obj')) {
     Icon = Box;
     color = "#60a5fa"; // blue-400
   }
-  // meta color overrides handled below
-  
+  else if (lowerType === 'soundwave' || lowerType === 'sound' || lowerName.endsWith('.wav') || lowerName.endsWith('.mp3')) {
+    Icon = Music;
+    color = "#a855f7"; // purple-500
+  }
+
+  if (name === '.plume_meta' || name.endsWith('.plume_meta')) {
+    Icon = FileCode;
+    color = theme.colors.accent.secondary;
+  }
+
   // if meta.color provided, prefer it (strip leading '#')
   let finalColor = color;
   try {
@@ -178,10 +182,12 @@ export const AssetTile = ({ id, name, type, selected = false, onClick, onDoubleC
       const mcol: string = typeof meta.color === 'string' ? (meta.color as string) : '';
       if (mcol.length > 0) finalColor = mcol.startsWith('#') ? mcol : ('#' + mcol);
     }
-  } catch (e) {}
+  } catch (e) { }
+
+  const displayName = name.replace(/\.(plumeasset|plume_mesh|fbx|obj|gltf|glb|png|jpg|jpeg|tga|bmp|wav|mp3|ogg)$/i, '');
 
   return (
-    <div 
+    <div
       className="flex flex-col items-center p-2 rounded cursor-pointer group w-24 transition-colors"
       onClick={(e) => onClick?.(e)}
       onDoubleClick={(e) => onDoubleClick?.(e)}
@@ -201,7 +207,7 @@ export const AssetTile = ({ id, name, type, selected = false, onClick, onDoubleC
         border: selected ? `1px solid ${theme.colors.accent.primary}` : undefined
       }}
     >
-      <div 
+      <div
         className="w-16 h-16 rounded mb-2 flex items-center justify-center border shadow-sm relative overflow-hidden transition-colors"
         style={{
           backgroundColor: theme.colors.bg.secondary,
@@ -214,17 +220,17 @@ export const AssetTile = ({ id, name, type, selected = false, onClick, onDoubleC
           e.currentTarget.style.borderColor = theme.colors.border.default;
         }}
       >
-         <Icon size={32} style={{ color: finalColor }} fill={type === 'folder' ? 'none' : (name === '.plume_meta' || name.endsWith('.plume_meta') ? finalColor : undefined)} stroke={type === 'folder' ? finalColor : (name === '.plume_meta' || name.endsWith('.plume_meta') ? finalColor : undefined)} strokeWidth={type === 'folder' || name === '.plume_meta' || name.endsWith('.plume_meta') ? '1.5' : undefined} />
+        <Icon size={32} style={{ color: finalColor }} fill={type === 'folder' ? 'none' : (name === '.plume_meta' || name.endsWith('.plume_meta') ? finalColor : undefined)} stroke={type === 'folder' ? finalColor : (name === '.plume_meta' || name.endsWith('.plume_meta') ? finalColor : undefined)} strokeWidth={type === 'folder' || name === '.plume_meta' || name.endsWith('.plume_meta') ? '1.5' : undefined} />
       </div>
-      <span 
+      <span
         className="text-[10px] text-center break-words w-full truncate px-1 rounded"
         style={{
           color: selected ? theme.colors.text.primary : theme.colors.text.secondary,
           backgroundColor: 'transparent'
         }}
-        title={name}
+        title={displayName}
       >
-        {name}
+        {displayName}
       </span>
     </div>
   );
