@@ -1,9 +1,8 @@
 ﻿import { useState, useEffect, useRef, useCallback } from 'react';
 import { Header } from './components/layout/Header';
-import { Toolbar } from './components/layout/Toolbar';
-import { Viewport } from './components/viewport/Viewport';
-import { OutlinerPanel } from './components/panels/OutlinerPanel';
-import { DetailsPanel } from './components/panels/DetailsPanel';
+import { TabSystem, Tab } from './components/layout/TabSystem';
+import { SceneEditor } from './components/editors/SceneEditor';
+import { StaticMeshEditor } from './components/editors/StaticMeshEditor';
 import { ContentBrowserPanel } from './components/panels/ContentBrowserPanel';
 import { ConsolePanel } from './components/panels/ConsolePanel';
 import { EditorPreferences } from './components/panels/EditorPreferences';
@@ -38,6 +37,12 @@ export default function App() {
   const [showProjectSettings, setShowProjectSettings] = useState(false);
   const [renderingAPI, setRenderingAPI] = useState<'DirectX12' | 'Vulkan' | 'OpenGL' | 'Metal'>('OpenGL');
   const [cameraTransform, setCameraTransform] = useState({ position: { x: 0, y: -50, z: -150 }, rotation: { x: 20, y: 0, z: 0 } });
+
+  // Tab System State
+  const [tabs, setTabs] = useState<Tab[]>([
+    { id: 'scene', title: 'Main Scene', type: 'scene', closable: false }
+  ]);
+  const [activeTabId, setActiveTabId] = useState<string>('scene');
 
   // Settings
   const [showFPS, setShowFPS] = useState(false);
@@ -333,6 +338,7 @@ export default function App() {
     const args = parts.slice(1).map(v => Number(v));
 
     if (name === 'fps') {
+      // ... same fps logic ...
       if (args.length === 0) {
         addLog(`${showFPS ? 1 : 0}`, 'INFO');
         return;
@@ -352,6 +358,7 @@ export default function App() {
       return;
     }
 
+    // ... vsync, maxfps, clear logs logic ... I'm keeping your existing command handling logic
     if (name === 'vsync') {
       if (args.length === 0) {
         addLog(`${vsyncEnabled ? 1 : 0}`, 'INFO');
@@ -392,6 +399,16 @@ export default function App() {
 
     if (name === 'clear') {
       setLogs([]);
+      return;
+    }
+
+    // Command to open Static Mesh Tab for testing
+    if (name === 'openmesh') {
+      const meshName = parts[1] || 'New Mesh';
+      const newTabId = `mesh-${Date.now()}`;
+      setTabs(prev => [...prev, { id: newTabId, title: meshName, type: 'static-mesh', data: { entityId: meshName }, closable: true }]);
+      setActiveTabId(newTabId);
+      addLog(`Opened Static Mesh Editor: ${meshName}`, 'INFO');
       return;
     }
 
@@ -527,7 +544,13 @@ export default function App() {
     return () => { window.removeEventListener('keydown', handleKeyDown); window.removeEventListener('keyup', handleKeyUp); };
   }, [showPreferences, showPluginManager, showProjectSettings, showContentBrowser]);
 
-  const selectedEntity = entities.find(e => e.id === selectedId);
+  const handleTabClose = (id: string) => {
+    const newTabs = tabs.filter(t => t.id !== id);
+    setTabs(newTabs);
+    if (activeTabId === id && newTabs.length > 0) {
+      setActiveTabId(newTabs[newTabs.length - 1].id);
+    }
+  };
 
   return (
     <div
@@ -537,55 +560,111 @@ export default function App() {
         color: theme.colors.text.primary
       }}
     >
-      <Header isPlaying={isPlaying} onSave={() => { }} onAbout={() => setShowAboutModal(true)} onPreferences={() => setShowPreferences(true)} onPlugins={() => setShowPluginManager(true)} onProjectSettings={() => setShowProjectSettings(true)} />
-      <Toolbar activeTool={activeTool} setActiveTool={setActiveTool} onSave={() => { }} onDelete={() => { }} isPlaying={isPlaying} onPlay={() => setIsPlaying(true)} onPause={() => setIsPlaying(false)} onStop={() => setIsPlaying(false)} />
-      <div className="flex-1 flex overflow-hidden" style={{ backgroundColor: 'transparent' }}>
-        <Viewport entities={entities} selectedId={selectedId} setSelectedId={setSelectedId} cameraTransform={cameraTransform} setCameraTransform={setCameraTransform} activeTool={activeTool} viewMode={viewMode} setViewMode={setViewMode} onAddEntity={(type) => setEntities([...entities, { id: Date.now().toString(), name: type, type, visible: true, transform: { position: { x: 0, y: 0, z: 0 }, rotation: { x: 0, y: 0, z: 0 }, scale: { x: 1, y: 1, z: 1 } } }])} />
-        <div
-          className="w-80 flex flex-col shrink-0 border-l"
-          style={{
-            backgroundColor: theme.colors.bg.secondary,
-            borderColor: theme.colors.border.default
-          }}
-        >
-          <OutlinerPanel
-            entities={entities}
-            selectedId={selectedId}
-            setSelectedId={setSelectedId}
-            onAddEntity={(type) => {
-              const newEntity: Entity = {
-                id: Date.now().toString(),
-                name: type,
-                type,
-                visible: true,
-                transform: {
-                  position: { x: 0, y: 0, z: 0 },
-                  rotation: { x: 0, y: 0, z: 0 },
-                  scale: { x: 1, y: 1, z: 1 }
-                }
-              };
-              setEntities([...entities, newEntity]);
-            }}
-            setEntities={setEntities}
-            onDuplicate={(ent) => {
-              const newEntity: Entity = {
-                ...ent,
-                id: Date.now().toString(),
-                name: `${ent.name}_Copy`
-              };
-              setEntities([...entities, newEntity]);
-            }}
-            onDelete={(id) => {
-              setEntities(entities.filter(e => e.id !== id));
-              if (selectedId === id) {
-                setSelectedId(null);
-              }
-            }}
-          />
-          <DetailsPanel selectedEntity={selectedEntity} setEntities={setEntities} />
-        </div>
+      <Header
+        isPlaying={isPlaying}
+        onSave={() => { }}
+        onAbout={() => setShowAboutModal(true)}
+        onPreferences={() => setShowPreferences(true)}
+        onPlugins={() => setShowPluginManager(true)}
+        onProjectSettings={() => setShowProjectSettings(true)}
+      />
+
+      {/* Tab System Area */}
+      <TabSystem
+        tabs={tabs}
+        activeTabId={activeTabId}
+        onTabClick={setActiveTabId}
+        onTabClose={handleTabClose}
+      >
+        {/* Children unused in this prop pattern, we render content below */}
+      </TabSystem>
+
+      {/* Main Content Area - switching based on active tab */}
+      <div className="flex-1 flex overflow-hidden relative" style={{ backgroundColor: 'transparent' }}>
+        {tabs.map(tab => {
+          // We can either mount/unmount or hide/show. For 3D contexts, preserving the DOM (hide/show) is often better to avoid re-initializing WebGL contexts if they are attached to the DOM.
+          // However, our SceneEditor passes state down. If we unmount, state in App is preserved, but SceneEditor internal state (if any) resets.
+          // Let's use display: none for now to support quick switching.
+          const isActive = tab.id === activeTabId;
+          return (
+            <div key={tab.id} className="w-full h-full absolute inset-0" style={{ display: isActive ? 'block' : 'none' }}>
+              {tab.type === 'scene' && (
+                <SceneEditor
+                  activeTool={activeTool}
+                  setActiveTool={setActiveTool}
+                  onSave={() => { }}
+                  onDelete={() => {
+                    if (selectedId) {
+                      setEntities(entities.filter(e => e.id !== selectedId));
+                      setSelectedId(null);
+                    }
+                  }}
+                  isPlaying={isPlaying}
+                  onPlay={() => setIsPlaying(true)}
+                  onPause={() => setIsPlaying(false)}
+                  onStop={() => setIsPlaying(false)}
+                  entities={entities}
+                  setEntities={setEntities}
+                  selectedId={selectedId}
+                  setSelectedId={setSelectedId}
+                  cameraTransform={cameraTransform}
+                  setCameraTransform={setCameraTransform}
+                  viewMode={viewMode}
+                  setViewMode={setViewMode}
+                  onAddEntity={(type) => setEntities([...entities, { id: Date.now().toString(), name: type, type, visible: true, transform: { position: { x: 0, y: 0, z: 0 }, rotation: { x: 0, y: 0, z: 0 }, scale: { x: 1, y: 1, z: 1 } } }])}
+                  onDuplicate={(ent) => {
+                    const newEntity = { ...ent, id: Date.now().toString(), name: `${ent.name}_Copy` };
+                    setEntities([...entities, newEntity]);
+                  }}
+                  onDeleteEntity={(id) => {
+                    setEntities(entities.filter(e => e.id !== id));
+                    if (selectedId === id) setSelectedId(null);
+                  }}
+                />
+              )}
+              {tab.type === 'static-mesh' && (
+                <StaticMeshEditor
+                  entityId={tab.data?.entityId || 'Unknown'}
+                  onClose={() => handleTabClose(tab.id)}
+                />
+              )}
+            </div>
+          );
+        })}
       </div>
-      <ContentBrowserPanel show={showContentBrowser} onClose={() => setShowContentBrowser(false)} onLog={addLog} searchQuery={searchQuery} setSearchQuery={setSearchQuery} />
+
+      <ContentBrowserPanel
+        show={showContentBrowser}
+        onClose={() => setShowContentBrowser(false)}
+        onLog={addLog}
+        searchQuery={searchQuery}
+        setSearchQuery={setSearchQuery}
+        onOpenAsset={(asset) => {
+          // Identify Static Meshes. The backend type might be 'StaticMesh' or we check extension for raw files.
+          // Adjust logic as needed based on actual backend types.
+          const nameLower = asset.name.toLowerCase();
+          const isMesh = asset.type === 'StaticMesh' || nameLower.endsWith('.fbx') || nameLower.endsWith('.obj') || nameLower.endsWith('.gltf');
+
+          if (isMesh) {
+            const tabId = `mesh-${asset.id}`;
+            setTabs(prev => {
+              if (prev.find(t => t.id === tabId)) return prev;
+              return [...prev, {
+                id: tabId,
+                title: asset.name,
+                type: 'static-mesh',
+                data: { entityId: asset.name, assetId: asset.id },
+                closable: true
+              }];
+            });
+            setActiveTabId(tabId);
+            addLog(`Opened asset: ${asset.name}`, 'INFO');
+            setShowContentBrowser(false); // Auto-close browser? Optional.
+          } else {
+            addLog(`Cannot open asset type: ${asset.type}`, 'WARN');
+          }
+        }}
+      />
       <ConsolePanel
         logs={logs}
         onClear={() => setLogs([])}
@@ -607,6 +686,8 @@ export default function App() {
         }}
       />
       <ProjectSettings isOpen={showProjectSettings} onClose={() => setShowProjectSettings(false)} />
+
+      {/* Footer / Status Bar - Persistent */}
       <div
         className="h-6 border-t flex items-center justify-between px-2 text-[10px]"
         style={{

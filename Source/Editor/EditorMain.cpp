@@ -869,21 +869,39 @@ void InitWebView(const std::string& htmlPath) {
                                             return S_OK;
                                         }
 
-                                        // Helper to send content list for a given path (string)
+                                            // Helper to send content list for a given path (string)
                                         // If recursive==true, return a hierarchical tree of folders/files with children arrays
                                         std::function<nlohmann::json(const fs::path&)> buildNode;
                                         buildNode = [&](const fs::path& p) -> nlohmann::json {
                                             nlohmann::json it;
                                             std::string name = p.filename().string();
                                             std::string id = name + "_" + std::to_string(std::hash<std::string>{}(p.string()));
+                                            
+                                            // Default type
                                             std::string type = fs::is_directory(p) ? "folder" : "file";
                                             std::string pathStr = p.string();
                                             for (auto &c : pathStr) if (c == '\\') c = '/';
+                                            
                                             it["id"] = id;
                                             it["name"] = name;
-                                            it["type"] = type;
                                             it["path"] = pathStr;
-                                            if (fs::is_directory(p)) {
+                                            
+                                            // Handle .plumeasset files specifically
+                                            if (!fs::is_directory(p) && p.extension() == ".plumeasset") {
+                                                try {
+                                                    std::ifstream ifs(p.string());
+                                                    if (ifs.is_open()) {
+                                                        nlohmann::json assetJson;
+                                                        ifs >> assetJson;
+                                                        if (assetJson.contains("type")) {
+                                                            type = assetJson["type"].get<std::string>();
+                                                        }
+                                                        it["meta"] = assetJson;
+                                                    }
+                                                } catch(...) {}
+                                            } else if (fs::is_directory(p)) {
+                                                // Existing folder meta logic
+                                                it["type"] = "folder";
                                                 try {
                                                     fs::path meta = p / ".plume_meta";
                                                     if (fs::exists(meta)) {
@@ -896,6 +914,8 @@ void InitWebView(const std::string& htmlPath) {
                                                     }
                                                 } catch(...) {}
                                             }
+                                            
+                                            it["type"] = type;
                                             return it;
                                         };
 
@@ -1190,38 +1210,49 @@ void InitWebView(const std::string& htmlPath) {
                                                             fs::path src(filePath);
                                                             if (!fs::exists(src)) continue;
                                                             
-                                                            // Get file extension
+                                                            // Copy source file first
+                                                            fs::path destFile = contentDir / fileName;
+                                                            if (!fs::exists(destFile)) {
+                                                                fs::copy_file(src, destFile, fs::copy_options::overwrite_existing);
+                                                            }
+                                                            
+                                                            // Determine Asset Type
                                                             std::string ext = src.extension().string();
                                                             for (auto& c : ext) c = std::tolower(c);
                                                             
-                                                            // Check if it's a 3D model
-                                                            bool is3DModel = (ext == ".fbx" || ext == ".obj" || ext == ".glb" || ext == ".gltf");
+                                                            std::string assetType = "";
                                                             
-                                                            if (is3DModel) {
-                                                                // Create a Static Mesh asset (just .plume_mesh file, no folder)
-                                                                std::string meshName = fs::path(fileName).stem().string();
+                                                            // 3D Models
+                                                            if (ext == ".fbx" || ext == ".obj" || ext == ".glb" || ext == ".gltf") {
+                                                                assetType = "StaticMesh";
+                                                            } 
+                                                            // Textures
+                                                            else if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".tga" || ext == ".bmp") {
+                                                                assetType = "Texture";
+                                                            }
+                                                            // Audio
+                                                            else if (ext == ".wav" || ext == ".mp3" || ext == ".ogg") {
+                                                                assetType = "SoundWave";
+                                                            }
+                                                            
+                                                            if (!assetType.empty()) {
+                                                                // Create .plumeasset file
+                                                                std::string assetName = fs::path(fileName).stem().string();
                                                                 
-                                                                try {
-                                                                    // Create a .plume_mesh metadata file directly
-                                                                    nlohmann::json meshMeta;
-                                                                    meshMeta["type"] = "StaticMesh";
-                                                                    meshMeta["sourceFile"] = fileName;
-                                                                    meshMeta["format"] = ext.substr(1); // Remove the dot
-                                                                    
-                                                                    fs::path metaFile = contentDir / (meshName + ".plume_mesh");
-                                                                    std::ofstream ofs(metaFile.string());
-                                                                    if (ofs.is_open()) {
-                                                                        ofs << meshMeta.dump(2);
-                                                                        ofs.close();
-                                                                    }
-                                                                    
-                                                                    createdAssets.push_back(meshName + ".plume_mesh");
+                                                                nlohmann::json meta;
+                                                                meta["type"] = assetType;
+                                                                meta["source"] = fileName;
+                                                                
+                                                                fs::path assetFile = contentDir / (assetName + ".plumeasset");
+                                                                std::ofstream ofs(assetFile.string());
+                                                                if (ofs.is_open()) {
+                                                                    ofs << meta.dump(2);
+                                                                    ofs.close();
+                                                                    createdAssets.push_back(assetName + ".plumeasset");
                                                                     importedCount++;
-                                                                } catch(...) {}
+                                                                }
                                                             } else {
-                                                                // For other files, just copy them
-                                                                fs::path destFile = contentDir / fileName;
-                                                                fs::copy_file(src, destFile, fs::copy_options::overwrite_existing);
+                                                                // Just a generic file import
                                                                 createdAssets.push_back(fileName);
                                                                 importedCount++;
                                                             }
@@ -1277,48 +1308,61 @@ void InitWebView(const std::string& htmlPath) {
                                                 
                                                 if (filePath.empty() || fileName.empty()) continue;
                                                 
-                                                try {
-                                                    fs::path src(filePath);
-                                                    if (!fs::exists(src)) continue;
-                                                    
-                                                    // Get file extension
-                                                    std::string ext = src.extension().string();
-                                                    for (auto& c : ext) c = std::tolower(c);
-                                                    
-                                                    // Check if it's a 3D model
-                                                    bool is3DModel = (ext == ".fbx" || ext == ".obj" || ext == ".glb" || ext == ".gltf");
-                                                    
-                                                    if (is3DModel) {
-                                                        // Create a Static Mesh asset
-                                                        std::string meshName = fs::path(fileName).stem().string();
-                                                        fs::path meshFolder = contentDir / meshName;
-                                                        
-                                                        try {
-                                                            // Create a .plume_mesh metadata file directly (no folder)
-                                                            nlohmann::json meshMeta;
-                                                            meshMeta["type"] = "StaticMesh";
-                                                            meshMeta["sourceFile"] = fileName;
-                                                            meshMeta["format"] = ext.substr(1); // Remove the dot
+                                                    try {
+                                                            fs::path src(filePath);
+                                                            if (!fs::exists(src)) continue;
                                                             
-                                                            fs::path metaFile = contentDir / (meshName + ".plume_mesh");
-                                                            std::ofstream ofs(metaFile.string());
-                                                            if (ofs.is_open()) {
-                                                                ofs << meshMeta.dump(2);
-                                                                ofs.close();
+                                                            // Copy source file first
+                                                            fs::path destFile = contentDir / fileName;
+                                                            if (!fs::exists(destFile)) {
+                                                                fs::copy_file(src, destFile, fs::copy_options::overwrite_existing);
                                                             }
                                                             
-                                                            createdAssets.push_back(meshName + ".plume_mesh");
-                                                            importedCount++;
+                                                            // Determine Asset Type
+                                                            std::string ext = src.extension().string();
+                                                            for (auto& c : ext) c = std::tolower(c);
+                                                            
+                                                            std::string assetType = "";
+                                                            
+                                                            // 3D Models
+                                                            if (ext == ".fbx" || ext == ".obj" || ext == ".glb" || ext == ".gltf") {
+                                                                assetType = "StaticMesh";
+                                                            } 
+                                                            // Textures
+                                                            else if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".tga" || ext == ".bmp") {
+                                                                assetType = "Texture";
+                                                            }
+                                                            // Audio
+                                                            else if (ext == ".wav" || ext == ".mp3" || ext == ".ogg") {
+                                                                assetType = "SoundWave";
+                                                            }
+                                                            
+                                                            if (!assetType.empty()) {
+                                                                // Create .plumeasset file
+                                                                std::string assetName = fs::path(fileName).stem().string(); // No source extension in asset name ?
+                                                                // Usually asset name matches source name but with .plumeasset extension
+                                                                // e.g. MyMesh.fbx -> MyMesh.plumeasset (user sees MyMesh)
+                                                                
+                                                                nlohmann::json meta;
+                                                                meta["type"] = assetType;
+                                                                meta["source"] = fileName;
+                                                                
+                                                                fs::path assetFile = contentDir / (assetName + ".plumeasset");
+                                                                std::ofstream ofs(assetFile.string());
+                                                                if (ofs.is_open()) {
+                                                                    ofs << meta.dump(2);
+                                                                    ofs.close();
+                                                                    createdAssets.push_back(assetName + ".plumeasset");
+                                                                    importedCount++;
+                                                                }
+                                                            } else {
+                                                                // Just a generic file import
+                                                                createdAssets.push_back(fileName);
+                                                                importedCount++;
+                                                            }
+
                                                         } catch(...) {}
-                                                    } else {
-                                                        // For other files, just copy them
-                                                        fs::path destFile = contentDir / fileName;
-                                                        fs::copy_file(src, destFile, fs::copy_options::overwrite_existing);
-                                                        createdAssets.push_back(fileName);
-                                                        importedCount++;
                                                     }
-                                                } catch(...) {}
-                                            }
                                             
                                             // Send result back
                                             nlohmann::json resultData;
