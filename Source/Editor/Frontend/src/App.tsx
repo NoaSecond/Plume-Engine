@@ -32,9 +32,7 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showAboutModal, setShowAboutModal] = useState(false);
   const [isAboutClosing, setIsAboutClosing] = useState(false);
-  const [showPreferences, setShowPreferences] = useState(false);
-  const [showPluginManager, setShowPluginManager] = useState(false);
-  const [showProjectSettings, setShowProjectSettings] = useState(false);
+  // Modal states removed
   const [renderingAPI, setRenderingAPI] = useState<'DirectX12' | 'Vulkan' | 'OpenGL' | 'Metal'>('OpenGL');
   const [cameraTransform, setCameraTransform] = useState({ position: { x: 0, y: -50, z: -150 }, rotation: { x: 20, y: 0, z: 0 } });
 
@@ -43,6 +41,17 @@ export default function App() {
     { id: 'scene', title: 'Main Scene', type: 'scene', closable: false }
   ]);
   const [activeTabId, setActiveTabId] = useState<string>('scene');
+
+  const handleOpenTab = (type: Tab['type'], title: string) => {
+    const existingTab = tabs.find(t => t.type === type);
+    if (existingTab) {
+      setActiveTabId(existingTab.id);
+    } else {
+      const newTabId = `${type}-${Date.now()}`;
+      setTabs(prev => [...prev, { id: newTabId, title, type, closable: true }]);
+      setActiveTabId(newTabId);
+    }
+  };
 
   // Settings
   const [showFPS, setShowFPS] = useState(false);
@@ -510,18 +519,6 @@ export default function App() {
       keysPressed.current[e.code] = true;
 
       if (e.key === 'Escape') {
-        if (showPreferences) {
-          setShowPreferences(false);
-          return;
-        }
-        if (showPluginManager) {
-          setShowPluginManager(false);
-          return;
-        }
-        if (showProjectSettings) {
-          setShowProjectSettings(false);
-          return;
-        }
         if (showContentBrowser) {
           setShowContentBrowser(false);
           return;
@@ -542,7 +539,7 @@ export default function App() {
     const handleKeyUp = (e: KeyboardEvent) => { keysPressed.current[e.code] = false; };
     window.addEventListener('keydown', handleKeyDown); window.addEventListener('keyup', handleKeyUp);
     return () => { window.removeEventListener('keydown', handleKeyDown); window.removeEventListener('keyup', handleKeyUp); };
-  }, [showPreferences, showPluginManager, showProjectSettings, showContentBrowser]);
+  }, [showContentBrowser]);
 
   const handleTabClose = (id: string) => {
     const newTabs = tabs.filter(t => t.id !== id);
@@ -571,9 +568,9 @@ export default function App() {
         isPlaying={isPlaying}
         onSave={() => { }}
         onAbout={() => setShowAboutModal(true)}
-        onPreferences={() => setShowPreferences(true)}
-        onPlugins={() => setShowPluginManager(true)}
-        onProjectSettings={() => setShowProjectSettings(true)}
+        onPreferences={() => handleOpenTab('editor-preferences', 'Editor Preferences')}
+        onPlugins={() => handleOpenTab('plugin-manager', 'Plugin Manager')}
+        onProjectSettings={() => handleOpenTab('project-settings', 'Project Settings')}
       />
 
       {/* Tab System Area */}
@@ -637,6 +634,32 @@ export default function App() {
                   onClose={() => handleTabClose(tab.id)}
                 />
               )}
+              {tab.type === 'editor-preferences' && (
+                <EditorPreferences
+                  isOpen={true} // Ignored by component
+                  onClose={() => handleTabClose(tab.id)}
+                />
+              )}
+              {tab.type === 'project-settings' && (
+                <ProjectSettings
+                  isOpen={true} // Ignored by component
+                  onClose={() => handleTabClose(tab.id)}
+                />
+              )}
+              {tab.type === 'plugin-manager' && (
+                <PluginManager
+                  isOpen={true}
+                  onClose={() => handleTabClose(tab.id)}
+                  plugins={plugins}
+                  onTogglePlugin={(id, enabled) => {
+                    if ((window as any).chrome?.webview) {
+                      (window as any).chrome.webview.postMessage({ action: 'toggle-plugin', id, enabled });
+                      // Optimistic update
+                      setPlugins(prev => prev.map(p => p.id === id ? { ...p, enabled } : p));
+                    }
+                  }}
+                />
+              )}
             </div>
           );
         })}
@@ -698,20 +721,6 @@ export default function App() {
         isOpen={showConsole}
         setIsOpen={setShowConsole}
       />
-      <EditorPreferences isOpen={showPreferences} onClose={() => setShowPreferences(false)} />
-      <PluginManager
-        isOpen={showPluginManager}
-        onClose={() => setShowPluginManager(false)}
-        plugins={plugins}
-        onTogglePlugin={(id, enabled) => {
-          if ((window as any).chrome?.webview) {
-            (window as any).chrome.webview.postMessage({ action: 'toggle-plugin', id, enabled });
-            // Optimistic update
-            setPlugins(prev => prev.map(p => p.id === id ? { ...p, enabled } : p));
-          }
-        }}
-      />
-      <ProjectSettings isOpen={showProjectSettings} onClose={() => setShowProjectSettings(false)} />
 
       {/* Footer / Status Bar - Persistent */}
       <div

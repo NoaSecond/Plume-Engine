@@ -12,130 +12,54 @@ type PreferenceTab = 'theme' | 'shortcuts';
 export function EditorPreferences({ isOpen, onClose }: EditorPreferencesProps) {
   const { theme, currentTheme, setTheme } = useTheme();
   const [activeTab, setActiveTab] = useState<PreferenceTab>('theme');
-  const [isClosing, setIsClosing] = useState(false);
 
-  const handleClose = () => {
-    setIsClosing(true);
-    setTimeout(() => {
-      setIsClosing(false);
-      onClose();
-    }, 180);
-  };
-
-  if (!isOpen && !isClosing) return null;
+  // If used as a tab, we assume it's always "open" if rendered. 
+  // We keep the prop for compatibility if needed, but we don't return null based on it 
+  // because the TabSystem handles mounting/unmounting.
+  // Actually, if we keep the prop, we should respect it if it was passed as false, 
+  // but in the tab system it won't be passed. 
+  // Let's just ignore isOpen or assume true.
 
   return (
-    <div className={`fixed inset-0 z-[4000] flex items-center justify-center ${isClosing ? 'modal-backdrop-exit' : 'modal-backdrop'}`} style={{ backgroundColor: 'rgba(0, 0, 0, 0.8)' }}>
-      <div 
-        className={`w-[900px] h-[600px] flex flex-col rounded-lg shadow-2xl overflow-hidden ${isClosing ? 'modal-content-exit' : 'modal-content'}`}
-        style={{ 
-          backgroundColor: theme.colors.bg.primary,
-          border: `1px solid ${theme.colors.border.default}`,
-          position: 'absolute',
-          left: '50%',
-          top: '50%',
-          transform: 'translate(-50%, -50%)'
-        }}
-      >
-        {/* Header */}
-        <div 
-          className="h-12 flex items-center justify-between px-4 border-b"
-          style={{ 
+    <div className="w-full h-full flex flex-col overflow-hidden" style={{ backgroundColor: theme.colors.bg.primary }}>
+      {/* Content */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* Left Navigation */}
+        <div
+          className="w-48 border-r overflow-y-auto"
+          style={{
             backgroundColor: theme.colors.bg.secondary,
             borderColor: theme.colors.border.default
           }}
         >
-          <h2 className="text-lg font-semibold" style={{ color: theme.colors.text.primary }}>
-            Editor Preferences
-          </h2>
-          <button
-            onClick={handleClose}
-            className="w-8 h-8 flex items-center justify-center rounded hover:bg-opacity-80 transition-colors"
-            style={{ backgroundColor: theme.colors.bg.elevated }}
-          >
-            <span style={{ color: theme.colors.text.secondary }}>✕</span>
-          </button>
-        </div>
-
-        {/* Content */}
-        <div className="flex-1 flex overflow-hidden">
-          {/* Left Navigation */}
-          <div 
-            className="w-48 border-r overflow-y-auto"
-            style={{ 
-              backgroundColor: theme.colors.bg.secondary,
-              borderColor: theme.colors.border.default
-            }}
-          >
-            <div className="p-2 space-y-1">
-              <button
-                onClick={() => setActiveTab('theme')}
-                className="w-full text-left px-3 py-2 rounded text-sm transition-colors hover:bg-opacity-70"
-                style={{
-                  backgroundColor: activeTab === 'theme' ? theme.colors.bg.elevated : 'transparent',
-                  color: activeTab === 'theme' ? theme.colors.text.primary : theme.colors.text.secondary
-                }}
-                onMouseEnter={(e) => {
-                  if (activeTab !== 'theme') {
-                    e.currentTarget.style.backgroundColor = `${theme.colors.bg.elevated}50`;
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (activeTab !== 'theme') {
-                    e.currentTarget.style.backgroundColor = 'transparent';
-                  }
-                }}
-              >
-                Thèmes
-              </button>
-              <button
-                onClick={() => setActiveTab('shortcuts')}
-                className="w-full text-left px-3 py-2 rounded text-sm transition-colors hover:bg-opacity-70"
-                style={{
-                  backgroundColor: activeTab === 'shortcuts' ? theme.colors.bg.elevated : 'transparent',
-                  color: activeTab === 'shortcuts' ? theme.colors.text.primary : theme.colors.text.secondary
-                }}
-                onMouseEnter={(e) => {
-                  if (activeTab !== 'shortcuts') {
-                    e.currentTarget.style.backgroundColor = `${theme.colors.bg.elevated}50`;
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (activeTab !== 'shortcuts') {
-                    e.currentTarget.style.backgroundColor = 'transparent';
-                  }
-                }}
-              >
-                Raccourcis
-              </button>
-            </div>
-          </div>
-
-          {/* Right Content */}
-          <div className="flex-1 overflow-y-auto p-6">
-            {activeTab === 'theme' && <ThemeSettings />}
-            {activeTab === 'shortcuts' && <ShortcutSettings />}
+          <div className="p-2 space-y-1">
+            <button
+              onClick={() => setActiveTab('theme')}
+              className="w-full text-left px-3 py-2 rounded text-sm transition-colors hover:bg-opacity-70"
+              style={{
+                backgroundColor: activeTab === 'theme' ? theme.colors.bg.elevated : 'transparent',
+                color: activeTab === 'theme' ? theme.colors.text.primary : theme.colors.text.secondary
+              }}
+            >
+              Thèmes
+            </button>
+            <button
+              onClick={() => setActiveTab('shortcuts')}
+              className="w-full text-left px-3 py-2 rounded text-sm transition-colors hover:bg-opacity-70"
+              style={{
+                backgroundColor: activeTab === 'shortcuts' ? theme.colors.bg.elevated : 'transparent',
+                color: activeTab === 'shortcuts' ? theme.colors.text.primary : theme.colors.text.secondary
+              }}
+            >
+              Raccourcis
+            </button>
           </div>
         </div>
 
-        {/* Footer */}
-        <div 
-          className="h-12 flex items-center justify-end gap-2 px-4 border-t"
-          style={{ 
-            backgroundColor: theme.colors.bg.secondary,
-            borderColor: theme.colors.border.default
-          }}
-        >
-          <button
-            onClick={handleClose}
-            className="px-4 py-1.5 rounded text-sm transition-colors"
-            style={{
-              backgroundColor: theme.colors.accent.primary,
-              color: theme.colors.text.primary
-            }}
-          >
-            Fermer
-          </button>
+        {/* Right Content */}
+        <div className="flex-1 overflow-y-auto p-6">
+          {activeTab === 'theme' && <ThemeSettings />}
+          {activeTab === 'shortcuts' && <ShortcutSettings />}
         </div>
       </div>
     </div>
@@ -168,23 +92,23 @@ function ThemeSettings() {
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-3">
                     <div className="flex gap-1">
-                      <div 
+                      <div
                         className="w-6 h-6 rounded border"
-                        style={{ 
+                        style={{
                           backgroundColor: themeData.colors.bg.primary,
                           borderColor: theme.colors.border.default
                         }}
                       />
-                      <div 
+                      <div
                         className="w-6 h-6 rounded border"
-                        style={{ 
+                        style={{
                           backgroundColor: themeData.colors.accent.primary,
                           borderColor: theme.colors.border.default
                         }}
                       />
-                      <div 
+                      <div
                         className="w-6 h-6 rounded border"
-                        style={{ 
+                        style={{
                           backgroundColor: themeData.colors.text.primary,
                           borderColor: theme.colors.border.default
                         }}
@@ -195,7 +119,7 @@ function ThemeSettings() {
                     </span>
                   </div>
                   {isActive && (
-                    <span className="text-xs px-2 py-0.5 rounded" style={{ 
+                    <span className="text-xs px-2 py-0.5 rounded" style={{
                       backgroundColor: theme.colors.accent.primary,
                       color: theme.colors.text.primary
                     }}>
@@ -233,12 +157,12 @@ function ThemeSettings() {
 
 function ColorPreview({ label, color }: { label: string; color: string }) {
   const { theme } = useTheme();
-  
+
   return (
     <div className="flex items-center gap-2">
-      <div 
+      <div
         className="w-10 h-10 rounded border"
-        style={{ 
+        style={{
           backgroundColor: color,
           borderColor: theme.colors.border.default
         }}
@@ -297,9 +221,9 @@ function ShortcutSettings() {
             <span className="text-sm" style={{ color: theme.colors.text.primary }}>
               {shortcut.action}
             </span>
-            <span 
+            <span
               className="text-xs font-mono px-2 py-1 rounded"
-              style={{ 
+              style={{
                 backgroundColor: theme.colors.bg.elevated,
                 color: theme.colors.text.secondary,
                 border: `1px solid ${theme.colors.border.default}`
@@ -311,7 +235,7 @@ function ShortcutSettings() {
         ))}
       </div>
 
-      <div className="mt-6 p-4 rounded" style={{ 
+      <div className="mt-6 p-4 rounded" style={{
         backgroundColor: theme.colors.bg.secondary,
         border: `1px solid ${theme.colors.border.default}`
       }}>

@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
 import { useTheme } from '../../ThemeContext';
-import { X, Box, Globe, Image as ImageIcon, Music, File } from 'lucide-react';
+import { X, Box, Globe, Image as ImageIcon, Music, File, Layers, Bone, Film, Settings, Package, Plug } from 'lucide-react';
 
 export interface Tab {
     id: string;
     title: string;
-    type: 'scene' | 'static-mesh' | 'texture' | 'sound';
-    data?: any;
-    closable?: boolean;
+    type: 'scene' | 'static-mesh' | 'texture' | 'sound' | 'material' | 'level' | 'skeletal-mesh' | 'animation-sequence' | 'editor-preferences' | 'project-settings' | 'plugin-manager';
+    data?: any; // e.g. entityId or filename
+    closable: boolean;
 }
 
 interface TabSystemProps {
@@ -29,6 +29,13 @@ export const TabSystem: React.FC<TabSystemProps> = ({ tabs, activeTabId, onTabCl
             case 'static-mesh': return <Box size={14} className="mr-2" />;
             case 'texture': return <ImageIcon size={14} className="mr-2" />;
             case 'sound': return <Music size={14} className="mr-2" />;
+            case 'material': return <Layers size={14} className="mr-2" />;
+            case 'level': return <Globe size={14} className="mr-2" />;
+            case 'skeletal-mesh': return <Bone size={14} className="mr-2" />;
+            case 'animation-sequence': return <Film size={14} className="mr-2" />;
+            case 'editor-preferences': return <Settings size={14} className="mr-2" />;
+            case 'project-settings': return <Package size={14} className="mr-2" />;
+            case 'plugin-manager': return <Plug size={14} className="mr-2" />;
             default: return <File size={14} className="mr-2" />;
         }
     };
@@ -70,15 +77,12 @@ export const TabSystem: React.FC<TabSystemProps> = ({ tabs, activeTabId, onTabCl
                         onDragOver={handleDragOver}
                         onDrop={(e) => handleDrop(e, index)}
                         onClick={() => onTabClick(tab.id)}
-                        className={`
-              relative h-full flex items-center px-3 min-w-[100px] max-w-[180px] cursor-pointer group
-              text-[10px] border-r transition-colors
-            `}
+                        className={`relative h-full flex items-center px-3 min-w-[100px] max-w-[180px] cursor-pointer group text-[10px] border-r transition-colors`}
                         style={{
                             backgroundColor: isActive ? theme.colors.bg.primary : 'transparent',
                             color: isActive ? theme.colors.accent.primary : theme.colors.text.muted,
                             borderColor: theme.colors.border.default,
-                            borderTop: isActive ? `2px solid ${theme.colors.accent.primary}` : '2px solid transparent'
+                            borderTop: isActive ? `2px solid ${theme.colors.accent.primary} ` : '2px solid transparent'
                         }}
                     >
                         {getIcon(tab.type)}
