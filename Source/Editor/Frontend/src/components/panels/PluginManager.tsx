@@ -15,11 +15,13 @@ interface PluginInfo {
 interface PluginManagerProps {
   isOpen: boolean;
   onClose: () => void;
+  plugins: any[];
+  onTogglePlugin: (id: string, enabled: boolean) => void;
 }
 
-export const PluginManager: React.FC<PluginManagerProps> = ({ isOpen, onClose }) => {
+export const PluginManager: React.FC<PluginManagerProps> = ({ isOpen, onClose, plugins, onTogglePlugin }) => {
   const { theme } = useTheme();
-  const [plugins, setPlugins] = useState<PluginInfo[]>([]);
+  // plugins state moved to parent
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<'all' | 'enabled' | 'Official' | 'Community'>('all');
   const [isClosing, setIsClosing] = useState(false);
@@ -32,54 +34,19 @@ export const PluginManager: React.FC<PluginManagerProps> = ({ isOpen, onClose })
     }, 180);
   };
 
-  useEffect(() => {
-    if (isOpen) {
-      loadPlugins();
-    }
-  }, [isOpen]);
-
-  const loadPlugins = () => {
-    // TODO: Charger depuis le backend via WebView message
-    // Pour l'instant, données de test
-    setPlugins([
-      {
-        id: 'discord_rich_presence',
-        name: 'Discord Rich Presence',
-        description: 'Affiche votre activité Plume Engine sur Discord',
-        version: '1.0.0',
-        author: 'Plume Engine Team',
-        category: 'Official',
-        enabled: true
-      }
-    ]);
-  };
+  // loadPlugins effect removed as data comes from props
 
   const togglePlugin = (pluginId: string) => {
-    setPlugins(prev => prev.map(plugin => {
-      if (plugin.id === pluginId) {
-        const newEnabled = !plugin.enabled;
-        
-        // Envoyer au backend
-        // @ts-ignore
-        if (window.chrome?.webview) {
-          // @ts-ignore
-          window.chrome.webview.postMessage({
-            type: 'toggle-plugin',
-            pluginId: pluginId,
-            enabled: newEnabled
-          });
-        }
-        
-        return { ...plugin, enabled: newEnabled };
-      }
-      return plugin;
-    }));
+    const plugin = plugins.find(p => p.id === pluginId);
+    if (plugin) {
+      onTogglePlugin(pluginId, !plugin.enabled);
+    }
   };
 
   const filteredPlugins = plugins.filter(plugin => {
     const matchesSearch = plugin.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         plugin.description.toLowerCase().includes(searchQuery.toLowerCase());
-    
+      plugin.description.toLowerCase().includes(searchQuery.toLowerCase());
+
     if (selectedCategory === 'all') return matchesSearch;
     if (selectedCategory === 'enabled') return matchesSearch && plugin.enabled;
     return matchesSearch && plugin.category === selectedCategory;
@@ -96,13 +63,13 @@ export const PluginManager: React.FC<PluginManagerProps> = ({ isOpen, onClose })
   return (
     <div className={`fixed inset-0 z-[4100] flex items-center justify-center ${isClosing ? 'modal-backdrop-exit' : 'modal-backdrop'}`}>
       {/* Backdrop */}
-      <div 
+      <div
         className="absolute inset-0 bg-black/80 backdrop-blur-sm"
         onClick={handleClose}
       />
-      
+
       {/* Panel */}
-      <div 
+      <div
         className={`relative border rounded-lg shadow-2xl w-[900px] h-[600px] flex flex-col ${isClosing ? 'modal-content-exit' : 'modal-content'}`}
         style={{
           backgroundColor: theme.colors.bg.primary,
@@ -114,7 +81,7 @@ export const PluginManager: React.FC<PluginManagerProps> = ({ isOpen, onClose })
         }}
       >
         {/* Header */}
-        <div 
+        <div
           className="flex items-center justify-between px-6 py-4 border-b"
           style={{ borderColor: theme.colors.border.default }}
         >
@@ -136,7 +103,7 @@ export const PluginManager: React.FC<PluginManagerProps> = ({ isOpen, onClose })
         </div>
 
         {/* Search Bar */}
-        <div 
+        <div
           className="px-6 py-3 border-b"
           style={{ borderColor: theme.colors.border.default }}
         >
@@ -160,23 +127,22 @@ export const PluginManager: React.FC<PluginManagerProps> = ({ isOpen, onClose })
         {/* Content */}
         <div className="flex-1 flex overflow-hidden">
           {/* Sidebar */}
-          <div 
+          <div
             className="w-56 border-r p-4 overflow-y-auto"
             style={{ borderColor: theme.colors.border.default }}
           >
             <div className="space-y-1">
               <button
                 onClick={() => setSelectedCategory('all')}
-                className={`w-full text-left px-3 py-2 rounded transition-colors hover:bg-opacity-10 hover:bg-white ${
-                  selectedCategory === 'all' ? 'bg-opacity-10 bg-white' : ''
-                }`}
-                style={{ 
-                  color: selectedCategory === 'all' ? theme.colors.accent.primary : theme.colors.text.secondary 
+                className={`w-full text-left px-3 py-2 rounded transition-colors hover:bg-opacity-10 hover:bg-white ${selectedCategory === 'all' ? 'bg-opacity-10 bg-white' : ''
+                  }`}
+                style={{
+                  color: selectedCategory === 'all' ? theme.colors.accent.primary : theme.colors.text.secondary
                 }}
               >
                 <div className="flex items-center justify-between">
                   <span>Tous les plugins</span>
-                  <span 
+                  <span
                     className="text-xs px-2 py-0.5 rounded"
                     style={{ backgroundColor: theme.colors.bg.tertiary }}
                   >
@@ -187,16 +153,15 @@ export const PluginManager: React.FC<PluginManagerProps> = ({ isOpen, onClose })
 
               <button
                 onClick={() => setSelectedCategory('enabled')}
-                className={`w-full text-left px-3 py-2 rounded transition-colors hover:bg-opacity-10 hover:bg-white ${
-                  selectedCategory === 'enabled' ? 'bg-opacity-10 bg-white' : ''
-                }`}
-                style={{ 
-                  color: selectedCategory === 'enabled' ? theme.colors.accent.primary : theme.colors.text.secondary 
+                className={`w-full text-left px-3 py-2 rounded transition-colors hover:bg-opacity-10 hover:bg-white ${selectedCategory === 'enabled' ? 'bg-opacity-10 bg-white' : ''
+                  }`}
+                style={{
+                  color: selectedCategory === 'enabled' ? theme.colors.accent.primary : theme.colors.text.secondary
                 }}
               >
                 <div className="flex items-center justify-between">
                   <span>Plugins activés</span>
-                  <span 
+                  <span
                     className="text-xs px-2 py-0.5 rounded"
                     style={{ backgroundColor: theme.colors.bg.tertiary }}
                   >
@@ -207,7 +172,7 @@ export const PluginManager: React.FC<PluginManagerProps> = ({ isOpen, onClose })
 
               <div className="h-px my-3" style={{ backgroundColor: theme.colors.border.default }} />
 
-              <div 
+              <div
                 className="text-xs font-semibold px-3 py-2"
                 style={{ color: theme.colors.text.muted }}
               >
@@ -216,16 +181,15 @@ export const PluginManager: React.FC<PluginManagerProps> = ({ isOpen, onClose })
 
               <button
                 onClick={() => setSelectedCategory('Official')}
-                className={`w-full text-left px-3 py-2 rounded transition-colors hover:bg-opacity-10 hover:bg-white ${
-                  selectedCategory === 'Official' ? 'bg-opacity-10 bg-white' : ''
-                }`}
-                style={{ 
-                  color: selectedCategory === 'Official' ? theme.colors.accent.primary : theme.colors.text.secondary 
+                className={`w-full text-left px-3 py-2 rounded transition-colors hover:bg-opacity-10 hover:bg-white ${selectedCategory === 'Official' ? 'bg-opacity-10 bg-white' : ''
+                  }`}
+                style={{
+                  color: selectedCategory === 'Official' ? theme.colors.accent.primary : theme.colors.text.secondary
                 }}
               >
                 <div className="flex items-center justify-between">
                   <span>Officiels</span>
-                  <span 
+                  <span
                     className="text-xs px-2 py-0.5 rounded"
                     style={{ backgroundColor: theme.colors.bg.tertiary }}
                   >
@@ -236,16 +200,15 @@ export const PluginManager: React.FC<PluginManagerProps> = ({ isOpen, onClose })
 
               <button
                 onClick={() => setSelectedCategory('Community')}
-                className={`w-full text-left px-3 py-2 rounded transition-colors hover:bg-opacity-10 hover:bg-white ${
-                  selectedCategory === 'Community' ? 'bg-opacity-10 bg-white' : ''
-                }`}
-                style={{ 
-                  color: selectedCategory === 'Community' ? theme.colors.accent.primary : theme.colors.text.secondary 
+                className={`w-full text-left px-3 py-2 rounded transition-colors hover:bg-opacity-10 hover:bg-white ${selectedCategory === 'Community' ? 'bg-opacity-10 bg-white' : ''
+                  }`}
+                style={{
+                  color: selectedCategory === 'Community' ? theme.colors.accent.primary : theme.colors.text.secondary
                 }}
               >
                 <div className="flex items-center justify-between">
                   <span>Community</span>
-                  <span 
+                  <span
                     className="text-xs px-2 py-0.5 rounded"
                     style={{ backgroundColor: theme.colors.bg.tertiary }}
                   >
@@ -286,9 +249,9 @@ export const PluginManager: React.FC<PluginManagerProps> = ({ isOpen, onClose })
                           <h3 className="font-semibold" style={{ color: theme.colors.text.primary }}>
                             {plugin.name}
                           </h3>
-                          <span 
+                          <span
                             className="text-xs px-2 py-0.5 rounded"
-                            style={{ 
+                            style={{
                               backgroundColor: theme.colors.bg.tertiary,
                               color: theme.colors.text.secondary
                             }}
@@ -296,9 +259,9 @@ export const PluginManager: React.FC<PluginManagerProps> = ({ isOpen, onClose })
                             v{plugin.version}
                           </span>
                           {plugin.category === 'Official' && (
-                            <span 
+                            <span
                               className="text-xs px-2 py-0.5 rounded"
-                              style={{ 
+                              style={{
                                 backgroundColor: `${theme.colors.accent.primary}33`,
                                 color: theme.colors.accent.primary
                               }}
@@ -317,14 +280,13 @@ export const PluginManager: React.FC<PluginManagerProps> = ({ isOpen, onClose })
 
                       <button
                         onClick={() => togglePlugin(plugin.id)}
-                        className={`ml-4 px-4 py-2 rounded flex items-center gap-2 transition-colors ${
-                          plugin.enabled ? 'bg-opacity-20' : ''
-                        }`}
+                        className={`ml-4 px-4 py-2 rounded flex items-center gap-2 transition-colors ${plugin.enabled ? 'bg-opacity-20' : ''
+                          }`}
                         style={{
-                          backgroundColor: plugin.enabled 
+                          backgroundColor: plugin.enabled
                             ? `${theme.colors.accent.primary}33`
                             : theme.colors.bg.tertiary,
-                          color: plugin.enabled 
+                          color: plugin.enabled
                             ? theme.colors.accent.primary
                             : theme.colors.text.secondary
                         }}

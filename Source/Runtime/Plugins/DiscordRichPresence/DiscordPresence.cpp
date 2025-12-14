@@ -1,5 +1,6 @@
 #include "DiscordPresence.h"
 #include <chrono>
+#include <thread>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -36,10 +37,12 @@ bool DiscordPresence::Initialize() {
     // Discord Application ID pour Plume Engine
     discord::ClientId clientId = 1445163901581787236LL;
     
-    auto result = discord::Core::Create(clientId, DiscordCreateFlags_NoRequireDiscord, &g_discordCore);
-    if (result != discord::Result::Ok || !g_discordCore) {
-        // Discord initialization failed - application will continue without Rich Presence
-        return false;
+    if (!g_discordCore) {
+        auto result = discord::Core::Create(clientId, DiscordCreateFlags_NoRequireDiscord, &g_discordCore);
+        if (result != discord::Result::Ok || !g_discordCore) {
+            // Discord initialization failed - application will continue without Rich Presence
+            return false;
+        }
     }
     
     m_startTimestamp = std::chrono::duration_cast<std::chrono::seconds>(
@@ -58,14 +61,59 @@ bool DiscordPresence::Initialize() {
 }
 
 void DiscordPresence::Shutdown() {
-    if (!m_initialized || !m_enabled) return;
+    if (!m_initialized) return;
     
+#ifdef _WIN32
+    if (g_discordCore) {
+        // Clear activity before shutdown
+        bool success = false;
+        int attempts = 0;
+        
+        while (!success && attempts < 3) {
+            attempts++;
+            
+            volatile bool callbackReceived = false;
+            volatile int result = -1;
+            
+            g_discordCore->ActivityManager().ClearActivity([&callbackReceived, &result](discord::Result r) {
+                result = (int)r;
+                callbackReceived = true;
+            });
+            
+            // Wait for callback (max 500ms)
+            auto start = std::chrono::steady_clock::now();
+            while (!callbackReceived && std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count() < 500) {
+                g_discordCore->RunCallbacks();
+                std::this_thread::sleep_for(std::chrono::milliseconds(2));
+            }
+            
+            if (callbackReceived && result == 0) {
+                success = true;
+            } else {
+                std::this_thread::sleep_for(std::chrono::milliseconds(50)); // Wait before retry
+            }
+        }
+        
+        // Final grace period to flush
+        auto graceStart = std::chrono::steady_clock::now();
+        while (std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - graceStart).count() < 2000) {
+             g_discordCore->RunCallbacks();
+             std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        }
+        
+        // DO NOT delete core here. We keep the connection alive but cleared.
+        // It will be deleted in destructor.
+    }
+    m_initialized = false;
+#endif
+}
+
+DiscordPresence::~DiscordPresence() {
 #ifdef _WIN32
     if (g_discordCore) {
         delete g_discordCore;
         g_discordCore = nullptr;
     }
-    m_initialized = false;
 #endif
 }
 
@@ -136,6 +184,10 @@ void DiscordPresence::UpdatePresence() {
         // Optional callback to handle errors
     });
 #endif
+}
+
+extern "C" __declspec(dllexport) IPlugin* CreatePlugin() {
+    return new DiscordPresence();
 }
 
 } // namespace Plume

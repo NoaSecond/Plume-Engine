@@ -6,7 +6,7 @@
 
 namespace Plume {
 
-class PLUME_API DiscordPresence : public IPlugin {
+class DiscordPresence : public IPlugin {
 public:
     static DiscordPresence& Get();
     
@@ -26,7 +26,7 @@ public:
     
 public:
     DiscordPresence() = default;
-    ~DiscordPresence() = default;
+    ~DiscordPresence();
 
 private:
     
@@ -42,5 +42,7 @@ private:
     
     void UpdatePresence();
 };
+
+extern "C" __declspec(dllexport) IPlugin* CreatePlugin();
 
 } // namespace Plume

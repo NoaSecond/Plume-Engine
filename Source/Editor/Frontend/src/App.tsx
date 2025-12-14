@@ -17,6 +17,12 @@ import { useTheme } from './ThemeContext';
 
 export default function App() {
   const { theme } = useTheme();
+
+  // Plugin System State
+  const [plugins, setPlugins] = useState<any[]>([]);
+  const [refreshingPluginId, setRefreshingPluginId] = useState<string | null>(null);
+
+  // Editor State
   const [entities, setEntities] = useState<Entity[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [logs, setLogs] = useState<LogEntry[]>([]);
@@ -31,13 +37,17 @@ export default function App() {
   const [showPluginManager, setShowPluginManager] = useState(false);
   const [showProjectSettings, setShowProjectSettings] = useState(false);
   const [renderingAPI, setRenderingAPI] = useState<'DirectX12' | 'Vulkan' | 'OpenGL' | 'Metal'>('OpenGL');
-  const [cameraTransform, setCameraTransform] = useState({ position: {x:0, y:-50, z:-150}, rotation: {x:20, y:0, z:0} });
+  const [cameraTransform, setCameraTransform] = useState({ position: { x: 0, y: -50, z: -150 }, rotation: { x: 20, y: 0, z: 0 } });
+
+  // Settings
   const [showFPS, setShowFPS] = useState(false);
   const [fpsValue, setFpsValue] = useState(0);
   const showFPSRef = useRef<boolean>(showFPS);
   const [vsyncEnabled, setVsyncEnabled] = useState(true);
   const [maxFpsCap, setMaxFpsCap] = useState(144);
   const [viewMode, setViewMode] = useState<'Lit' | 'Unlit' | 'Wireframe'>('Lit');
+
+  // Refs
   const requestRef = useRef<number>();
   const previousTimeRef = useRef<number>();
   const keysPressed = useRef<{ [key: string]: boolean }>({});
@@ -55,6 +65,21 @@ export default function App() {
     setLogs(prev => [...prev.slice(-99), { id: Date.now(), time, level, msg }]);
   }, []);
 
+  const refreshPlugin = (id: string) => {
+    if (refreshingPluginId) return;
+    setRefreshingPluginId(id);
+
+    if ((window as any).chrome?.webview) {
+      (window as any).chrome.webview.postMessage({ action: 'refresh-plugin', id });
+    }
+
+    // Minimum "Refreshing..." display time of 1s
+    setTimeout(() => {
+      setRefreshingPluginId(null);
+    }, 1000);
+  };
+
+  // Main Initialization & Event Listener Effect
   useEffect(() => {
     // Listen to messages from native (WebView2 PostWebMessage)
     const handleNativeMessage = (e: any) => {
@@ -62,6 +87,14 @@ export default function App() {
         const data = (e && e.data) ? e.data : (e && e.detail) ? e.detail : e;
         if (!data) return;
         const action = data.action;
+
+        if (action === 'plugin-list') {
+          if (data.plugins) {
+            setPlugins(data.plugins);
+            addLog(`Loaded ${data.plugins.length} plugins`, 'INFO');
+          }
+        }
+
         if (action === 'ui_config' && data.uiConfig) {
           if (typeof data.uiConfig.showFPS !== 'undefined') {
             const val = !!data.uiConfig.showFPS;
@@ -75,26 +108,37 @@ export default function App() {
             setMaxFpsCap(data.uiConfig.maxFPS);
           }
         }
-      } catch(e) {}
+      } catch (e) { }
     };
-    try { if ((window as any).chrome?.webview) (window as any).chrome.webview.addEventListener('message', handleNativeMessage); else window.addEventListener('message', handleNativeMessage as any); } catch(e) {}
+
+    try {
+      if ((window as any).chrome?.webview) {
+        (window as any).chrome.webview.addEventListener('message', handleNativeMessage);
+        // Request initial plugin list once listener is attached
+        setTimeout(() => {
+          (window as any).chrome.webview.postMessage({ action: 'get-plugins' });
+        }, 500);
+      }
+      else window.addEventListener('message', handleNativeMessage as any);
+    } catch (e) { }
+
     const loadSceneData = () => {
       const script = document.createElement('script');
-      script.src = './scene_data.js'; 
+      script.src = './scene_data.js';
       script.onload = () => {
         const data = (window as any).PLUME_SCENE_DATA;
-        if (data) { 
-          setEntities(data); 
+        if (data) {
+          setEntities(data);
           addLog('Scene loaded successfully', 'INFO');
         }
       };
-      script.onerror = () => { 
+      script.onerror = () => {
         setEntities(DEFAULT_SCENE);
         addLog('Failed to load scene, using default', 'WARN');
       };
       document.body.appendChild(script);
     };
-    
+
     const loadRenderingData = () => {
       const script = document.createElement('script');
       script.src = './rendering_data.js';
@@ -103,35 +147,33 @@ export default function App() {
         if (data && data.graphicsAPI) {
           setRenderingAPI(data.graphicsAPI);
         }
-          if (data && typeof data.fps === 'number') {
-            setFpsValue(Math.round(data.fps));
+        if (data && typeof data.fps === 'number') {
+          setFpsValue(Math.round(data.fps));
+        }
+        if (data && data.uiConfig) {
+          if (typeof data.uiConfig.showFPS !== 'undefined') {
+            const val = !!data.uiConfig.showFPS;
+            setShowFPS(val);
+            showFPSRef.current = val;
           }
-          if (data && data.uiConfig) {
-            if (typeof data.uiConfig.showFPS !== 'undefined') {
-              const val = !!data.uiConfig.showFPS;
-              setShowFPS(val);
-              showFPSRef.current = val;
-            }
-            if (typeof data.uiConfig.vsync !== 'undefined') {
-              setVsyncEnabled(!!data.uiConfig.vsync);
-            }
-            if (typeof data.uiConfig.maxFPS !== 'undefined') {
-              setMaxFpsCap(data.uiConfig.maxFPS);
-            }
+          if (typeof data.uiConfig.vsync !== 'undefined') {
+            setVsyncEnabled(!!data.uiConfig.vsync);
           }
-            // If renderer reports vsync/maxfps in future, sync here (not present currently)
+          if (typeof data.uiConfig.maxFPS !== 'undefined') {
+            setMaxFpsCap(data.uiConfig.maxFPS);
+          }
+        }
       };
       document.body.appendChild(script);
     };
-    
+
     loadSceneData();
     loadRenderingData();
 
-    // If the native side already exported rendering data synchronously (file present),
-    // pick up fps/uiConfig immediately so console commands reflect the correct state.
+    // Initial sycn
     try {
       const init = (window as any).PLUME_RENDERING_DATA;
-        if (init) {
+      if (init) {
         if (init.graphicsAPI) setRenderingAPI(init.graphicsAPI);
         if (typeof init.fps === 'number') setFpsValue(Math.round(init.fps));
         if (init.uiConfig && typeof init.uiConfig.showFPS !== 'undefined') {
@@ -141,15 +183,15 @@ export default function App() {
         }
         if (init.camera) {
           const rawRot = init.camera.rotation || { x: 0, y: 0, z: 0 };
-          const clamp = (v:number, a:number, b:number) => Math.max(a, Math.min(b, v));
-          const normalizeAngle = (v:number) => { let a = ((v % 360) + 360) % 360; if (a >= 180) a -= 360; return a; };
+          const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
+          const normalizeAngle = (v: number) => { let a = ((v % 360) + 360) % 360; if (a >= 180) a -= 360; return a; };
           const normRaw = { x: normalizeAngle(rawRot.x), y: normalizeAngle(rawRot.y), z: normalizeAngle(rawRot.z) };
           const normRot = { x: clamp(normRaw.x, -89, 89), y: normRaw.y, z: normRaw.z };
-          setCameraTransform({ position: init.camera.position || { x:0,y:0,z:0 }, rotation: normRot });
+          setCameraTransform({ position: init.camera.position || { x: 0, y: 0, z: 0 }, rotation: normRot });
         }
       }
-    } catch(e) {}
-    
+    } catch (e) { }
+
     // Poll for rendering data updates every 500ms
     const renderingInterval = setInterval(() => {
       const script = document.createElement('script');
@@ -164,24 +206,24 @@ export default function App() {
           setFpsValue(Math.round(data.fps));
         }
         if (data && data.uiConfig && typeof data.uiConfig.showFPS !== 'undefined') {
-            const val = !!data.uiConfig.showFPS;
-            if (val !== showFPSRef.current) {
-              showFPSRef.current = val;
-              setShowFPS(val);
-            } else {
-              setShowFPS(val);
-            }
+          const val = !!data.uiConfig.showFPS;
+          if (val !== showFPSRef.current) {
+            showFPSRef.current = val;
+            setShowFPS(val);
+          } else {
+            setShowFPS(val);
+          }
         }
         if (data && data.uiConfig) {
-            if (typeof data.uiConfig.vsync !== 'undefined') setVsyncEnabled(!!data.uiConfig.vsync);
-            if (typeof data.uiConfig.maxFPS !== 'undefined') setMaxFpsCap(data.uiConfig.maxFPS);
+          if (typeof data.uiConfig.vsync !== 'undefined') setVsyncEnabled(!!data.uiConfig.vsync);
+          if (typeof data.uiConfig.maxFPS !== 'undefined') setMaxFpsCap(data.uiConfig.maxFPS);
         }
-        
+
         if (data && data.camera) {
           // Normalize and clamp rotation values coming from the native backend
           const rawRot = data.camera.rotation || { x: 0, y: 0, z: 0 };
-          const clamp = (v:number, a:number, b:number) => Math.max(a, Math.min(b, v));
-          const normalizeAngle = (v:number) => {
+          const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
+          const normalizeAngle = (v: number) => {
             // Normalize to [-180,180)
             let a = ((v % 360) + 360) % 360;
             if (a >= 180) a -= 360;
@@ -210,13 +252,13 @@ export default function App() {
       };
       document.body.appendChild(script);
     }, 500);
-    
+
     addLog('Plume Engine Editor initialized', 'INFO');
-    
+
     return () => clearInterval(renderingInterval);
   }, [addLog]);
 
-  const normalizeAngle = (v:number) => {
+  const normalizeAngle = (v: number) => {
     let a = ((v % 360) + 360) % 360;
     if (a >= 180) a -= 360;
     return a;
@@ -227,20 +269,15 @@ export default function App() {
     if (!raw) return;
     addLog(`> ${raw}`, 'USER');
 
-    // Support help requests like `help <name>` or `help <prefix>` (ex: `help viewport` or `help viewport.cam`)
     const helpPrefixMatch = raw.match(/^(help|\?|commands)\s+([a-z0-9_.-]+)$/i);
     if (helpPrefixMatch) {
       const prefix = helpPrefixMatch[2].toLowerCase();
-
-      // If there's an exact command with that name, show its detailed help
       const exact = COMMANDS[prefix];
       if (exact) {
         addLog(`${prefix}: ${exact.description}`, 'INFO');
         addLog(`${exact.usage}`, 'INFO');
         return;
       }
-
-      // Otherwise treat as a prefix and list immediate children (groups and leaf commands)
       const keys = Object.keys(COMMANDS);
       const normalized = prefix.replace(/^\.+|\.+$/g, '');
       const matched = keys.filter(k => k === normalized || k.startsWith(normalized + '.'));
@@ -248,7 +285,6 @@ export default function App() {
         addLog(`No commands under ${prefix}`, 'WARN');
         return;
       }
-
       addLog(`Commands under '${prefix}':`, 'INFO');
       const children = new Set<string>();
       for (const k of matched) {
@@ -260,8 +296,6 @@ export default function App() {
           children.add(next);
         }
       }
-
-      // For each child, show whether it's a subgroup (with count) or a leaf command (with usage)
       Array.from(children).sort().forEach((child) => {
         if (child === '') {
           const info = COMMANDS[normalized];
@@ -275,7 +309,6 @@ export default function App() {
           const info = COMMANDS[full];
           addLog(`${full}: ${info.usage} — ${info.description}`, 'INFO');
         }
-        // Only show a count for groups that actually contain more than the leaf itself
         if (descendantCount > 1) {
           addLog(`${full}/ (${descendantCount})`, 'INFO');
         }
@@ -283,9 +316,6 @@ export default function App() {
       return;
     }
 
-    
-
-    // If user asks for a general help / commands list (top-level prefixes)
     if (/^(help|\?|commands)$/i.test(raw)) {
       addLog('Top-level command prefixes:', 'INFO');
       const keys = Object.keys(COMMANDS);
@@ -298,12 +328,10 @@ export default function App() {
       return;
     }
 
-    // replace commas with spaces and split
     const parts = raw.replace(/,/g, ' ').split(/\s+/);
     const name = parts[0].toLowerCase();
     const args = parts.slice(1).map(v => Number(v));
 
-    // fps command: query or set FPS overlay visibility
     if (name === 'fps') {
       if (args.length === 0) {
         addLog(`${showFPS ? 1 : 0}`, 'INFO');
@@ -324,7 +352,6 @@ export default function App() {
       return;
     }
 
-    // vsync command: query or set vsync
     if (name === 'vsync') {
       if (args.length === 0) {
         addLog(`${vsyncEnabled ? 1 : 0}`, 'INFO');
@@ -333,7 +360,6 @@ export default function App() {
       const v = args[0];
       if (v === 0) {
         setVsyncEnabled(false);
-        // notify native
         if ((window as any).chrome?.webview) (window as any).chrome.webview.postMessage({ action: 'set-vsync', value: false });
         addLog('VSync disabled', 'INFO');
         return;
@@ -348,7 +374,6 @@ export default function App() {
       return;
     }
 
-    // maxfps command: query or set max FPS cap
     if (name === 'maxfps') {
       if (args.length === 0) {
         addLog(`${maxFpsCap}`, 'INFO');
@@ -365,20 +390,18 @@ export default function App() {
       return;
     }
 
-    // Built-in convenience commands
     if (name === 'clear') {
       setLogs([]);
       return;
     }
 
     if (name === 'viewport.cam.loc') {
-      if (args.length < 3 || !args.slice(0,3).every(Number.isFinite)) {
+      if (args.length < 3 || !args.slice(0, 3).every(Number.isFinite)) {
         addLog('Usage: viewport.cam.loc x y z', 'ERROR');
         return;
       }
       const [x, y, z] = args;
       setCameraTransform(prev => ({ ...prev, position: { x, y, z } }));
-      // Notify native backend of camera position change so renderer updates
       if ((window as any).chrome?.webview) {
         (window as any).chrome.webview.postMessage({ action: 'set-camera', position: { x, y, z } });
       }
@@ -387,17 +410,15 @@ export default function App() {
     }
 
     if (name === 'viewport.cam.rot') {
-      if (args.length < 3 || !args.slice(0,3).every(Number.isFinite)) {
+      if (args.length < 3 || !args.slice(0, 3).every(Number.isFinite)) {
         addLog('Usage: viewport.cam.rot pitch yaw roll', 'ERROR');
         return;
       }
       let [px, py, pz] = args;
-      // Normalize angles and clamp pitch to avoid flipping
       px = Math.max(-89, Math.min(89, normalizeAngle(px)));
       py = normalizeAngle(py);
       pz = normalizeAngle(pz);
       setCameraTransform(prev => ({ ...prev, rotation: { x: px, y: py, z: pz } }));
-      // Notify native backend of camera rotation change so renderer updates
       if ((window as any).chrome?.webview) {
         (window as any).chrome.webview.postMessage({ action: 'set-camera', rotation: { x: px, y: py, z: pz } });
       }
@@ -412,11 +433,11 @@ export default function App() {
     if (previousTimeRef.current !== undefined) {
       const deltaTime = time - previousTimeRef.current;
       const moveSpeed = deltaTime * 0.1;
-      
+
       // Batch camera updates to reduce state changes
       let needsCameraUpdate = false;
       const cameraUpdates: any = {};
-      
+
       if (keysPressed.current['KeyW']) {
         cameraUpdates.z = moveSpeed;
         needsCameraUpdate = true;
@@ -425,7 +446,7 @@ export default function App() {
         cameraUpdates.z = -moveSpeed;
         needsCameraUpdate = true;
       }
-      
+
       if (needsCameraUpdate) {
         setCameraTransform(prev => ({
           ...prev,
@@ -435,7 +456,7 @@ export default function App() {
           }
         }));
       }
-      
+
       // Optimize entity rotation updates
       if (isPlaying) {
         setEntities(prev => prev.map(ent => {
@@ -463,9 +484,6 @@ export default function App() {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // If the user is typing in a text input/textarea/contenteditable, ignore
-      // regular keys so the viewport camera doesn't react. Allow shortcuts
-      // (Ctrl/Alt/Meta) and Escape to still work.
       const active = document.activeElement as HTMLElement | null;
       const isTyping = !!active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable);
       if (isTyping && !(e.ctrlKey || e.altKey || e.metaKey) && e.key !== 'Escape') {
@@ -473,10 +491,8 @@ export default function App() {
       }
 
       keysPressed.current[e.code] = true;
-      
-      // Handle Escape key to close modals and drawers
+
       if (e.key === 'Escape') {
-        // Close modals first (highest priority)
         if (showPreferences) {
           setShowPreferences(false);
           return;
@@ -489,22 +505,21 @@ export default function App() {
           setShowProjectSettings(false);
           return;
         }
-        // Close content browser drawer
         if (showContentBrowser) {
           setShowContentBrowser(false);
           return;
         }
       }
-      
-      if(e.ctrlKey && e.code === 'Space') {
+
+      if (e.ctrlKey && e.code === 'Space') {
         e.preventDefault();
         setShowContentBrowser(p => !p);
-        setShowConsole(false); // Fermer la console si on ouvre le content browser
+        setShowConsole(false);
       }
-      if(e.ctrlKey && e.code === 'KeyI') {
+      if (e.ctrlKey && e.code === 'KeyI') {
         e.preventDefault();
         setShowConsole(p => !p);
-        setShowContentBrowser(false); // Fermer le content browser si on ouvre la console
+        setShowContentBrowser(false);
       }
     };
     const handleKeyUp = (e: KeyboardEvent) => { keysPressed.current[e.code] = false; };
@@ -515,28 +530,28 @@ export default function App() {
   const selectedEntity = entities.find(e => e.id === selectedId);
 
   return (
-    <div 
+    <div
       className="h-screen w-full flex flex-col overflow-hidden font-sans select-none"
-      style={{ 
+      style={{
         backgroundColor: 'transparent',
-        color: theme.colors.text.primary 
+        color: theme.colors.text.primary
       }}
     >
-      <Header isPlaying={isPlaying} onSave={() => {}} onAbout={() => setShowAboutModal(true)} onPreferences={() => setShowPreferences(true)} onPlugins={() => setShowPluginManager(true)} onProjectSettings={() => setShowProjectSettings(true)} />
-      <Toolbar activeTool={activeTool} setActiveTool={setActiveTool} onSave={() => {}} onDelete={() => {}} isPlaying={isPlaying} onPlay={() => setIsPlaying(true)} onPause={() => setIsPlaying(false)} onStop={() => setIsPlaying(false)} />
+      <Header isPlaying={isPlaying} onSave={() => { }} onAbout={() => setShowAboutModal(true)} onPreferences={() => setShowPreferences(true)} onPlugins={() => setShowPluginManager(true)} onProjectSettings={() => setShowProjectSettings(true)} />
+      <Toolbar activeTool={activeTool} setActiveTool={setActiveTool} onSave={() => { }} onDelete={() => { }} isPlaying={isPlaying} onPlay={() => setIsPlaying(true)} onPause={() => setIsPlaying(false)} onStop={() => setIsPlaying(false)} />
       <div className="flex-1 flex overflow-hidden" style={{ backgroundColor: 'transparent' }}>
-        <Viewport entities={entities} selectedId={selectedId} setSelectedId={setSelectedId} cameraTransform={cameraTransform} setCameraTransform={setCameraTransform} activeTool={activeTool} viewMode={viewMode} setViewMode={setViewMode} onAddEntity={(type) => setEntities([...entities, {id: Date.now().toString(), name: type, type, visible: true, transform: {position:{x:0,y:0,z:0}, rotation:{x:0,y:0,z:0}, scale:{x:1,y:1,z:1}}}])} />
-        <div 
+        <Viewport entities={entities} selectedId={selectedId} setSelectedId={setSelectedId} cameraTransform={cameraTransform} setCameraTransform={setCameraTransform} activeTool={activeTool} viewMode={viewMode} setViewMode={setViewMode} onAddEntity={(type) => setEntities([...entities, { id: Date.now().toString(), name: type, type, visible: true, transform: { position: { x: 0, y: 0, z: 0 }, rotation: { x: 0, y: 0, z: 0 }, scale: { x: 1, y: 1, z: 1 } } }])} />
+        <div
           className="w-80 flex flex-col shrink-0 border-l"
-          style={{ 
-            backgroundColor: theme.colors.bg.secondary, 
-            borderColor: theme.colors.border.default 
+          style={{
+            backgroundColor: theme.colors.bg.secondary,
+            borderColor: theme.colors.border.default
           }}
         >
-          <OutlinerPanel 
-            entities={entities} 
-            selectedId={selectedId} 
-            setSelectedId={setSelectedId} 
+          <OutlinerPanel
+            entities={entities}
+            selectedId={selectedId}
+            setSelectedId={setSelectedId}
             onAddEntity={(type) => {
               const newEntity: Entity = {
                 id: Date.now().toString(),
@@ -544,14 +559,14 @@ export default function App() {
                 type,
                 visible: true,
                 transform: {
-                  position: {x:0, y:0, z:0},
-                  rotation: {x:0, y:0, z:0},
-                  scale: {x:1, y:1, z:1}
+                  position: { x: 0, y: 0, z: 0 },
+                  rotation: { x: 0, y: 0, z: 0 },
+                  scale: { x: 1, y: 1, z: 1 }
                 }
               };
               setEntities([...entities, newEntity]);
-            }} 
-            setEntities={setEntities} 
+            }}
+            setEntities={setEntities}
             onDuplicate={(ent) => {
               const newEntity: Entity = {
                 ...ent,
@@ -559,32 +574,43 @@ export default function App() {
                 name: `${ent.name}_Copy`
               };
               setEntities([...entities, newEntity]);
-            }} 
+            }}
             onDelete={(id) => {
               setEntities(entities.filter(e => e.id !== id));
               if (selectedId === id) {
                 setSelectedId(null);
               }
-            }} 
+            }}
           />
           <DetailsPanel selectedEntity={selectedEntity} setEntities={setEntities} />
         </div>
       </div>
       <ContentBrowserPanel show={showContentBrowser} onClose={() => setShowContentBrowser(false)} onLog={addLog} searchQuery={searchQuery} setSearchQuery={setSearchQuery} />
-      <ConsolePanel 
-        logs={logs} 
-        onClear={() => setLogs([])} 
+      <ConsolePanel
+        logs={logs}
+        onClear={() => setLogs([])}
         onExecuteCommand={(cmd) => handleExecuteCommand(cmd)}
         isOpen={showConsole}
         setIsOpen={setShowConsole}
       />
       <EditorPreferences isOpen={showPreferences} onClose={() => setShowPreferences(false)} />
-      <PluginManager isOpen={showPluginManager} onClose={() => setShowPluginManager(false)} />
+      <PluginManager
+        isOpen={showPluginManager}
+        onClose={() => setShowPluginManager(false)}
+        plugins={plugins}
+        onTogglePlugin={(id, enabled) => {
+          if ((window as any).chrome?.webview) {
+            (window as any).chrome.webview.postMessage({ action: 'toggle-plugin', id, enabled });
+            // Optimistic update
+            setPlugins(prev => prev.map(p => p.id === id ? { ...p, enabled } : p));
+          }
+        }}
+      />
       <ProjectSettings isOpen={showProjectSettings} onClose={() => setShowProjectSettings(false)} />
-      <div 
+      <div
         className="h-6 border-t flex items-center justify-between px-2 text-[10px]"
-        style={{ 
-          backgroundColor: theme.colors.bg.secondary, 
+        style={{
+          backgroundColor: theme.colors.bg.secondary,
           borderColor: theme.colors.border.default,
           color: theme.colors.text.muted,
           zIndex: 2000,
@@ -592,20 +618,20 @@ export default function App() {
         }}
       >
         <div className="flex items-center gap-3">
-          <button 
+          <button
             onClick={() => {
               setShowContentBrowser(p => !p);
-              setShowConsole(false); // Fermer la console
+              setShowConsole(false);
             }}
             className="hover:underline cursor-pointer"
           >
             Content Browser (Ctrl+Space)
           </button>
           <span style={{ color: theme.colors.border.default }}>|</span>
-          <button 
+          <button
             onClick={() => {
               setShowConsole(p => !p);
-              setShowContentBrowser(false); // Fermer le content browser
+              setShowContentBrowser(false);
             }}
             className="hover:underline cursor-pointer"
           >
@@ -615,25 +641,45 @@ export default function App() {
           <span>{entities.length} entities</span>
         </div>
         <div className="flex items-center gap-3">
-            <span style={{ color: theme.colors.accent.primary }}>Plume Engine v0.1 Alpha</span>
+          {/* Plugins Section */}
+          <div className="flex items-center gap-3 border-r pr-3" style={{ borderColor: theme.colors.border.default }}>
+            {plugins.filter(p => p.enabled).map(p => (
+              <div key={p.id} className="flex items-center gap-1">
+                <span style={{ color: theme.colors.text.primary }}>{p.name} {p.version ? `v${p.version}` : ''}</span>
+                <button
+                  onClick={() => refreshPlugin(p.id)}
+                  className={`hover:text-white cursor-pointer px-1 ${refreshingPluginId === p.id ? 'animate-spin' : ''}`}
+                  title="Refresh Plugin"
+                  style={{ color: theme.colors.text.muted }}
+                  disabled={refreshingPluginId === p.id}
+                >
+                  {refreshingPluginId === p.id ? '↻' : '↺'}
+                </button>
+                {refreshingPluginId === p.id && <span className="text-[9px] italic" style={{ color: theme.colors.text.muted }}>Refreshing...</span>}
+                <span style={{ color: theme.colors.border.default, marginLeft: 8 }}>|</span>
+              </div>
+            ))}
+          </div>
+
+          <span style={{ color: theme.colors.accent.primary }}>Plume Engine v0.1 Alpha</span>
           <span style={{ color: theme.colors.border.default }}>|</span>
-            <span>{theme.displayName}</span>
+          <span>{theme.displayName}</span>
           <span style={{ color: theme.colors.border.default }}>|</span>
-            <span>{renderingAPI}</span>
-            {showFPS && (
-              <>
-                <span style={{ color: theme.colors.border.default }}>|</span>
-                <span>FPS: {fpsValue}</span>
-              </>
-            )}
+          <span>{renderingAPI}</span>
+          {showFPS && (
+            <>
+              <span style={{ color: theme.colors.border.default }}>|</span>
+              <span>FPS: {fpsValue}</span>
+            </>
+          )}
         </div>
       </div>
       {(showAboutModal || isAboutClosing) && (
         <div className={`fixed inset-0 bg-black/50 flex items-center justify-center z-50 ${isAboutClosing ? 'modal-backdrop-exit' : 'modal-backdrop'}`}>
-          <div 
+          <div
             className={`border rounded p-6 ${isAboutClosing ? 'modal-content-exit' : 'modal-content'}`}
-            style={{ 
-              backgroundColor: theme.colors.bg.secondary, 
+            style={{
+              backgroundColor: theme.colors.bg.secondary,
               borderColor: theme.colors.border.default,
               position: 'absolute',
               left: '50%',
@@ -641,17 +687,17 @@ export default function App() {
               transform: 'translate(-50%, -50%)'
             }}
           >
-            <PlumeLogo/>
+            <PlumeLogo />
             <h2 className="text-2xl font-light mt-4" style={{ color: theme.colors.text.primary }}>Plume Engine</h2>
             <p className="text-sm mt-2" style={{ color: theme.colors.text.secondary }}>Version 0.1 Alpha</p>
             <p className="text-xs mt-2" style={{ color: theme.colors.text.muted }}>Created by Noa Second</p>
             <p className="text-xs mt-4" style={{ color: theme.colors.text.muted }}>Current theme: {theme.displayName}</p>
-            <button 
+            <button
               onClick={handleAboutClose}
               className="mt-4 px-4 py-2 rounded"
-              style={{ 
-                backgroundColor: theme.colors.accent.primary, 
-                color: theme.colors.text.primary 
+              style={{
+                backgroundColor: theme.colors.accent.primary,
+                color: theme.colors.text.primary
               }}
             >
               Close

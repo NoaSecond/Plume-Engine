@@ -39,12 +39,6 @@ Plume::PluginManager::Get().RegisterPlugin(plugin);
 - **Community** - Plugins créés par la communauté
 - **System** - Plugins système essentiels (non désactivables)
 
-## Plugins disponibles
-
-### Officiels
-
-- **DiscordRichPresence** - Affiche l'activité sur Discord
-
 ## Gestion des plugins
 
 Les plugins peuvent être gérés via l'interface graphique:

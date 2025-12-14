@@ -2,7 +2,6 @@
 #include <Core/PluginManager.h>
 #include <Rendering/RHI/RHIDevice.h>
 #include <Rendering/RHI/RHISwapChain.h>
-#include <Plugins/DiscordRichPresence/DiscordPresence.h>
 #include <string>
 #include <filesystem>
 #include <fstream>
@@ -504,6 +503,7 @@ void InitWebView(const std::string& htmlPath) {
                                         L"      window.chrome.webview.postMessage({ action: 'plume_dom_ready' });\n"
                                         L"      document.addEventListener('DOMContentLoaded', function(){ window.chrome.webview.postMessage({ action: 'plume_dom_ready' }); });\n"
                                         L"      setTimeout(function(){ window.chrome.webview.postMessage({ action: 'plume_dom_heartbeat' }); }, 750);\n"
+                                        L"      setTimeout(function(){ window.chrome.webview.postMessage({ action: 'get-plugins' }); }, 1000);\n"
                                         L"    }\n"
                                         L"  }catch(e){}\n"
                                         L"})();";
@@ -536,6 +536,18 @@ void InitWebView(const std::string& htmlPath) {
                                             std::wstring out(size, L'\0');
                                             MultiByteToWideChar(CP_UTF8, 0, s.c_str(), (int)s.size(), out.data(), size);
                                             return out;
+                                        };
+
+                                        // Helper to send structured result back to the frontend (optionally with data)
+                                        auto sendResult = [&](bool success, const std::string& message, nlohmann::json data = {}) {
+                                            nlohmann::json res;
+                                            res["type"] = "result";
+                                            res["success"] = success;
+                                            res["message"] = message;
+                                            if (!data.is_null() && !data.empty()) res["data"] = data;
+                                            std::string out = res.dump();
+                                            std::wstring wides = utf8_to_wstr(out);
+                                            if (g_app.webview) g_app.webview->PostWebMessageAsJson(wides.c_str());
                                         };
 
                                         std::string msg = wstr_to_utf8(messageW);
@@ -607,6 +619,62 @@ void InitWebView(const std::string& htmlPath) {
                                                 return S_OK;
                                             }
                                             std::string out = "{\"type\":\"error\",\"action\":\"set-vsync\"}";
+                                            std::wstring wides = utf8_to_wstr(out);
+                                            if (g_app.webview) g_app.webview->PostWebMessageAsJson(wides.c_str());
+                                            return S_OK;
+                                        }
+
+                                        if (action == "refresh-plugin") {
+                                            std::string id = j.value("id", "");
+                                            if (id.empty()) { sendResult(false, "No plugin ID provided"); return S_OK; }
+                                            
+                                            auto p = Plume::PluginManager::Get().GetPlugin(id);
+                                            // Handle case where plugin might not be loaded yet
+                                            if (!p) {
+                                                 // Try to find it in the directory but not loaded? 
+                                                 // For now, simple reload of existing.
+                                                 // IMPROVEMENT: If we had a list of *available* but *unloaded* plugins, we could load it here.
+                                                 sendResult(false, "Plugin not found");
+                                                 return S_OK;
+                                            }
+                                            
+                                            p->Shutdown();
+                                            bool success = p->Initialize();
+                                            sendResult(success, success ? "Plugin refreshed" : "Failed to refresh plugin");
+                                            return S_OK;
+                                        }
+
+                                        if (action == "toggle-plugin") {
+                                            std::string id = j.value("id", "");
+                                            if (id.empty()) { sendResult(false, "No plugin ID provided"); return S_OK; }
+                                            bool enabled = j.value("enabled", false);
+                                            
+                                            Plume::PluginManager::Get().EnablePlugin(id, enabled);
+                                            
+                                            // Confirm the state change back to UI (optional but good practice)
+                                            std::string out = "{\"type\":\"result\",\"action\":\"toggle-plugin\",\"id\":\"" + id + "\",\"enabled\":" + (enabled ? "true" : "false") + "}";
+                                            std::wstring wides = utf8_to_wstr(out);
+                                            if (g_app.webview) g_app.webview->PostWebMessageAsJson(wides.c_str());
+                                            return S_OK;
+                                        }
+
+                                        if (action == "get-plugins") {
+                                            auto& pm = Plume::PluginManager::Get();
+                                            auto plugins = pm.GetAllPlugins();
+                                            nlohmann::json list = nlohmann::json::array();
+                                            for (const auto& info : plugins) {
+                                                nlohmann::json item;
+                                                item["id"] = info.id;
+                                                item["name"] = info.name;
+                                                item["description"] = info.description;
+                                                item["version"] = info.version;
+                                                item["enabled"] = pm.IsPluginEnabled(info.id);
+                                                list.push_back(item);
+                                            }
+                                            nlohmann::json res;
+                                            res["action"] = "plugin-list";
+                                            res["plugins"] = list;
+                                            std::string out = res.dump();
                                             std::wstring wides = utf8_to_wstr(out);
                                             if (g_app.webview) g_app.webview->PostWebMessageAsJson(wides.c_str());
                                             return S_OK;
@@ -869,17 +937,6 @@ void InitWebView(const std::string& htmlPath) {
                                             if (g_app.webview) g_app.webview->PostWebMessageAsJson(wides.c_str());
                                         };
 
-                                        // Helper to send structured result back to the frontend (optionally with data)
-                                        auto sendResult = [&](bool success, const std::string& message, nlohmann::json data = {}) {
-                                            nlohmann::json res;
-                                            res["type"] = "result";
-                                            res["success"] = success;
-                                            res["message"] = message;
-                                            if (!data.is_null() && !data.empty()) res["data"] = data;
-                                            std::string out = res.dump();
-                                            std::wstring wides = utf8_to_wstr(out);
-                                            if (g_app.webview) g_app.webview->PostWebMessageAsJson(wides.c_str());
-                                        };
 
                                         // File actions
                                         if (action == "list-content") {
@@ -1394,10 +1451,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     splash.UpdateProgress(0.3f, "Loading plugins...");
     auto& pluginManager = Plume::PluginManager::Get();
     
-    // Enregistrer les plugins disponibles
+    // Enregistrer les plugins disponibles (Dynamic Loading)
     splash.UpdateProgress(0.35f, "Registering plugins...");
-    auto discordPlugin = std::make_shared<Plume::DiscordPresence>();
-    pluginManager.RegisterPlugin(discordPlugin);
+    pluginManager.LoadPluginsFromDirectory(".");
     
     // Initialiser tous les plugins activés
     splash.UpdateProgress(0.4f, "Initializing plugins...");
