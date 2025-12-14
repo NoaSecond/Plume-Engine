@@ -695,30 +695,6 @@ export const ProjectSettings: React.FC<ProjectSettingsProps> = ({ isOpen, onClos
 
 
         </div>
-        {/* Footer */}
-        <div
-          className="flex items-center justify-end space-x-3 p-4 rounded-b-lg"
-          style={{
-            backgroundColor: theme.colors.bg.secondary,
-            borderTop: `1px solid ${theme.colors.border.default}`
-          }}
-        >
-          <button
-            className="px-4 py-2 text-sm rounded transition-colors"
-            style={{
-              backgroundColor: theme.colors.accent.primary,
-              color: theme.colors.text.primary
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = theme.colors.accent.secondary;
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = theme.colors.accent.primary;
-            }}
-          >
-            Save Settings
-          </button>
-        </div>
       </div>
     </div>
   );

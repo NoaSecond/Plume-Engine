@@ -37,10 +37,34 @@ export default function App() {
   const [cameraTransform, setCameraTransform] = useState({ position: { x: 0, y: -50, z: -150 }, rotation: { x: 20, y: 0, z: 0 } });
 
   // Tab System State
-  const [tabs, setTabs] = useState<Tab[]>([
-    { id: 'scene', title: 'Main Scene', type: 'scene', closable: false }
-  ]);
-  const [activeTabId, setActiveTabId] = useState<string>('scene');
+  const [tabs, setTabs] = useState<Tab[]>(() => {
+    const saved = localStorage.getItem('plume_editor_tabs');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        // Ensure scene is always there? Or trust storage. 
+        // Let's ensure at least Basic Scene is present if array is empty, though logic below handles that.
+        return parsed.length > 0 ? parsed : [{ id: 'scene', title: 'Main Scene', type: 'scene', closable: false }];
+      } catch (e) {
+        console.error("Failed to load tabs", e);
+      }
+    }
+    return [{ id: 'scene', title: 'Main Scene', type: 'scene', closable: false }];
+  });
+
+  const [activeTabId, setActiveTabId] = useState<string>(() => {
+    return localStorage.getItem('plume_editor_active_tab') || 'scene';
+  });
+
+  // Save tabs effect
+  useEffect(() => {
+    localStorage.setItem('plume_editor_tabs', JSON.stringify(tabs));
+  }, [tabs]);
+
+  // Save active tab effect
+  useEffect(() => {
+    localStorage.setItem('plume_editor_active_tab', activeTabId);
+  }, [activeTabId]);
 
   const handleOpenTab = (type: Tab['type'], title: string) => {
     const existingTab = tabs.find(t => t.type === type);
@@ -104,7 +128,13 @@ export default function App() {
 
         if (action === 'plugin-list') {
           if (data.plugins) {
-            setPlugins(data.plugins);
+            const enrichedPlugins = data.plugins.map((p: any) => {
+              if (p.name === 'Discord Rich Presence' && !p.author) {
+                return { ...p, author: 'Plume Engine Team' };
+              }
+              return p;
+            });
+            setPlugins(enrichedPlugins);
             addLog(`Loaded ${data.plugins.length} plugins`, 'INFO');
           }
         }
