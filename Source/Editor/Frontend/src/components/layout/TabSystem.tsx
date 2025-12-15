@@ -5,7 +5,7 @@ import { X, Box, Globe, Image as ImageIcon, Music, File, Layers, Bone, Film, Set
 export interface Tab {
     id: string;
     title: string;
-    type: 'scene' | 'static-mesh' | 'texture' | 'sound' | 'material' | 'level' | 'skeletal-mesh' | 'animation-sequence' | 'editor-preferences' | 'project-settings' | 'plugin-manager' | 'content-browser' | 'console';
+    type: 'scene' | 'static-mesh' | 'texture' | 'sound' | 'material' | 'material-editor' | 'level' | 'skeletal-mesh' | 'animation-sequence' | 'editor-preferences' | 'project-settings' | 'plugin-manager' | 'content-browser' | 'console';
     data?: any; // e.g. entityId or filename
     closable: boolean;
 }
@@ -31,6 +31,7 @@ export const TabSystem: React.FC<TabSystemProps> = ({ tabs, activeTabId, onTabCl
             case 'texture': return <ImageIcon size={14} className="mr-2" />;
             case 'sound': return <Music size={14} className="mr-2" />;
             case 'material': return <Layers size={14} className="mr-2" />;
+            case 'material-editor': return <Layers size={14} className="mr-2" />;
             case 'level': return <Globe size={14} className="mr-2" />;
             case 'skeletal-mesh': return <Bone size={14} className="mr-2" />;
             case 'animation-sequence': return <Film size={14} className="mr-2" />;

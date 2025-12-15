@@ -4,6 +4,7 @@ import { TabSystem, Tab } from './components/layout/TabSystem';
 import { SceneEditor } from './components/editors/SceneEditor';
 import { StaticMeshEditor } from './components/editors/StaticMeshEditor';
 import { TextureViewer } from './components/editors/TextureViewer';
+import { MaterialEditor } from './components/editors/MaterialEditor';
 import { ContentBrowserPanel } from './components/panels/ContentBrowserPanel';
 import { ConsolePanel } from './components/panels/ConsolePanel';
 import { EditorPreferences } from './components/panels/EditorPreferences';
@@ -141,6 +142,50 @@ export default function App() {
     } else {
       setTabs(prev => [...prev, { id: uniqueId, title, type, data, closable: true }]);
       setActiveTabId(uniqueId);
+    }
+  };
+
+  // Centralized asset opening logic
+  const handleOpenAsset = (asset: any) => {
+    // Identify Asset Types based on Type property primarily
+    const type = asset.type ? asset.type : '';
+
+    let tabType: 'static-mesh' | 'texture' | 'sound' | 'material-editor' | null = null;
+
+    // Prioritize explicit types
+    if (type === 'StaticMesh') tabType = 'static-mesh';
+    else if (type === 'Texture') tabType = 'texture';
+    else if (type === 'SoundWave') tabType = 'sound';
+    else if (type === 'Material') tabType = 'material-editor';
+
+    // Fallback to extensions only if type is generic/missing, but only for .plumeasset if strictly needed
+    // The user requested to remove legacy extensions like .fbx, .obj, .plumematerial
+
+    if (tabType) {
+      const tabId = `${tabType}-${asset.id}`;
+      setTabs(prev => {
+        if (prev.find(t => t.id === tabId)) return prev;
+        // Clean up name if it has an extension (just in case backend sends it)
+        const title = asset.name.replace(/\.plumeasset$/i, '');
+        return [...prev, {
+          id: tabId,
+          title: title,
+          type: tabType as any,
+          // Pass full path if available or ID
+          data: typeof asset.path === 'string' ? asset.path : (asset.path || asset.id),
+          closable: true
+        }];
+      });
+      setActiveTabId(tabId);
+      addLog(`Opened asset: ${asset.name}`, 'INFO');
+      // If it's the main browser, close it (optional, logic might differ but acceptable default)
+      if (showContentBrowser) setShowContentBrowser(false);
+    } else if (asset.type === 'texture' || asset.type === 'image') {
+      // Fallback for generic textures if type matching failed above
+      handleOpenTab('texture', asset.name, asset.path || asset.id);
+      if (showContentBrowser) setShowContentBrowser(false);
+    } else {
+      addLog(`Cannot open asset type: ${asset.type}`, 'WARN');
     }
   };
 
@@ -785,6 +830,9 @@ export default function App() {
               {tab.type === 'texture' && (
                 <TextureViewer assetId={typeof tab.data === 'string' ? tab.data : (tab.data?.entityId || tab.data?.assetId || '')} name={tab.title} />
               )}
+              {tab.type === 'material-editor' && (
+                <MaterialEditor assetId={typeof tab.data === 'string' ? tab.data : (tab.data?.entityId || tab.data?.assetId || '')} name={tab.title} />
+              )}
               {tab.type === 'editor-preferences' && (
                 <EditorPreferences
                   isOpen={true} // Ignored by component
@@ -817,36 +865,7 @@ export default function App() {
                   isDocked={true}
                   onClose={() => handleTabClose(tab.id)}
                   onLog={addLog}
-                  onOpenAsset={(asset) => {
-                    // Reuse the same logic for opening assets
-                    const nameLower = asset.name.toLowerCase();
-                    const type = asset.type ? asset.type : '';
-
-                    let tabType: 'static-mesh' | 'texture' | 'sound' | null = null;
-
-                    if (type === 'StaticMesh' || nameLower.endsWith('.fbx') || nameLower.endsWith('.obj') || nameLower.endsWith('.ply')) tabType = 'static-mesh';
-                    else if (type === 'Texture' || nameLower.endsWith('.png') || nameLower.endsWith('.jpg') || nameLower.endsWith('.tga')) tabType = 'texture';
-                    else if (type === 'SoundWave' || nameLower.endsWith('.wav') || nameLower.endsWith('.mp3')) tabType = 'sound';
-
-                    if (tabType) {
-                      const tabId = `${tabType}-${asset.id}`;
-                      setTabs(prev => {
-                        if (prev.find(t => t.id === tabId)) return prev;
-                        const title = asset.name.replace(/\.(plumeasset|plume_mesh|fbx|obj|gltf|glb|png|jpg|jpeg|tga|bmp|wav|mp3|ogg)$/i, '');
-                        return [...prev, {
-                          id: tabId,
-                          title: title,
-                          type: tabType as any,
-                          data: { entityId: asset.name, assetId: asset.id },
-                          closable: true
-                        }];
-                      });
-                      setActiveTabId(tabId);
-                      addLog(`Opened asset: ${asset.name}`, 'INFO');
-                    } else {
-                      addLog(`Cannot open asset type: ${asset.type}`, 'WARN');
-                    }
-                  }}
+                  onOpenAsset={handleOpenAsset}
                 />
               )}
               {tab.type === 'console' && (
@@ -887,40 +906,7 @@ export default function App() {
         onLog={addLog}
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
-        onOpenAsset={(asset) => {
-          // Identify Asset Types
-          const nameLower = asset.name.toLowerCase();
-          const type = asset.type ? asset.type : '';
-
-          let tabType: 'static-mesh' | 'texture' | 'sound' | null = null;
-
-          if (type === 'StaticMesh' || nameLower.endsWith('.fbx') || nameLower.endsWith('.obj') || nameLower.endsWith('.ply')) tabType = 'static-mesh';
-          else if (type === 'Texture' || nameLower.endsWith('.png') || nameLower.endsWith('.jpg') || nameLower.endsWith('.tga')) tabType = 'texture';
-          else if (type === 'SoundWave' || nameLower.endsWith('.wav') || nameLower.endsWith('.mp3')) tabType = 'sound';
-
-          if (tabType) {
-            const tabId = `${tabType}-${asset.id}`;
-            setTabs(prev => {
-              if (prev.find(t => t.id === tabId)) return prev;
-              const title = asset.name.replace(/\.(plumeasset|plume_mesh|fbx|obj|gltf|glb|png|jpg|jpeg|tga|bmp|wav|mp3|ogg)$/i, '');
-              return [...prev, {
-                id: tabId,
-                title: title,
-                type: tabType as any,
-                data: { entityId: asset.name, assetId: asset.id },
-                closable: true
-              }];
-            });
-            setActiveTabId(tabId);
-            addLog(`Opened asset: ${asset.name}`, 'INFO');
-            setShowContentBrowser(false);
-          } else if (asset.type === 'texture' || asset.type === 'image' || asset.name.endsWith('.png') || asset.name.endsWith('.jpg') || asset.name.endsWith('.tga')) {
-            handleOpenTab('texture', asset.name, asset.path || asset.id);
-            setShowContentBrowser(false);
-          } else if (asset.type === 'scene' || asset.type === 'level' || asset.name.endsWith('.plumemap')) {
-            addLog(`Cannot open asset type: ${asset.type}`, 'WARN');
-          }
-        }}
+        onOpenAsset={handleOpenAsset}
       />
       <ConsolePanel
         logs={logs}
