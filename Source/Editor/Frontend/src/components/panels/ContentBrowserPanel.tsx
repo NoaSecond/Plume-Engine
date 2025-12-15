@@ -548,7 +548,16 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
   const handleImport = () => {
     const __webview = (window as any).chrome?.webview;
     if (__webview) {
-      __webview.postMessage({ action: 'import-file', path: currentPath });
+      __webview.postMessage({
+        action: 'import-file',
+        path: currentPath,
+        filters: [
+          { name: 'Textures', extensions: ['*.png', '*.jpg', '*.jpeg', '*.tga', '*.bmp', '*.psd', '*.svg'] },
+          { name: 'Models', extensions: ['*.fbx', '*.obj', '*.gltf', '*.glb'] },
+          { name: 'Audio', extensions: ['*.wav', '*.mp3', '*.ogg'] },
+          { name: 'All Files', extensions: ['*.*'] }
+        ]
+      });
     } else {
       // Fallback pour le d�veloppement
       onLog('Import dialog not available', 'ERROR');
@@ -688,8 +697,17 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
     if (asset.type === 'folder') {
       openFolder(asset);
     } else {
+      // Ensure path is complete relative to Content
+      const cleanPath = asset.path || asset.name;
+      let finalPath = cleanPath;
+      if (!cleanPath.includes('/') && !cleanPath.includes('\\')) {
+        // It's a file in the current folder, prepend currentPath
+        const sep = (currentPath.endsWith('/') || currentPath.endsWith('\\')) ? '' : '/';
+        finalPath = `${currentPath}${sep}${cleanPath}`;
+      }
+
       // Open asset
-      if (onOpenAsset) onOpenAsset(asset);
+      if (onOpenAsset) onOpenAsset({ ...asset, path: finalPath });
     }
   };
 
@@ -1133,7 +1151,13 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
         <div
           ref={contentAreaRef}
           onWheel={handleWheel}
-          className="flex-1 p-2 overflow-y-auto relative"
+          onClick={(e) => {
+            if (e.target === e.currentTarget || (e.target as HTMLElement).classList.contains('asset-grid-container')) {
+              setSelectedIds(new Set());
+              setLastSelectedId(null);
+            }
+          }}
+          className="flex-1 p-2 overflow-y-auto relative asset-grid-container"
           style={{ backgroundColor: theme.colors.bg.secondary }}
           onContextMenu={(e) => {
             // Right click on empty area

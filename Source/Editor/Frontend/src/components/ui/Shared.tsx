@@ -140,6 +140,8 @@ export const MenuBarItem: React.FC<MenuBarItemProps> = ({ label, items, onAction
 
 export const AssetTile = ({ id, name, type, selected = false, onClick, onDoubleClick, onContextMenu, meta, scale = 1 }: { id?: string, name: string, type: string, selected?: boolean, onClick?: (e: React.MouseEvent) => void, onDoubleClick?: (e: React.MouseEvent) => void, onContextMenu?: (e: React.MouseEvent, info: { name: string, type: string }) => void, meta?: any, scale?: number }) => {
   const { theme } = useTheme();
+  const [isHovered, setIsHovered] = useState(false);
+
   let Icon = File;
   let color = "#9ca3af"; // gray-400
 
@@ -209,28 +211,27 @@ export const AssetTile = ({ id, name, type, selected = false, onClick, onDoubleC
 
   return (
     <div
-      className="flex flex-col items-center p-2 rounded cursor-pointer group transition-colors"
+      className="flex flex-col items-center p-2 rounded cursor-pointer group transition-all duration-75"
       style={{
-        width: `${size}px`
+        width: `${size}px`,
+        backgroundColor: selected ? theme.colors.selection.background : (isHovered ? theme.colors.bg.elevated : 'transparent'),
+        transform: isHovered ? 'translateY(-1px)' : 'none'
       }}
       onClick={(e) => onClick?.(e)}
       onDoubleClick={(e) => onDoubleClick?.(e)}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.backgroundColor = theme.colors.bg.elevated;
-      }}
-      onMouseLeave={(e) => {
-        if (!selected) e.currentTarget.style.backgroundColor = 'transparent';
-      }}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
       onContextMenu={(e) => {
         e.preventDefault();
         if (onContextMenu) onContextMenu(e, { name, type });
       }}
     >
       <div
-        className="rounded mb-2 flex items-center justify-center border shadow-sm relative overflow-hidden transition-transform"
+        className="rounded mb-2 flex items-center justify-center border shadow-sm relative overflow-hidden transition-colors"
         style={{
           backgroundColor: theme.colors.bg.secondary,
-          borderColor: theme.colors.border.default,
+          borderColor: (selected || isHovered) ? theme.colors.accent.primary : theme.colors.border.default,
+          borderWidth: (selected || isHovered) ? '1px' : '1px',
           width: `${Math.round(size * 0.66)}px`, // Icon container relative size
           height: `${Math.round(size * 0.66)}px`
         }}
@@ -246,8 +247,10 @@ export const AssetTile = ({ id, name, type, selected = false, onClick, onDoubleC
       <span
         className="text-[10px] text-center w-full px-1 rounded break-words whitespace-normal"
         style={{
-          color: selected ? theme.colors.text.primary : theme.colors.text.secondary,
-          backgroundColor: 'transparent',
+          color: selected ? '#FFFFFF' : theme.colors.text.secondary,
+          backgroundColor: selected ? (theme.name === 'feather-light' ? theme.colors.accent.primary : 'transparent') : 'transparent', // Ensure contrast if light theme
+          textShadow: selected ? '0px 1px 2px rgba(0,0,0,0.8)' : 'none', // Strong shadow for white text visibility
+          fontWeight: 'normal',
           display: '-webkit-box',
           WebkitLineClamp: 2,
           WebkitBoxOrient: 'vertical',

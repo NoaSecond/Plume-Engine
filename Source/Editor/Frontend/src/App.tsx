@@ -3,6 +3,7 @@ import { Header } from './components/layout/Header';
 import { TabSystem, Tab } from './components/layout/TabSystem';
 import { SceneEditor } from './components/editors/SceneEditor';
 import { StaticMeshEditor } from './components/editors/StaticMeshEditor';
+import { TextureViewer } from './components/editors/TextureViewer';
 import { ContentBrowserPanel } from './components/panels/ContentBrowserPanel';
 import { ConsolePanel } from './components/panels/ConsolePanel';
 import { EditorPreferences } from './components/panels/EditorPreferences';
@@ -126,14 +127,20 @@ export default function App() {
 
 
 
-  const handleOpenTab = (type: Tab['type'], title: string) => {
-    const existingTab = tabs.find(t => t.type === type);
+  const handleOpenTab = (type: Tab['type'], title: string, data?: any) => {
+    // For editors that support multiple instances (like texture viewer), check based on ID/data if possible, 
+    // or just allow multiple tabs if handled.
+    // However, basic implementation often checks type.
+    // If it's a texture, we probably want a specific tab per texture.
+    // Let's generate a unique ID based on type + title (assuming title is unique per asset)
+    const uniqueId = (type === 'texture' || type === 'static-mesh') ? `${type}-${title}` : type;
+
+    const existingTab = tabs.find(t => t.id === uniqueId);
     if (existingTab) {
       setActiveTabId(existingTab.id);
     } else {
-      const newTabId = `${type}-${Date.now()}`;
-      setTabs(prev => [...prev, { id: newTabId, title, type, closable: true }]);
-      setActiveTabId(newTabId);
+      setTabs(prev => [...prev, { id: uniqueId, title, type, data, closable: true }]);
+      setActiveTabId(uniqueId);
     }
   };
 
@@ -775,6 +782,9 @@ export default function App() {
                   onClose={() => handleTabClose(tab.id)}
                 />
               )}
+              {tab.type === 'texture' && (
+                <TextureViewer assetId={typeof tab.data === 'string' ? tab.data : (tab.data?.entityId || tab.data?.assetId || '')} name={tab.title} />
+              )}
               {tab.type === 'editor-preferences' && (
                 <EditorPreferences
                   isOpen={true} // Ignored by component
@@ -904,7 +914,10 @@ export default function App() {
             setActiveTabId(tabId);
             addLog(`Opened asset: ${asset.name}`, 'INFO');
             setShowContentBrowser(false);
-          } else {
+          } else if (asset.type === 'texture' || asset.type === 'image' || asset.name.endsWith('.png') || asset.name.endsWith('.jpg') || asset.name.endsWith('.tga')) {
+            handleOpenTab('texture', asset.name, asset.path || asset.id);
+            setShowContentBrowser(false);
+          } else if (asset.type === 'scene' || asset.type === 'level' || asset.name.endsWith('.plumemap')) {
             addLog(`Cannot open asset type: ${asset.type}`, 'WARN');
           }
         }}
