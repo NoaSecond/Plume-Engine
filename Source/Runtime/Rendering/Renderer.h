@@ -1,6 +1,7 @@
 #pragma once
 #include <memory>
 #include <vector>
+#include "../Core/Components.h"
 
 #ifndef PLUME_API
 #if defined(_WIN32)
@@ -50,6 +51,7 @@ namespace Plume {
         void RenderTestCube(RHI::RHICommandBuffer* cmdBuffer);
         void RenderGrid(RHI::RHICommandBuffer* cmdBuffer);
         void RenderGizmo(RHI::RHICommandBuffer* cmdBuffer);
+        void RenderMesh(RHI::RHICommandBuffer* cmdBuffer, const TransformComponent& transform, const std::string& meshPath);
 
         RHI::RHIDevice* m_Device;
         Scene* m_Scene = nullptr; // Current scene being rendered

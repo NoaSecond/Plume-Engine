@@ -62,10 +62,35 @@ namespace Plume {
         scissor.height = m_ViewportHeight;
         cmdBuffer->SetScissor(scissor);
 
-        // Diagnostics logging removed (only INI/load-related diagnostics are kept)
-        
         // Render grid and gizmo
         RenderGrid(cmdBuffer);
+        
+        // Render Scene Entities
+        #ifdef _WIN32
+        glEnable(GL_DEPTH_TEST);
+        glEnable(GL_LIGHTING);
+        glEnable(GL_LIGHT0);
+        glEnable(GL_COLOR_MATERIAL);
+
+        // Setup Light
+        GLfloat lightPos[] = { 50.0f, 50.0f, 50.0f, 1.0f };
+        GLfloat lightAmb[] = { 0.2f, 0.2f, 0.2f, 1.0f };
+        GLfloat lightDiff[] = { 1.0f, 1.0f, 1.0f, 1.0f };
+        glLightfv(GL_LIGHT0, GL_POSITION, lightPos);
+        glLightfv(GL_LIGHT0, GL_AMBIENT, lightAmb);
+        glLightfv(GL_LIGHT0, GL_DIFFUSE, lightDiff);
+
+        for (const auto& entity : scene->m_Registry) {
+            if (!entity.Visible) continue;
+            
+            if (entity.Type.Type == EntityType::Mesh) {
+                RenderMesh(cmdBuffer, entity.Transform, entity.Type.SubType);
+            }
+        }
+        
+        glDisable(GL_LIGHTING);
+        #endif
+
         RenderGizmo(cmdBuffer);
         
         cmdBuffer->EndRenderPass();
@@ -119,7 +144,7 @@ namespace Plume {
         const float spacing = 1.0f;
         glEnable(GL_DEPTH_TEST);
         glDepthMask(GL_TRUE);
-        glColor3f(1.0f, 1.0f, 1.0f);
+        glColor3f(0.5f, 0.5f, 0.5f);
         glBegin(GL_LINES);
         for (int i = -gridSize; i <= gridSize; i++) {
             // Lines along X
@@ -176,6 +201,76 @@ namespace Plume {
         // TODO: Implémenter avec vertex buffer et index buffer
         
         // cmdBuffer->DrawIndexed(36, 1, 0, 0, 0);
+    }
+
+    void Renderer::RenderMesh(RHI::RHICommandBuffer* cmdBuffer, const TransformComponent& transform, const std::string& meshPath) {
+#ifdef _WIN32
+        glPushMatrix();
+        
+        // Apply transform
+        glTranslatef(transform.Position.x, transform.Position.y, transform.Position.z);
+        // Rotations (YXZ order usually, but here independent for simplicity or matching Scene logic)
+        // Scene uses YXZ matrix construction.
+        // glRotate is axis-angle.
+        // Let's use the same reverse order as View matrix for consistency if possible, 
+        // OR just simple independent rotations
+        glRotatef(transform.Rotation.z, 0.0f, 0.0f, 1.0f);
+        glRotatef(transform.Rotation.y, 0.0f, 1.0f, 0.0f);
+        glRotatef(transform.Rotation.x, 1.0f, 0.0f, 0.0f);
+        glScalef(transform.Scale.x, transform.Scale.y, transform.Scale.z);
+
+        // Draw Cube (Placeholder for now)
+        // Check meshPath later to decide what to draw if we had an importer
+        
+        glColor3f(0.8f, 0.8f, 0.8f);
+        glBegin(GL_QUADS);
+        
+        // Front
+        glNormal3f(0.0f, 0.0f, 1.0f);
+        glVertex3f(-1.0f, -1.0f, 1.0f);
+        glVertex3f( 1.0f, -1.0f, 1.0f);
+        glVertex3f( 1.0f,  1.0f, 1.0f);
+        glVertex3f(-1.0f,  1.0f, 1.0f);
+        
+        // Back
+        glNormal3f(0.0f, 0.0f, -1.0f);
+        glVertex3f(-1.0f, -1.0f, -1.0f);
+        glVertex3f(-1.0f,  1.0f, -1.0f);
+        glVertex3f( 1.0f,  1.0f, -1.0f);
+        glVertex3f( 1.0f, -1.0f, -1.0f);
+        
+        // Left
+        glNormal3f(-1.0f, 0.0f, 0.0f);
+        glVertex3f(-1.0f, -1.0f, -1.0f);
+        glVertex3f(-1.0f, -1.0f,  1.0f);
+        glVertex3f(-1.0f,  1.0f,  1.0f);
+        glVertex3f(-1.0f,  1.0f, -1.0f);
+        
+        // Right
+        glNormal3f(1.0f, 0.0f, 0.0f);
+        glVertex3f( 1.0f, -1.0f, -1.0f);
+        glVertex3f( 1.0f,  1.0f, -1.0f);
+        glVertex3f( 1.0f,  1.0f,  1.0f);
+        glVertex3f( 1.0f, -1.0f,  1.0f);
+        
+        // Top
+        glNormal3f(0.0f, 1.0f, 0.0f);
+        glVertex3f(-1.0f,  1.0f, -1.0f);
+        glVertex3f(-1.0f,  1.0f,  1.0f);
+        glVertex3f( 1.0f,  1.0f,  1.0f);
+        glVertex3f( 1.0f,  1.0f, -1.0f);
+        
+        // Bottom
+        glNormal3f(0.0f, -1.0f, 0.0f);
+        glVertex3f(-1.0f, -1.0f, -1.0f);
+        glVertex3f( 1.0f, -1.0f, -1.0f);
+        glVertex3f( 1.0f, -1.0f,  1.0f);
+        glVertex3f(-1.0f, -1.0f,  1.0f);
+        
+        glEnd();
+        
+        glPopMatrix();
+#endif
     }
 
 } // namespace Plume

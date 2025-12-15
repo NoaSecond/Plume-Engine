@@ -90,7 +90,7 @@ static void ToggleWebViewVisibility() {
 void ExportSceneData() {
     if (!g_app.engine) return;
     
-    std::string sceneJson = g_app.engine->GetActiveScene()->SerializeToJson();
+    std::string sceneJson = g_app.engine->GetMainScene()->SerializeToJson();
     std::string dataPath = g_app.uiFolder + "/scene_data.js";
     std::string tempPath = dataPath + ".tmp";
     
@@ -625,6 +625,22 @@ void InitWebView(const std::string& htmlPath) {
                                             std::string out = "{\"type\":\"error\",\"action\":\"set-maxfps\"}";
                                             std::wstring wides = utf8_to_wstr(out);
                                             if (g_app.webview) g_app.webview->PostWebMessageAsJson(wides.c_str());
+                                            return S_OK;
+                                        }
+
+                                        // Preview Pipeline Messages
+                                        if (action == "preview-asset") {
+                                            std::string path = j.value("path", "");
+                                            if (g_app.engine) {
+                                                g_app.engine->LoadPreviewAsset(path);
+                                            }
+                                            return S_OK;
+                                        }
+
+                                        if (action == "restore-main-scene") {
+                                            if (g_app.engine) {
+                                                g_app.engine->StopPreview();
+                                            }
                                             return S_OK;
                                         }
 

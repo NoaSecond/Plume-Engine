@@ -61,10 +61,7 @@ export default function App() {
     localStorage.setItem('plume_editor_tabs', JSON.stringify(tabs));
   }, [tabs]);
 
-  // Save active tab effect
-  useEffect(() => {
-    localStorage.setItem('plume_editor_active_tab', activeTabId);
-  }, [activeTabId]);
+
 
   const handleOpenTab = (type: Tab['type'], title: string) => {
     const existingTab = tabs.find(t => t.type === type);
@@ -102,6 +99,32 @@ export default function App() {
     const time = new Date().toLocaleTimeString('en-US', { hour12: false });
     setLogs(prev => [...prev.slice(-99), { id: Date.now(), time, level, msg }]);
   }, []);
+
+  // Save active tab effect & Sync Backend State
+  useEffect(() => {
+    localStorage.setItem('plume_editor_active_tab', activeTabId);
+
+    // Sync Backend State with Active Tab
+    const activeTab = tabs.find(t => t.id === activeTabId);
+    if (activeTab) {
+      if (activeTab.type === 'static-mesh') {
+        const assetPath = activeTab.data?.entityId || 'Unknown';
+        // We pass the ID or Name as path for now. 
+        // In real asset system, we'd pass the full path or UUID.
+
+        if ((window as any).chrome?.webview) {
+          (window as any).chrome.webview.postMessage({ action: 'preview-asset', path: assetPath });
+          addLog(`Previewing asset: ${assetPath}`, 'INFO');
+        }
+      } else {
+        // For scene or any other tab, we assume we want the main scene
+        // If we had multiple types of 3D editors, we'd need more logic.
+        if ((window as any).chrome?.webview) {
+          (window as any).chrome.webview.postMessage({ action: 'restore-main-scene' });
+        }
+      }
+    }
+  }, [activeTabId, tabs, addLog]);
 
   const refreshPlugin = (id: string) => {
     if (refreshingPluginId) return;

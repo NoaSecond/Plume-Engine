@@ -35,7 +35,8 @@ namespace RHI {
         void RenderFrame();
         void Shutdown();
         bool IsRunning() const { return m_IsRunning; }
-        Scene* GetActiveScene() { return m_Scene.get(); }
+        Scene* GetActiveScene() { return m_ActiveScene; } // Return active (Main or Preview)
+        Scene* GetMainScene() { return m_Scene.get(); } // Return Main Scene specifically
         RHI::RHIDevice* GetRenderer() { return m_Renderer.get(); }
         RHI::GraphicsAPI GetCurrentGraphicsAPI() const { return m_CurrentAPI; }
         Plume::Renderer* GetRendererObject() { return m_RendererObject.get(); }
@@ -53,9 +54,19 @@ namespace RHI {
         int GetMaxFPS() const;
         void SetVSync(bool on);
         bool GetVSync() const;
+
+        // Preview Pipeline
+        void LoadPreviewAsset(const std::string& path);
+        void StopPreview();
+        
+        void LoadMainLevel();
+
     private:
         bool m_IsRunning = false;
         std::unique_ptr<Scene> m_Scene;
+        std::unique_ptr<Scene> m_PreviewScene;
+        Scene* m_ActiveScene = nullptr; // Points to either m_Scene or m_PreviewScene
+
         std::unique_ptr<RHI::RHIDevice> m_Renderer;
         std::unique_ptr<Plume::Renderer> m_RendererObject;
         void* m_WindowHandle = nullptr;

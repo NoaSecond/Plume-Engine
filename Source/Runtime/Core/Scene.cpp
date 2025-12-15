@@ -2,10 +2,61 @@
 #include <iostream>
 #include <sstream>
 #include <cmath>
+#include "nlohmann_json.hpp"
 
 namespace Plume {
     Scene::Scene() {}
     Scene::~Scene() {}
+
+    void Scene::Clear() {
+        m_Registry.clear();
+    }
+
+    void Scene::DeserializeFromJson(const std::string& jsonString) {
+        Clear();
+        try {
+            auto j = nlohmann::json::parse(jsonString);
+            if (!j.is_array()) return;
+            
+            for (const auto& item : j) {
+                EntityData data;
+                data.Tag.ID = item.value("id", GenerateUUID());
+                data.Tag.Name = item.value("name", "Entity");
+                
+                std::string typeStr = item.value("type", "Mesh");
+                if (typeStr == "Light") data.Type.Type = EntityType::Light;
+                else if (typeStr == "Camera") data.Type.Type = EntityType::Camera;
+                else if (typeStr == "Folder") data.Type.Type = EntityType::Folder;
+                else data.Type.Type = EntityType::Mesh;
+                
+                data.Type.SubType = item.value("subType", "");
+                data.Visible = item.value("visible", true);
+                
+                if (item.contains("transform")) {
+                    auto& t = item["transform"];
+                    if (t.contains("position")) {
+                        data.Transform.Position.x = t["position"].value("x", 0.0f);
+                        data.Transform.Position.y = t["position"].value("y", 0.0f);
+                        data.Transform.Position.z = t["position"].value("z", 0.0f);
+                    }
+                    if (t.contains("rotation")) {
+                        data.Transform.Rotation.x = t["rotation"].value("x", 0.0f);
+                        data.Transform.Rotation.y = t["rotation"].value("y", 0.0f);
+                        data.Transform.Rotation.z = t["rotation"].value("z", 0.0f);
+                    }
+                    if (t.contains("scale")) {
+                        data.Transform.Scale.x = t["scale"].value("x", 1.0f);
+                        data.Transform.Scale.y = t["scale"].value("y", 1.0f);
+                        data.Transform.Scale.z = t["scale"].value("z", 1.0f);
+                    }
+                }
+                
+                m_Registry.push_back(data);
+            }
+        } catch (...) {
+            std::cout << "Failed to deserialize scene JSON" << std::endl;
+        }
+    }
 
     Entity Scene::CreateEntity(const std::string& name, EntityType type, const std::string& subType) {
         EntityData data;

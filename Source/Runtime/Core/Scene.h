@@ -17,6 +17,8 @@
 
 namespace Plume {
     class Entity;
+    class Renderer; 
+
     class PLUME_API Scene {
     public:
         Scene();
@@ -24,6 +26,8 @@ namespace Plume {
         Entity CreateEntity(const std::string& name, EntityType type, const std::string& subType = "");
         void OnUpdate(float deltaTime);
         std::string SerializeToJson();
+        void DeserializeFromJson(const std::string& json);
+        void Clear();
         // Camera helpers: access / modify the first Camera entity's transform
         bool GetCameraTransform(TransformComponent& out);
         void SetCameraTransform(const TransformComponent& t);
@@ -31,6 +35,9 @@ namespace Plume {
         void RotateCamera(const Vec3& delta);
         // Translate in camera-local space (x = right, y = up, z = forward)
         void TranslateCameraLocal(const Vec3& localDelta, bool followPitch = true);
+
+        // Allow Renderer to iterate entities
+        friend class Renderer;
     private:
         struct EntityData {
             TagComponent Tag;

@@ -266,6 +266,39 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
     }
   }, [show, currentPath]);
 
+  const createAsset = (defaultName: string, type: string) => {
+    const __webview = (window as any).chrome?.webview;
+    if (__webview) {
+      // Create a new asset via blob import
+      const assetName = defaultName;
+      const jsonContent = JSON.stringify({
+        type: type,
+        // Default properties based on type
+        properties: type === 'Material' ? { color: [1, 1, 1], roughness: 0.5, metallic: 0.0 } : {}
+      }, null, 2);
+
+      const base64Content = btoa(jsonContent);
+
+      // Use import-file-blob to create the file
+      // We append a timestamp to ensure uniqueness if needed, but import-file-blob handles collisions?
+      // Actually import-file-blob might default to overwrite or collision handling.
+      // Let's rely on the backend's import logic which we saw handles collisions by renaming.
+      // But we want to rename IT properly.
+
+      // Wait, import-file-blob takes a name. Let's send a unique name.
+      const uniqueName = `${assetName}_${Date.now()}.plumeasset`;
+
+      __webview.postMessage({
+        action: 'import-file-blob',
+        path: currentPath,
+        name: uniqueName,
+        content: base64Content
+      });
+
+      onLog(`Creating new ${type}...`, 'INFO');
+    }
+  };
+
   const createFolder = (name?: string) => {
     if (name) {
       const folderName = name;
@@ -995,12 +1028,15 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
           <ContextMenu
             x={ctxX}
             y={ctxY}
+            direction="up"
             items={(ctxType === 'empty' ? [
               { id: 'create_folder', label: 'Create Folder' },
               { id: 'open_in_explorer', label: 'Open In Explorer' },
               { id: 'paste', label: 'Paste', disabled: clipboard == null },
               { id: 'import', label: 'Import' },
-              { id: 'create_asset', label: 'Create Asset...' }
+              { id: 'sep1', type: 'separator' },
+              { id: 'create_material', label: 'Create Material' },
+              { id: 'create_level', label: 'Create Level' }
             ] : ctxType === 'folder' ? [
               { id: 'change_color', label: 'Change Color' },
               { id: 'rename', label: 'Rename' },
@@ -1025,6 +1061,8 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
               else if (id === 'change_color' && ctxTarget) {
                 setColorPicker({ open: true, x: ctxX, y: ctxY, target: ctxTarget });
               }
+              else if (id === 'create_material') createAsset('M_NewMaterial', 'Material');
+              else if (id === 'create_level') createAsset('L_NewLevel', 'Level');
 
               const payload = { action: id, target: ctxTarget };
               document.dispatchEvent(new CustomEvent('contentBrowserAction', { detail: payload }));
