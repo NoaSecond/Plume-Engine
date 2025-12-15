@@ -142,8 +142,7 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
         if (selectedIds.size === 1) {
           // Preserve meta when starting rename
           const asset = selectedAsset as any;
-          setEditingId(asset.id);
-          setEditingValue(asset.name);
+          renameItem(asset);
         }
       } else if (ctrlKey && keyLower === 'v') {
         e.preventDefault();
@@ -364,9 +363,66 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
 
   const renameItem = (item: { id: string, name: string, type: string, path?: string, meta?: any }) => {
     setEditingId(item.id);
-    setEditingValue(item.name);
+
+    let startValue = item.name;
+    if (item.type !== 'folder') {
+      const lastDot = item.name.lastIndexOf('.');
+      if (lastDot > 0) { // > 0 to ignore files starting with dot (hidden)
+        startValue = item.name.substring(0, lastDot);
+      }
+    }
+    setEditingValue(startValue);
+
     // Ensure meta is preserved in the assets array during rename
     setAssets(prev => prev.map(a => a.id === item.id ? { ...a, meta: { ...a.meta } } : a));
+  };
+
+  const commitRename = (asset: { id: string, name: string, type: string, path?: string, meta?: any }, newValue: string) => {
+    let newName = newValue.trim();
+    if (!newName) newName = asset.type === 'folder' ? 'New Folder' : 'New Asset';
+
+    // Extension preservation logic
+    if (asset.type !== 'folder' && asset.name.includes('.')) {
+      const lastDot = asset.name.lastIndexOf('.');
+      if (lastDot !== -1) {
+        const ext = asset.name.substring(lastDot); // e.g. .png
+        // If new name doesn't end with the extension, append it
+        if (!newName.toLowerCase().endsWith(ext.toLowerCase())) {
+          newName += ext;
+        }
+      }
+    }
+
+    // Update assets and preserve meta
+    setAssets(prev => prev.map(it => it.id === asset.id ? { ...it, name: newName, meta: { ...it.meta } } : it));
+
+    // Update folderTree if it's a folder
+    if (asset.type === 'folder' && asset.path) {
+      const updateFolderName = (nodes: any[], targetPath: string, nName: string): any[] => {
+        return nodes.map(node => {
+          if (node.path === targetPath) {
+            return { ...node, name: nName, meta: { ...node.meta } };
+          }
+          if (node.children && node.children.length > 0) {
+            return { ...node, children: updateFolderName(node.children, targetPath, nName) };
+          }
+          return node;
+        });
+      };
+      setFolderTree(prev => updateFolderName(prev, asset.path!, newName));
+    }
+
+    setEditingId(null);
+    const __webview = (window as any).chrome?.webview;
+    if (!asset.path) {
+      // placeholder -> create folder under currentPath
+      if (__webview) __webview.postMessage({ action: 'create-folder', name: newName, path: currentPath });
+    } else {
+      // existing item -> rename
+      if (__webview) __webview.postMessage({ action: 'rename', path: asset.path, name: newName });
+    }
+    // request a fresh listing
+    if (__webview) __webview.postMessage({ action: 'list-content', path: currentPath });
   };
 
   const deleteItem = React.useCallback((item: { id: string, name: string, type: string }) => {
@@ -1055,11 +1111,51 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
                       className="w-16 h-16 rounded mb-2 flex items-center justify-center border shadow-sm relative overflow-hidden"
                       style={{ backgroundColor: theme.colors.bg.secondary, borderColor: theme.colors.border.default }}
                     >
-                      {a.type === 'folder' ? (
-                        <Folder size={32} style={{ color: a.meta?.color ? (a.meta.color.startsWith('#') ? a.meta.color : ('#' + a.meta.color)) : '#eab308' }} />
-                      ) : (
-                        <FileIcon size={32} style={{ color: theme.colors.text.secondary }} />
-                      )}
+                      {(() => {
+                        const type = a.type ? a.type.toLowerCase() : '';
+                        const name = a.name ? a.name.toLowerCase() : '';
+                        let Icon = FileIcon;
+                        let color = theme.colors.text.secondary;
+
+                        if (type === 'folder') {
+                          Icon = Folder;
+                          color = a.meta?.color ? (a.meta.color.startsWith('#') ? a.meta.color : ('#' + a.meta.color)) : '#eab308';
+                        }
+                        else if (type === 'staticmesh' || type === 'mesh' || name.endsWith('.plume_mesh') || name.endsWith('.fbx') || name.endsWith('.obj')) {
+                          Icon = Box;
+                          color = "#5DE2E7";
+                        }
+                        else if (type === 'texture' || type === 'image' || name.endsWith('.png') || name.endsWith('.jpg') || name.endsWith('.tga')) {
+                          Icon = ImageIcon;
+                          color = "#D05C5E";
+                        }
+                        else if (type === 'soundwave' || type === 'sound' || name.endsWith('.wav') || name.endsWith('.mp3')) {
+                          Icon = Music;
+                          color = "#CC6CE7";
+                        }
+                        else if (type === 'material' || name.endsWith('.plumematerial')) {
+                          Icon = Layers;
+                          color = "#7DDA58";
+                        }
+                        else if (type === 'level' || type === 'map' || name.endsWith('.plumemap') || name.endsWith('.map')) {
+                          Icon = Globe;
+                          color = "#FE9900";
+                        }
+                        else if (type === 'skeletalmesh' || name.endsWith('.plumeskel')) {
+                          Icon = Bone;
+                          color = "#FFECA1";
+                        }
+                        else if (type === 'animationsequence' || type === 'anim' || name.endsWith('.plumeanim')) {
+                          Icon = Film;
+                          color = "#BFD641";
+                        }
+                        else if (type === 'script' || name.endsWith('.ts') || name.endsWith('.js')) {
+                          Icon = FileCode;
+                          color = "#22c55e";
+                        }
+
+                        return <Icon size={32} style={{ color: color }} strokeWidth={type === 'folder' ? 1.5 : 2} />;
+                      })()}
                     </div>
                     <input
                       autoFocus
@@ -1068,39 +1164,7 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
                       onKeyDown={(e) => {
                         e.stopPropagation();
                         if (e.key === 'Enter') {
-                          // commit
-                          const newName = editingValue.trim() || 'New Folder';
-
-                          // Update assets and preserve meta
-                          setAssets(prev => prev.map(it => it.id === a.id ? { ...it, name: newName, meta: { ...it.meta } } : it));
-
-                          // Update folderTree if it's a folder
-                          if (a.type === 'folder' && a.path) {
-                            const updateFolderName = (nodes: any[], targetPath: string, newName: string): any[] => {
-                              return nodes.map(node => {
-                                if (node.path === targetPath) {
-                                  return { ...node, name: newName, meta: { ...node.meta } };
-                                }
-                                if (node.children && node.children.length > 0) {
-                                  return { ...node, children: updateFolderName(node.children, targetPath, newName) };
-                                }
-                                return node;
-                              });
-                            };
-                            setFolderTree(prev => updateFolderName(prev, a.path!, newName));
-                          }
-
-                          setEditingId(null);
-                          const __webview = (window as any).chrome?.webview;
-                          if (!a.path) {
-                            // placeholder -> create folder under currentPath
-                            if (__webview) __webview.postMessage({ action: 'create-folder', name: newName, path: currentPath });
-                          } else {
-                            // existing item -> rename
-                            if (__webview) __webview.postMessage({ action: 'rename', path: a.path, name: newName });
-                          }
-                          // request a fresh listing
-                          if (__webview) __webview.postMessage({ action: 'list-content', path: currentPath });
+                          commitRename(a as any, editingValue);
                         } else if (e.key === 'Escape') {
                           // cancel inline edit
                           setEditingId(null);
@@ -1109,36 +1173,7 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
                         }
                       }}
                       onBlur={() => {
-                        // commit on blur
-                        const newName = editingValue.trim() || 'New Folder';
-
-                        // Update assets and preserve meta
-                        setAssets(prev => prev.map(it => it.id === a.id ? { ...it, name: newName, meta: { ...it.meta } } : it));
-
-                        // Update folderTree if it's a folder
-                        if (a.type === 'folder' && a.path) {
-                          const updateFolderName = (nodes: any[], targetPath: string, newName: string): any[] => {
-                            return nodes.map(node => {
-                              if (node.path === targetPath) {
-                                return { ...node, name: newName, meta: { ...node.meta } };
-                              }
-                              if (node.children && node.children.length > 0) {
-                                return { ...node, children: updateFolderName(node.children, targetPath, newName) };
-                              }
-                              return node;
-                            });
-                          };
-                          setFolderTree(prev => updateFolderName(prev, a.path!, newName));
-                        }
-
-                        setEditingId(null);
-                        const __webview = (window as any).chrome?.webview;
-                        if (!a.path) {
-                          if (__webview) __webview.postMessage({ action: 'create-folder', name: newName, path: currentPath });
-                        } else {
-                          if (__webview) __webview.postMessage({ action: 'rename', path: a.path, name: newName });
-                        }
-                        if (__webview) __webview.postMessage({ action: 'list-content', path: currentPath });
+                        commitRename(a as any, editingValue);
                       }}
                       className="text-[10px] text-center break-words w-full px-1 rounded"
                       style={{ backgroundColor: 'transparent', color: theme.colors.text.primary, border: `1px solid ${theme.colors.border.default}`, outline: 'none' }}
