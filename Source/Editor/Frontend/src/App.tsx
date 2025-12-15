@@ -300,7 +300,32 @@ export default function App() {
     addLog('Plume Engine Editor initialized', 'INFO');
 
     return () => clearInterval(renderingInterval);
+    return () => clearInterval(renderingInterval);
   }, [addLog]);
+
+  // Global Drag & Drop prevention (stop WebView from opening files)
+  useEffect(() => {
+    const preventDefault = (e: DragEvent) => {
+      e.preventDefault();
+      e.dataTransfer!.dropEffect = 'none';
+    };
+    const showDropEffect = (e: DragEvent) => {
+      // We allow the drop effect to be handled by specific components (like ContentBrowser) 
+      // effectively, but we prevent the default browser behavior of navigating.
+      e.preventDefault();
+    };
+
+    // We bind to window to catch everything. 
+    // Components that *want* the drop (like ContentBrowser) will handle it in their own listeners 
+    // and stopPropagation(), or we just rely on preventDefault here to stop navigation.
+    window.addEventListener('dragover', showDropEffect, false);
+    window.addEventListener('drop', showDropEffect, false);
+
+    return () => {
+      window.removeEventListener('dragover', showDropEffect);
+      window.removeEventListener('drop', showDropEffect);
+    };
+  }, []);
 
   const normalizeAngle = (v: number) => {
     let a = ((v % 360) + 360) % 360;

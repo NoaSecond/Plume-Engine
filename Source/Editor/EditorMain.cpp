@@ -445,6 +445,25 @@ bool CreateAppWindow() {
     return true;
 }
 
+// Helper for Base64 decoding
+static std::string base64_decode(const std::string &in) {
+    std::string out;
+    std::vector<int> T(256, -1);
+    for (int i = 0; i < 64; i++) T["ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"[i]] = i;
+
+    int val = 0, valb = -8;
+    for (unsigned char c : in) {
+        if (T[c] == -1) break;
+        val = (val << 6) + T[c];
+        valb += 6;
+        if (valb >= 0) {
+            out.push_back(char((val >> valb) & 0xFF));
+            valb -= 8;
+        }
+    }
+    return out;
+}
+
 void InitWebView(const std::string& htmlPath) {
     CreateCoreWebView2Environment(
         Callback<ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler>(
@@ -1312,6 +1331,78 @@ void InitWebView(const std::string& htmlPath) {
                                                     // Refresh the content listing
                                                     sendContentListFor(path);
                                                 }
+                                            }
+                                            return S_OK;
+                                        }
+
+                                        // Import file from binary blob (Base64)
+                                        if (action == "import-file-blob") {
+                                            std::string targetPath = j.value("path", std::string());
+                                            std::string fileName = j.value("name", std::string());
+                                            std::string contentB64 = j.value("content", std::string());
+                                            
+                                            if (fileName.empty() || contentB64.empty()) {
+                                                sendResult(false, "Invalid file content");
+                                                return S_OK;
+                                            }
+
+                                            // Determine target directory
+                                            fs::path base = fs::path(g_app.uiFolder).parent_path();
+                                            fs::path contentDir = base / targetPath;
+                                            try { 
+                                                if (!fs::exists(contentDir)) fs::create_directories(contentDir); 
+                                            } catch(...) {}
+
+                                            // Decode and write source file
+                                            std::string decoded = base64_decode(contentB64);
+                                            // Write to temp file or direct to target? 
+                                            // Direct to target as if it was copied there.
+                                            fs::path filePath = contentDir / fileName;
+                                            std::ofstream ofsbin(filePath.string(), std::ios::binary);
+                                            ofsbin.write(decoded.data(), decoded.size());
+                                            ofsbin.close();
+                                            
+                                            // Now reuse the import logic as if it was a file on disk
+                                            std::string assetType = "";
+                                            std::string ext = filePath.extension().string();
+                                            for (auto& c : ext) c = std::tolower(c);
+                                            
+                                            if (ext == ".fbx" || ext == ".obj" || ext == ".glb" || ext == ".gltf") assetType = "StaticMesh";
+                                            else if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".tga" || ext == ".bmp") assetType = "Texture";
+                                            else if (ext == ".wav" || ext == ".mp3" || ext == ".ogg") assetType = "SoundWave";
+
+                                            if (!assetType.empty()) {
+                                                // Create .plumeasset with PLAS binary format
+                                                std::string assetName = filePath.stem().string();
+                                                nlohmann::json meta;
+                                                meta["type"] = assetType;
+                                                meta["source"] = fileName;
+
+                                                fs::path assetFile = contentDir / (assetName + ".plumeasset");
+                                                std::ofstream ofs(assetFile.string(), std::ios::binary);
+                                                if (ofs.is_open()) {
+                                                    // Header: PLAS
+                                                    ofs.write("PLAS", 4);
+                                                    uint32_t ver = 1;
+                                                    ofs.write(reinterpret_cast<char*>(&ver), 4);
+                                                    // JSON
+                                                    std::string metaStr = meta.dump(2);
+                                                    uint32_t metaLen = (uint32_t)metaStr.size();
+                                                    ofs.write(reinterpret_cast<char*>(&metaLen), 4);
+                                                    ofs.write(metaStr.data(), metaLen);
+                                                    // Payload (using the decoded buffer directly)
+                                                    ofs.write(decoded.data(), decoded.size());
+                                                    ofs.close();
+                                                }
+                                                // Remove source file since it is embedded
+                                                try { fs::remove(filePath); } catch(...) {}
+                                                
+                                                sendResult(true, "Imported " + fileName);
+                                                sendContentListFor(targetPath);
+                                            } else {
+                                                // Just keep the file as is? 
+                                                sendResult(true, "Saved " + fileName);
+                                                sendContentListFor(targetPath);
                                             }
                                             return S_OK;
                                         }

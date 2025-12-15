@@ -429,13 +429,17 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    if (!show) return;
     setIsDragOver(true);
   };
 
   const handleDragLeave = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    setIsDragOver(false);
+    // Only disable if we are leaving the main container
+    if (e.currentTarget === e.target) {
+      setIsDragOver(false);
+    }
   };
 
   const handleDrop = (e: React.DragEvent) => {
@@ -445,12 +449,49 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
 
     const files = e.dataTransfer.files;
     if (files && files.length > 0) {
-      // In WebView2, we need to use the file picker dialog for reliable file paths
-      // Simply trigger the import dialog which will handle the file selection
+      const filesToImport: any[] = [];
+      let hasPaths = false;
+
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const fullPath = (file as any).path;
+        if (fullPath) {
+          filesToImport.push({ path: fullPath, name: file.name });
+          hasPaths = true;
+        }
+      }
+
       const __webview = (window as any).chrome?.webview;
       if (__webview) {
-        __webview.postMessage({ action: 'import-file', path: currentPath });
-        onLog(`Opening import dialog...`, 'INFO');
+        if (hasPaths) {
+          __webview.postMessage({ action: 'import-files', path: currentPath, files: filesToImport });
+          onLog(`Importing ${filesToImport.length} files...`, 'INFO');
+        } else {
+          // Fallback: Upload as Blob (Base64)
+          // Handle first file only for now to keep it simple and safe
+          if (files.length > 0) {
+            const file = files[0];
+            const reader = new FileReader();
+            reader.onload = () => {
+              const result = reader.result as string;
+              const base64Content = result.split(',')[1];
+              if (base64Content) {
+                __webview.postMessage({
+                  action: 'import-file-blob',
+                  path: currentPath,
+                  name: file.name,
+                  content: base64Content
+                });
+                onLog(`Uploading ${file.name}...`, 'INFO');
+              }
+            };
+            reader.readAsDataURL(file);
+
+            if (files.length > 1) {
+              onLog("Multi-file import via drop not supported without paths. Importing first file only.", "WARN");
+            }
+          }
+        }
       }
     }
   };
@@ -632,6 +673,9 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
         // Close context menu on left-click only (button 0). Ignore right-clicks (button 2)
         if ((e as React.MouseEvent).button === 0) setCtxVisible(false);
       }}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
       style={{
         backgroundColor: theme.colors.bg.primary,
         borderTop: `1px solid ${theme.colors.accent.primary}`,
