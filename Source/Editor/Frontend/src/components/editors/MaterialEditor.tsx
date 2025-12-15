@@ -54,6 +54,7 @@ export const MaterialEditor: React.FC<MaterialEditorProps> = ({ assetId, name })
                     onEdgesChange={onEdgesChange}
                     onConnect={onConnect}
                     fitView
+                    onInit={(instance) => instance.fitView()}
                     proOptions={{ hideAttribution: true }}
                     style={{ backgroundColor: theme.colors.bg.primary }}
                 >
