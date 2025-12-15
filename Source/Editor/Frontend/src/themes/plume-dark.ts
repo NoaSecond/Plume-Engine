@@ -7,16 +7,16 @@ export const plumeDark: Theme = {
   description: 'The reference theme, inspired by modern AAA engines',
   colors: {
     bg: {
-      primary: '#1E1E1E',      // Deep anthracite
-      secondary: '#252525',    // Panel background
-      tertiary: '#2D2D2D',     // Elevated elements
-      elevated: '#333333',     // Hover states
+      primary: '#111111',      // Deep anthracite (Darker)
+      secondary: '#181818',    // Panel background (Darker)
+      tertiary: '#222222',     // Elevated elements (Darker)
+      elevated: '#2A2A2A',     // Hover states (Darker)
     },
     text: {
-      primary: '#E8E8E8',      // Off-white
-      secondary: '#B8B8B8',    // Secondary text
-      muted: '#808080',        // Muted text
-      disabled: '#505050',     // Disabled text
+      primary: '#E0E0E0',      // Off-white
+      secondary: '#A0A0A0',    // Secondary text
+      muted: '#666666',        // Muted text
+      disabled: '#404040',     // Disabled text
     },
     accent: {
       primary: '#4FC3F7',      // Bright cyan (selection)
@@ -25,8 +25,8 @@ export const plumeDark: Theme = {
       active: '#0288D1',       // Active state
     },
     border: {
-      default: '#3A3A3A',      // Standard border
-      subtle: '#2A2A2A',       // Subtle border
+      default: '#333333',      // Standard border
+      subtle: '#222222',       // Subtle border
       focus: '#4FC3F7',        // Focus border
     },
     status: {
@@ -36,8 +36,8 @@ export const plumeDark: Theme = {
       info: '#2196F3',
     },
     viewport: {
-      background: '#1A1A1A',
-      grid: '#2A2A2A',
+      background: '#0F0F0F',
+      grid: '#222222',
       selection: '#4FC3F780',
     },
     selection: {

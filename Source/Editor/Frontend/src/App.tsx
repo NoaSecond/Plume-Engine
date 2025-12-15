@@ -134,8 +134,16 @@ export default function App() {
     // or just allow multiple tabs if handled.
     // However, basic implementation often checks type.
     // If it's a texture, we probably want a specific tab per texture.
-    // Let's generate a unique ID based on type + title (assuming title is unique per asset)
-    const uniqueId = (type === 'texture' || type === 'static-mesh') ? `${type}-${title}` : type;
+    /* SINGLETON TABS */
+    const singletonTypes = ['editor-preferences', 'project-settings', 'plugin-manager', 'content-browser', 'console'];
+
+    // Default unique ID generation
+    let uniqueId: string = type;
+
+    // For multi-instance types, append title/identifier
+    if (!singletonTypes.includes(type)) {
+      uniqueId = `${type}-${title}`;
+    }
 
     const existingTab = tabs.find(t => t.id === uniqueId);
     if (existingTab) {
