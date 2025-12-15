@@ -247,15 +247,22 @@ export const AssetTile = ({ id, name, type, selected = false, onClick, onDoubleC
         />
       </div>
       <span
-        className="text-[10px] text-center break-words w-full truncate px-1 rounded"
+        className="text-[10px] text-center w-full px-1 rounded break-words whitespace-normal"
         style={{
           color: selected ? theme.colors.text.primary : theme.colors.text.secondary,
-          backgroundColor: 'transparent'
+          backgroundColor: 'transparent',
+          display: '-webkit-box',
+          WebkitLineClamp: 2,
+          WebkitBoxOrient: 'vertical',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          lineHeight: '1.2em',
+          height: '2.4em'
         }}
         title={displayName}
       >
         {displayName}
       </span>
-    </div>
+    </div >
   );
 };

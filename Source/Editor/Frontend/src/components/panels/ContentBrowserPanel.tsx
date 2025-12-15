@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { ChevronRight, Search, Folder, X, ChevronDown, File as FileIcon, Upload, Box, Image as ImageIcon, Music, Layers, Globe, Bone, Film, FileCode } from 'lucide-react';
+import { ChevronRight, Search, Folder, X, ChevronDown, File as FileIcon, Upload, Box, Image as ImageIcon, Music, Layers, Globe, Bone, Film, FileCode, AppWindow } from 'lucide-react';
 import { AssetTile } from '../ui/Shared';
 import { ContextMenu, ContextMenuItem } from '../ui/ContextMenu';
 import { Toast } from '../ui/Toast';
@@ -10,12 +10,18 @@ interface ContentBrowserProps {
   show: boolean;
   onClose: () => void;
   onLog: (msg: string, type: 'WARN' | 'INFO' | 'ERROR') => void;
-  searchQuery: string;
-  setSearchQuery: (q: string) => void;
+  searchQuery?: string;
+  setSearchQuery?: (q: string) => void;
   onOpenAsset?: (asset: { id: string; name: string; type: string; path?: string }) => void;
+  isDocked?: boolean;
+  onDock?: () => void;
 }
-export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClose, onLog, searchQuery, setSearchQuery, onOpenAsset }) => {
+export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClose, onLog, searchQuery: propsSearchQuery, setSearchQuery: propsSetSearchQuery, onOpenAsset, isDocked, onDock }) => {
   const { theme } = useTheme();
+  // Internal state for search if not controlled
+  const [internalSearchQuery, setInternalSearchQuery] = useState('');
+  const searchQuery = propsSearchQuery !== undefined ? propsSearchQuery : internalSearchQuery;
+  const setSearchQuery = propsSetSearchQuery || setInternalSearchQuery;
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [ctxVisible, setCtxVisible] = useState(false);
   const [ctxX, setCtxX] = useState(0);
@@ -802,9 +808,17 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
     setModalAction(null);
   };
 
+  // Deselect all items when the browser is closed (hidden)
+  useEffect(() => {
+    if (!show) {
+      setSelectedIds(new Set());
+      setLastSelectedId(null);
+    }
+  }, [show]);
+
   return (
     <div
-      className="fixed left-0 right-0 shadow-2xl transition-transform duration-300 ease-out flex flex-col"
+      className={`flex flex-col ${isDocked ? 'w-full h-full' : 'fixed left-0 right-0 shadow-2xl transition-transform duration-300 ease-out'}`}
       onMouseDown={(e) => {
         // Close context menu on left-click only (button 0). Ignore right-clicks (button 2)
         if ((e as React.MouseEvent).button === 0) setCtxVisible(false);
@@ -814,14 +828,14 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
       onDrop={handleDrop}
       style={{
         backgroundColor: theme.colors.bg.primary,
-        borderTop: `1px solid ${theme.colors.accent.primary}`,
-        height: '35vh',
-        bottom: '24px',
-        zIndex: 40,
-        transform: show ? 'translateY(0)' : 'translateY(100%)',
+        borderTop: isDocked ? 'none' : `1px solid ${theme.colors.accent.primary}`,
+        height: isDocked ? '100%' : '35vh',
+        bottom: isDocked ? undefined : '24px',
+        zIndex: isDocked ? 'auto' : 40,
+        transform: isDocked ? 'none' : (show ? 'translateY(0)' : 'translateY(100%)'),
         pointerEvents: show ? 'auto' : 'none',
-        willChange: 'transform',
-        position: 'fixed'
+        willChange: isDocked ? undefined : 'transform',
+        position: isDocked ? 'static' : 'fixed'
       }}
     >
       <div
@@ -886,6 +900,27 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
           </div>
         </div>
         <div className="flex items-center space-x-2">
+          {!isDocked && onDock && (
+            <button
+              className="text-xs px-2 py-1 rounded font-medium shadow-sm transition-colors flex items-center gap-1"
+              style={{
+                backgroundColor: theme.colors.bg.elevated,
+                color: theme.colors.text.primary,
+                border: `1px solid ${theme.colors.border.default}`
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = theme.colors.accent.primary;
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = theme.colors.border.default;
+              }}
+              onClick={onDock}
+              title="Open a new permanent docked Content Browser"
+            >
+              <AppWindow size={14} />
+              Docker
+            </button>
+          )}
           <button
             className="text-xs px-3 py-1 rounded font-medium shadow-sm transition-colors flex items-center gap-1"
             style={{

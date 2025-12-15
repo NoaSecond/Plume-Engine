@@ -738,6 +738,44 @@ export default function App() {
                   }}
                 />
               )}
+              {tab.type === 'content-browser' && (
+                <ContentBrowserPanel
+                  show={true}
+                  isDocked={true}
+                  onClose={() => handleTabClose(tab.id)}
+                  onLog={addLog}
+                  onOpenAsset={(asset) => {
+                    // Reuse the same logic for opening assets
+                    const nameLower = asset.name.toLowerCase();
+                    const type = asset.type ? asset.type : '';
+
+                    let tabType: 'static-mesh' | 'texture' | 'sound' | null = null;
+
+                    if (type === 'StaticMesh' || nameLower.endsWith('.fbx') || nameLower.endsWith('.obj') || nameLower.endsWith('.ply')) tabType = 'static-mesh';
+                    else if (type === 'Texture' || nameLower.endsWith('.png') || nameLower.endsWith('.jpg') || nameLower.endsWith('.tga')) tabType = 'texture';
+                    else if (type === 'SoundWave' || nameLower.endsWith('.wav') || nameLower.endsWith('.mp3')) tabType = 'sound';
+
+                    if (tabType) {
+                      const tabId = `${tabType}-${asset.id}`;
+                      setTabs(prev => {
+                        if (prev.find(t => t.id === tabId)) return prev;
+                        const title = asset.name.replace(/\.(plumeasset|plume_mesh|fbx|obj|gltf|glb|png|jpg|jpeg|tga|bmp|wav|mp3|ogg)$/i, '');
+                        return [...prev, {
+                          id: tabId,
+                          title: title,
+                          type: tabType as any,
+                          data: { entityId: asset.name, assetId: asset.id },
+                          closable: true
+                        }];
+                      });
+                      setActiveTabId(tabId);
+                      addLog(`Opened asset: ${asset.name}`, 'INFO');
+                    } else {
+                      addLog(`Cannot open asset type: ${asset.type}`, 'WARN');
+                    }
+                  }}
+                />
+              )}
             </div>
           );
         })}
@@ -757,6 +795,12 @@ export default function App() {
       <ContentBrowserPanel
         show={showContentBrowser}
         onClose={() => setShowContentBrowser(false)}
+        onDock={() => {
+          const newTabId = `content-browser-${Date.now()}`;
+          setTabs(prev => [...prev, { id: newTabId, title: 'Content Browser', type: 'content-browser', closable: true }]);
+          setActiveTabId(newTabId);
+          setShowContentBrowser(false);
+        }}
         onLog={addLog}
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
