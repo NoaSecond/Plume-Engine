@@ -5,6 +5,7 @@ import { SceneEditor } from './components/editors/SceneEditor';
 import { StaticMeshEditor } from './components/editors/StaticMeshEditor';
 import { TextureViewer } from './components/editors/TextureViewer';
 import { MaterialEditor } from './components/editors/MaterialEditor';
+import { SoundViewer } from './components/editors/SoundViewer';
 import { ContentBrowserPanel } from './components/panels/ContentBrowserPanel';
 import { ConsolePanel } from './components/panels/ConsolePanel';
 import { EditorPreferences } from './components/panels/EditorPreferences';
@@ -832,6 +833,9 @@ export default function App() {
               )}
               {tab.type === 'material-editor' && (
                 <MaterialEditor assetId={typeof tab.data === 'string' ? tab.data : (tab.data?.entityId || tab.data?.assetId || '')} name={tab.title} />
+              )}
+              {tab.type === 'sound' && (
+                <SoundViewer assetId={typeof tab.data === 'string' ? tab.data : (tab.data?.entityId || tab.data?.assetId || '')} name={tab.title} />
               )}
               {tab.type === 'editor-preferences' && (
                 <EditorPreferences

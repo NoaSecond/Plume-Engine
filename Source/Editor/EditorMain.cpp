@@ -24,6 +24,7 @@
 #include <shellapi.h>
 #include <dwmapi.h>
 #include <commdlg.h>
+#include <shlwapi.h> // For SHCreateMemStream
 #include <wrl.h>
 #include "WebView2.h"
 #include "SplashScreen.h"
@@ -32,6 +33,7 @@
 using namespace Microsoft::WRL;
 #pragma comment(lib, "dwmapi.lib")
 #pragma comment(lib, "comdlg32.lib")
+#pragma comment(lib, "shlwapi.lib")
 #endif
 
 namespace fs = std::filesystem;
@@ -41,6 +43,7 @@ struct AppState {
     HWND viewport = nullptr;
     ComPtr<ICoreWebView2Controller> controller;
     ComPtr<ICoreWebView2> webview;
+    ComPtr<ICoreWebView2Environment> env;
     Plume::Engine* engine = nullptr;
     std::string uiFolder;
     std::atomic<bool> shouldClose{false};
@@ -468,6 +471,7 @@ void InitWebView(const std::string& htmlPath) {
     CreateCoreWebView2Environment(
         Callback<ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler>(
             [htmlPath](HRESULT result, ICoreWebView2Environment* env) -> HRESULT {
+                g_app.env = env;
                 env->CreateCoreWebView2Controller(g_app.hwnd,
                     Callback<ICoreWebView2CreateCoreWebView2ControllerCompletedHandler>(
                         [htmlPath](HRESULT result, ICoreWebView2Controller* controller) -> HRESULT {
@@ -506,7 +510,144 @@ void InitWebView(const std::string& htmlPath) {
                             // Make controller visible
                             controller->put_IsVisible(TRUE);
 
-                            // Ensure the page background is transparent via injected script
+                            // Register asset:// protocol handler
+                            g_app.webview->AddWebResourceRequestedFilter(L"asset://*", COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL);
+                            EventRegistrationToken token;
+                            g_app.webview->add_WebResourceRequested(
+                                Callback<ICoreWebView2WebResourceRequestedEventHandler>(
+                                    [](ICoreWebView2* sender, ICoreWebView2WebResourceRequestedEventArgs* args) -> HRESULT {
+                                        // Request object getters requires casting to ICoreWebView2WebResourceRequest
+                                        ComPtr<ICoreWebView2WebResourceRequest> request;
+                                        args->get_Request(&request);
+                                        LPWSTR uri;
+                                        request->get_Uri(&uri);
+                                        std::wstring wuri(uri);
+                                        CoTaskMemFree(uri);
+
+                                        // Parse URI: asset://Content/File.plumeasset
+                                        // path part starts after asset://
+                                        size_t schemePos = wuri.find(L"asset://");
+                                        if (schemePos == std::wstring::npos) return S_OK;
+
+                                        std::wstring relPathW = wuri.substr(schemePos + 8);
+                                        // Convert to narrow string for filesystem
+                                        int size = WideCharToMultiByte(CP_UTF8, 0, relPathW.c_str(), (int)relPathW.size(), NULL, 0, NULL, NULL);
+                                        std::string relPath(size, 0);
+                                        WideCharToMultiByte(CP_UTF8, 0, relPathW.c_str(), (int)relPathW.size(), relPath.data(), size, NULL, NULL);
+
+                                        // Map relative path (e.g., Content/File) to absolute path
+                                        // g_app.uiFolder is .../Bin/UI
+                                        // We assume .../Bin/Content is the root for asset://
+                                        // Logic: up one level from UI
+                                        fs::path uiPath(g_app.uiFolder);
+                                        fs::path binPath = uiPath.parent_path();
+                                        fs::path filePath = binPath / relPath; // constructs Bin/Content/File...
+
+                                        if (!fs::exists(filePath)) {
+                                            // Fallback: try removing Content/ prefix if it was doubled
+                                            // or try adding it if missing?
+                                            // For now, strict mapping.
+                                            return S_OK; // Let WebView fail naturally (404)
+                                        }
+
+                                        // Open file
+                                        std::ifstream file(filePath, std::ios::binary);
+                                        if (!file.is_open()) return S_OK;
+
+                                        // Read into memory
+                                        std::vector<char> buffer((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+                                        file.close();
+
+                                        if (buffer.empty()) return S_OK;
+
+                                        // Content sniffing strategy:
+                                        // 1. Scan first 2KB for known signatures (RIFF, PNG, ID3, etc).
+                                        // 2. If found, serve from there.
+                                        // 3. Else fallback to PLAS JSON parsing logic.
+
+                                        const std::string headerPrefix = "PLAS;";
+                                        std::string mimeType = "application/octet-stream";
+                                        const char* dataStart = buffer.data();
+                                        size_t dataSize = buffer.size();
+                                        
+                                        // Limit scan to 2KB to be safe
+                                        size_t scanLimit = (buffer.size() < 2048) ? buffer.size() : 2048;
+                                        if (scanLimit > 4) {
+                                            bool foundMagic = false;
+                                            
+                                            for(size_t i=0; i < scanLimit - 4; i++) {
+                                                const unsigned char* p = (const unsigned char*)buffer.data() + i;
+                                                
+                                                // PNG: 89 50 4E 47
+                                                if (p[0] == 0x89 && p[1] == 0x50 && p[2] == 0x4E && p[3] == 0x47) {
+                                                    mimeType = "image/png";
+                                                    dataStart = (const char*)p;
+                                                    dataSize = buffer.size() - i;
+                                                    foundMagic = true;
+                                                    break;
+                                                }
+                                                // WAV: RIFF (52 49 46 46)
+                                                if (p[0] == 'R' && p[1] == 'I' && p[2] == 'F' && p[3] == 'F') {
+                                                    mimeType = "audio/wav";
+                                                    dataStart = (const char*)p;
+                                                    dataSize = buffer.size() - i;
+                                                    foundMagic = true;
+                                                    break;
+                                                }
+                                                // MP3: ID3 (49 44 33)
+                                                if (p[0] == 'I' && p[1] == 'D' && p[2] == '3') {
+                                                    mimeType = "audio/mpeg";
+                                                    dataStart = (const char*)p;
+                                                    dataSize = buffer.size() - i;
+                                                    foundMagic = true;
+                                                    break;
+                                                }
+                                                // MP3 w/o ID3: Sync Frame FFFB (approx) - Careful with false positives
+                                                if (p[0] == 0xFF && (p[1] & 0xE0) == 0xE0) {
+                                                    // High probability of MP3
+                                                    mimeType = "audio/mpeg";
+                                                    dataStart = (const char*)p;
+                                                    dataSize = buffer.size() - i;
+                                                    foundMagic = true;
+                                                    break;
+                                                }
+                                            }
+                                            
+                                            // If magic bytes failed, try to fallback to JSON type hint?
+                                            // But if we didn't find the binary, the file might be just metadata or corrupt.
+                                            // We will serve it effectively "as is" or whatever `dataStart` was (beginning).
+                                        }
+
+                                        // Create IStream
+                                        IStream* stream = SHCreateMemStream((const BYTE*)dataStart, (UINT)dataSize);
+                                        if (!stream) return S_OK;
+
+                                        // Create Response
+                                        std::wstring headers = L"Content-Type: ";
+                                        std::wstring wMime(mimeType.begin(), mimeType.end());
+                                        headers += wMime;
+                                        headers += L"\nAccess-Control-Allow-Origin: *";
+
+                                        ComPtr<ICoreWebView2WebResourceResponse> response;
+                                        if (g_app.env) {
+                                            g_app.env->CreateWebResourceResponse(
+                                                stream, 200, L"OK", (LPWSTR)headers.c_str(), &response
+                                            );
+                                            args->put_Response(response.Get());
+                                        }
+                                        
+                                        // Release stream since we attached it to ComPtr? 
+                                        // Actually stream was raw pointer from SHCreateMemStream.
+                                        // If we wrapped it in ComPtr<IStream> stream? 
+                                        // In Step 1592 we didn't use ComPtr<IStream> stream. We used raw IStream* stream = SHCreate...
+                                        // We should release it after passing to CreateWebResourceResponse? 
+                                        // WebView2 AddRefs it.
+                                        stream->Release();
+
+                                        return S_OK;
+                                    }
+                                ).Get(), &token);
+
                                 if (g_app.webview) {
                                     // Inject a small diagnostic script: force transparent backgrounds and post a ready message
                                     // The script posts a JSON message to the host so the native side can confirm DOM rendering.
