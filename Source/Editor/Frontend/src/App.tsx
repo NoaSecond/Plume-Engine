@@ -56,10 +56,73 @@ export default function App() {
     return localStorage.getItem('plume_editor_active_tab') || 'scene';
   });
 
+
   // Save tabs effect
   useEffect(() => {
     localStorage.setItem('plume_editor_tabs', JSON.stringify(tabs));
   }, [tabs]);
+
+  // Disable Global Zoom (Ctrl + Wheel / Keydown)
+  useEffect(() => {
+    // 1. Prevent Ctrl + Wheel zoom
+    const handleWheel = (e: WheelEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        // Allow propagation so custom zoom handlers work
+      }
+    };
+
+    // 2. Prevent Ctrl + (+/-) zoom
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        // Check codes for layout independence
+        if (
+          e.code === 'NumpadAdd' ||
+          e.code === 'NumpadSubtract' ||
+          e.code === 'Equal' ||
+          e.code === 'Minus' ||
+          e.key === '+' ||
+          e.key === '-' ||
+          e.key === '='
+        ) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+      }
+    };
+
+    // 3. Block pinch gestures (Trackpad/Touch)
+    // Note: 'gesturestart' is non-standard but works in Safari/some Webkit views. 
+    // For standard Chrome/Edge events, they often come as specific wheel/touch events.
+    const preventDefault = (e: Event) => {
+      e.preventDefault();
+      e.stopPropagation();
+    };
+
+    // Use non-passive listener to be able to preventDefault effectively
+    window.addEventListener('wheel', handleWheel, { passive: false });
+    window.addEventListener('keydown', handleKeyDown, { capture: true }); // Capture to stop it early
+    window.addEventListener('gesturestart', preventDefault);
+    window.addEventListener('gesturechange', preventDefault);
+    window.addEventListener('gestureend', preventDefault);
+
+    // Also try to block touchmove if it involves multiple touches (pinch)
+    const handleTouchMove = (e: TouchEvent) => {
+      if (e.touches.length > 1) {
+        e.preventDefault();
+      }
+    }
+    window.addEventListener('touchmove', handleTouchMove, { passive: false });
+
+    return () => {
+      window.removeEventListener('wheel', handleWheel);
+      window.removeEventListener('keydown', handleKeyDown, { capture: true } as any);
+      window.removeEventListener('gesturestart', preventDefault);
+      window.removeEventListener('gesturechange', preventDefault);
+      window.removeEventListener('gestureend', preventDefault);
+      window.removeEventListener('touchmove', handleTouchMove);
+    };
+  }, []);
 
 
 

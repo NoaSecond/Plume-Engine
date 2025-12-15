@@ -40,6 +40,10 @@ export const plumeDark: Theme = {
       grid: '#2A2A2A',
       selection: '#4FC3F780',
     },
+    selection: {
+      background: '#4FC3F730',
+      border: '#4FC3F7',
+    },
   },
   shadows: {
     sm: '0 1px 2px 0 rgba(0, 0, 0, 0.3)',

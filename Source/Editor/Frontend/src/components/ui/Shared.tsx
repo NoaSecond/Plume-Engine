@@ -138,7 +138,7 @@ export const MenuBarItem: React.FC<MenuBarItemProps> = ({ label, items, onAction
   );
 };
 
-export const AssetTile = ({ id, name, type, selected = false, onClick, onDoubleClick, onContextMenu, meta }: { id?: string, name: string, type: string, selected?: boolean, onClick?: (e: React.MouseEvent) => void, onDoubleClick?: (e: React.MouseEvent) => void, onContextMenu?: (e: React.MouseEvent, info: { name: string, type: string }) => void, meta?: any }) => {
+export const AssetTile = ({ id, name, type, selected = false, onClick, onDoubleClick, onContextMenu, meta, scale = 1 }: { id?: string, name: string, type: string, selected?: boolean, onClick?: (e: React.MouseEvent) => void, onDoubleClick?: (e: React.MouseEvent) => void, onContextMenu?: (e: React.MouseEvent, info: { name: string, type: string }) => void, meta?: any, scale?: number }) => {
   const { theme } = useTheme();
   let Icon = File;
   let color = "#9ca3af"; // gray-400
@@ -204,9 +204,15 @@ export const AssetTile = ({ id, name, type, selected = false, onClick, onDoubleC
 
   const displayName = name.replace(/\.(plumeasset|plume_mesh|fbx|obj|gltf|glb|png|jpg|jpeg|tga|bmp|wav|mp3|ogg|plumematerial|plumemap|plumeskel|plumeanim)$/i, '');
 
+  const baseSize = 96; // w-24 equivalent roughly
+  const size = Math.round(baseSize * scale);
+
   return (
     <div
-      className="flex flex-col items-center p-2 rounded cursor-pointer group w-24 transition-colors"
+      className="flex flex-col items-center p-2 rounded cursor-pointer group transition-colors"
+      style={{
+        width: `${size}px`
+      }}
       onClick={(e) => onClick?.(e)}
       onDoubleClick={(e) => onDoubleClick?.(e)}
       onMouseEnter={(e) => {
@@ -217,29 +223,20 @@ export const AssetTile = ({ id, name, type, selected = false, onClick, onDoubleC
       }}
       onContextMenu={(e) => {
         e.preventDefault();
-        e.stopPropagation();
-        onContextMenu?.(e, { name, type });
-      }}
-      style={{
-        backgroundColor: selected ? theme.colors.bg.elevated : undefined,
-        border: selected ? `1px solid ${theme.colors.accent.primary}` : undefined
+        if (onContextMenu) onContextMenu(e, { name, type });
       }}
     >
       <div
-        className="w-16 h-16 rounded mb-2 flex items-center justify-center border shadow-sm relative overflow-hidden transition-colors"
+        className="rounded mb-2 flex items-center justify-center border shadow-sm relative overflow-hidden transition-transform"
         style={{
           backgroundColor: theme.colors.bg.secondary,
-          borderColor: theme.colors.border.default
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.borderColor = theme.colors.accent.primary;
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.borderColor = theme.colors.border.default;
+          borderColor: theme.colors.border.default,
+          width: `${Math.round(size * 0.66)}px`, // Icon container relative size
+          height: `${Math.round(size * 0.66)}px`
         }}
       >
         <Icon
-          size={32}
+          size={Math.round(32 * scale)}
           color={finalColor}
           fill={type === 'folder' ? 'none' : (name === '.plume_meta' || name.endsWith('.plume_meta') ? finalColor : "none")}
           stroke={type === 'folder' ? finalColor : (name === '.plume_meta' || name.endsWith('.plume_meta') ? finalColor : finalColor)}

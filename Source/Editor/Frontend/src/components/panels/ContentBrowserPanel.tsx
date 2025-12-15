@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { ChevronRight, Search, Folder, X, ChevronDown, File as FileIcon, Upload, Box, Image as ImageIcon, Music, Layers, Globe, Bone, Film, FileCode, AppWindow } from 'lucide-react';
+import { ChevronRight, Search, Folder, X, ChevronDown, File as FileIcon, Upload, Box, Image as ImageIcon, Music, Layers, Globe, Bone, Film, FileCode, AppWindow, Minus, Plus } from 'lucide-react';
 import { AssetTile } from '../ui/Shared';
 import { ContextMenu, ContextMenuItem } from '../ui/ContextMenu';
 import { Toast } from '../ui/Toast';
@@ -62,6 +62,10 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
   const [modalTitle, setModalTitle] = useState('');
   const [modalDefault, setModalDefault] = useState<string>('');
   const [modalAction, setModalAction] = useState<string | null>(null);
+  // UI State
+  const [sidebarWidth, setSidebarWidth] = useState(192); // Default 12rem (48 * 4)
+  const [isResizingSidebar, setIsResizingSidebar] = useState(false);
+  const [zoomLevel, setZoomLevel] = useState(1.0); // 1.0 = normal size
   // Inline edit state for newly created items
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState<string>('');
@@ -621,42 +625,7 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
     }
   };
 
-  // Handle asset click with Ctrl and Shift modifiers
-  const handleAssetClick = (e: React.MouseEvent, assetId: string) => {
-    if (e.ctrlKey) {
-      // Ctrl+Click: toggle selection
-      setSelectedIds(prev => {
-        const newSet = new Set(prev);
-        if (newSet.has(assetId)) {
-          newSet.delete(assetId);
-        } else {
-          newSet.add(assetId);
-        }
-        return newSet;
-      });
-      setLastSelectedId(assetId);
-    } else if (e.shiftKey && lastSelectedId) {
-      // Shift+Click: select range
-      const currentIndex = assets.findIndex(a => a.id === assetId);
-      const lastIndex = assets.findIndex(a => a.id === lastSelectedId);
 
-      if (currentIndex !== -1 && lastIndex !== -1) {
-        const start = Math.min(currentIndex, lastIndex);
-        const end = Math.max(currentIndex, lastIndex);
-        const rangeIds = assets.slice(start, end + 1).map(a => a.id);
-
-        setSelectedIds(prev => {
-          const newSet = new Set(prev);
-          rangeIds.forEach(id => newSet.add(id));
-          return newSet;
-        });
-      }
-    } else {
-      // Normal click: select only this item
-      setSelectedIds(new Set([assetId]));
-      setLastSelectedId(assetId);
-    }
-  };
 
   // Open folder (navigate into) - set currentPath and request listing
   const openFolder = (item?: { id: string, name: string, type: string, path?: string }) => {
@@ -679,6 +648,66 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
     if (__webview) __webview.postMessage({ action: 'list-content', path: p });
     // Also refresh the full tree to ensure it's up to date
     if (__webview) __webview.postMessage({ action: 'list-content', path: 'Content', recursive: true });
+  };
+
+  const handleAssetClick = (asset: any, e: React.MouseEvent) => {
+    e.stopPropagation();
+
+    if (e.ctrlKey) {
+      // Toggle selection
+      setSelectedIds(prev => {
+        const newSet = new Set(prev);
+        if (newSet.has(asset.id)) newSet.delete(asset.id);
+        else newSet.add(asset.id);
+        return newSet;
+      });
+      setLastSelectedId(asset.id);
+    } else if (e.shiftKey && lastSelectedId) {
+      // Shift selection
+      const startIdx = assets.findIndex(a => a.id === lastSelectedId);
+      const endIdx = assets.findIndex(a => a.id === asset.id);
+      if (startIdx !== -1 && endIdx !== -1) {
+        const start = Math.min(startIdx, endIdx);
+        const end = Math.max(startIdx, endIdx);
+        const rangeIds = assets.slice(start, end + 1).map(a => a.id);
+        setSelectedIds(prev => {
+          const newSet = new Set(prev);
+          rangeIds.forEach(id => newSet.add(id));
+          return newSet;
+        });
+      }
+    } else {
+      // Single selection
+      setSelectedIds(new Set([asset.id]));
+      setLastSelectedId(asset.id);
+    }
+  };
+
+  const handleAssetDoubleClick = (asset: any, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (asset.type === 'folder') {
+      openFolder(asset);
+    } else {
+      // Open asset
+      if (onOpenAsset) onOpenAsset(asset);
+    }
+  };
+
+  const handleAssetContextMenu = (e: React.MouseEvent, asset: any, info: any) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    // Select if not already selected
+    if (!selectedIds.has(asset.id)) {
+      setSelectedIds(new Set([asset.id]));
+      setLastSelectedId(asset.id);
+    }
+
+    setCtxX(e.clientX);
+    setCtxY(e.clientY);
+    setCtxType(asset.type === 'folder' ? 'folder' : 'asset');
+    setCtxTarget(asset);
+    setCtxVisible(true);
   };
 
   // Toggle expansion for folder tree
@@ -830,7 +859,9 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
             )))))))))}
           </div>
 
-          <span style={{ fontWeight: currentPath === (node.path || node.name) ? 600 : 400 }}>{node.name}</span>
+          <span style={{ fontWeight: currentPath === (node.path || node.name) ? 600 : 400 }}>
+            {node.name.includes('.') ? node.name.substring(0, node.name.lastIndexOf('.')) : node.name}
+          </span>
         </div>
         <div ref={childrenRef} style={{
           maxHeight: isExpanded ? undefined : 0,
@@ -871,6 +902,47 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
       setLastSelectedId(null);
     }
   }, [show]);
+
+  // Sidebar Resizing Logic
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizingSidebar) return;
+      const newWidth = e.clientX;
+      setSidebarWidth(Math.max(100, Math.min(600, newWidth))); // Min 100px, Max 600px
+    };
+    const handleMouseUp = () => {
+      setIsResizingSidebar(false);
+      document.body.style.cursor = 'default';
+    };
+
+    if (isResizingSidebar) {
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = 'ew-resize';
+    }
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizingSidebar]);
+
+  // Zoom Handler
+  const handleZoomIn = () => setZoomLevel(prev => Math.min(2.0, prev + 0.1));
+  const handleZoomOut = () => setZoomLevel(prev => Math.max(0.5, prev - 0.1));
+
+  const handleWheel = (e: React.WheelEvent) => {
+    if (e.ctrlKey) {
+      // e.deltaY < 0 means scrolling up (zoom in)
+      if (e.deltaY < 0) {
+        setZoomLevel(prev => Math.min(2.0, prev + 0.1));
+      } else {
+        setZoomLevel(prev => Math.max(0.5, prev - 0.1));
+      }
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  };
 
   return (
     <div
@@ -977,6 +1049,16 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
               Docker
             </button>
           )}
+          <div className="flex items-center mx-2 bg-black/20 rounded p-0.5">
+            <button className="p-1 hover:bg-white/10 rounded" onClick={handleZoomOut} title="Zoom Out (Ctrl+Scroll Down)">
+              <Minus size={12} style={{ color: theme.colors.text.secondary }} />
+            </button>
+            <span className="text-[10px] mx-1 w-8 text-center" style={{ color: theme.colors.text.muted }}>{Math.round(zoomLevel * 100)}%</span>
+            <button className="p-1 hover:bg-white/10 rounded" onClick={handleZoomIn} title="Zoom In (Ctrl+Scroll Up)">
+              <Plus size={12} style={{ color: theme.colors.text.secondary }} />
+            </button>
+          </div>
+
           <button
             className="text-xs px-3 py-1 rounded font-medium shadow-sm transition-colors flex items-center gap-1"
             style={{
@@ -1013,10 +1095,11 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
       </div>
       <div className="flex-1 flex overflow-hidden">
         <div
-          className="w-48 p-2 overflow-y-auto"
+          className="p-2 overflow-y-auto flex-shrink-0"
           style={{
             backgroundColor: theme.colors.bg.elevated,
-            borderRight: `1px solid ${theme.colors.border.default}`
+            borderRight: `1px solid ${theme.colors.border.default}`,
+            width: `${sidebarWidth}px`
           }}
         >
           <div
@@ -1036,8 +1119,20 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
             )}
           </div>
         </div>
+
+        {/* Resize Handle */}
+        <div
+          className="w-1 cursor-ew-resize hover:bg-blue-500 transition-colors z-10"
+          style={{ backgroundColor: isResizingSidebar ? theme.colors.accent.primary : 'transparent' }}
+          onMouseDown={(e) => {
+            e.preventDefault();
+            setIsResizingSidebar(true);
+          }}
+        />
+
         <div
           ref={contentAreaRef}
+          onWheel={handleWheel}
           className="flex-1 p-2 overflow-y-auto relative"
           style={{ backgroundColor: theme.colors.bg.secondary }}
           onContextMenu={(e) => {
@@ -1095,6 +1190,7 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
             }}
           >
             {(() => {
+              // Helper to filter hidden sources
               const hiddenSources = new Set<string>();
               assets.forEach(a => {
                 const meta = a.meta as any;
@@ -1104,212 +1200,233 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
               });
               const visible = assets.filter(a => !hiddenSources.has(a.name) && a.name !== '.plume_meta' && !a.name.endsWith('.plume_meta'));
               const list = searchQuery ? visible.filter(a => a.name.toLowerCase().includes(searchQuery.toLowerCase())) : visible;
-              return list.map(a => (
-                a.id === editingId ? (
-                  <div key={a.id} className="flex flex-col items-center p-2 rounded cursor-pointer group w-24">
+
+              return list.map(a => {
+                if (a.id === editingId) {
+                  // INLINE RENAME RENDERING
+                  const type = a.type ? a.type.toLowerCase() : '';
+                  const name = a.name ? a.name.toLowerCase() : '';
+                  let Icon = FileIcon;
+                  let color = theme.colors.text.secondary;
+
+                  if (type === 'folder') {
+                    Icon = Folder;
+                    color = a.meta?.color ? (a.meta.color.startsWith('#') ? a.meta.color : ('#' + a.meta.color)) : '#eab308';
+                  }
+                  else if (type === 'staticmesh' || type === 'mesh' || name.endsWith('.plume_mesh') || name.endsWith('.fbx') || name.endsWith('.obj')) {
+                    Icon = Box;
+                    color = "#5DE2E7";
+                  }
+                  else if (type === 'texture' || type === 'image' || name.endsWith('.png') || name.endsWith('.jpg') || name.endsWith('.tga')) {
+                    Icon = ImageIcon;
+                    color = "#D05C5E";
+                  }
+                  else if (type === 'soundwave' || type === 'sound' || name.endsWith('.wav') || name.endsWith('.mp3')) {
+                    Icon = Music;
+                    color = "#CC6CE7";
+                  }
+                  else if (type === 'material' || name.endsWith('.plumematerial')) {
+                    Icon = Layers;
+                    color = "#7DDA58";
+                  }
+                  else if (type === 'level' || type === 'map' || name.endsWith('.plumemap') || name.endsWith('.map')) {
+                    Icon = Globe;
+                    color = "#FE9900";
+                  }
+                  else if (type === 'skeletalmesh' || name.endsWith('.plumeskel')) {
+                    Icon = Bone;
+                    color = "#FFECA1";
+                  }
+                  else if (type === 'animationsequence' || type === 'anim' || name.endsWith('.plumeanim')) {
+                    Icon = Film;
+                    color = "#BFD641";
+                  }
+                  else if (type === 'script' || name.endsWith('.ts') || name.endsWith('.js')) {
+                    Icon = FileCode;
+                    color = "#22c55e";
+                  }
+
+                  const baseSize = 96;
+                  const size = Math.round(baseSize * zoomLevel);
+
+                  return (
                     <div
-                      className="w-16 h-16 rounded mb-2 flex items-center justify-center border shadow-sm relative overflow-hidden"
-                      style={{ backgroundColor: theme.colors.bg.secondary, borderColor: theme.colors.border.default }}
+                      key={a.id}
+                      className="flex flex-col items-center p-2 rounded cursor-pointer group transition-colors"
+                      style={{
+                        backgroundColor: theme.colors.selection.background,
+                        border: `1px solid ${theme.colors.selection.border}`,
+                        width: `${size}px`
+                      }}
                     >
-                      {(() => {
-                        const type = a.type ? a.type.toLowerCase() : '';
-                        const name = a.name ? a.name.toLowerCase() : '';
-                        let Icon = FileIcon;
-                        let color = theme.colors.text.secondary;
-
-                        if (type === 'folder') {
-                          Icon = Folder;
-                          color = a.meta?.color ? (a.meta.color.startsWith('#') ? a.meta.color : ('#' + a.meta.color)) : '#eab308';
-                        }
-                        else if (type === 'staticmesh' || type === 'mesh' || name.endsWith('.plume_mesh') || name.endsWith('.fbx') || name.endsWith('.obj')) {
-                          Icon = Box;
-                          color = "#5DE2E7";
-                        }
-                        else if (type === 'texture' || type === 'image' || name.endsWith('.png') || name.endsWith('.jpg') || name.endsWith('.tga')) {
-                          Icon = ImageIcon;
-                          color = "#D05C5E";
-                        }
-                        else if (type === 'soundwave' || type === 'sound' || name.endsWith('.wav') || name.endsWith('.mp3')) {
-                          Icon = Music;
-                          color = "#CC6CE7";
-                        }
-                        else if (type === 'material' || name.endsWith('.plumematerial')) {
-                          Icon = Layers;
-                          color = "#7DDA58";
-                        }
-                        else if (type === 'level' || type === 'map' || name.endsWith('.plumemap') || name.endsWith('.map')) {
-                          Icon = Globe;
-                          color = "#FE9900";
-                        }
-                        else if (type === 'skeletalmesh' || name.endsWith('.plumeskel')) {
-                          Icon = Bone;
-                          color = "#FFECA1";
-                        }
-                        else if (type === 'animationsequence' || type === 'anim' || name.endsWith('.plumeanim')) {
-                          Icon = Film;
-                          color = "#BFD641";
-                        }
-                        else if (type === 'script' || name.endsWith('.ts') || name.endsWith('.js')) {
-                          Icon = FileCode;
-                          color = "#22c55e";
-                        }
-
-                        return <Icon size={32} style={{ color: color }} strokeWidth={type === 'folder' ? 1.5 : 2} />;
-                      })()}
+                      <div
+                        className="rounded mb-2 flex items-center justify-center border shadow-sm relative overflow-hidden transition-transform"
+                        style={{
+                          backgroundColor: theme.colors.bg.secondary,
+                          borderColor: theme.colors.border.default,
+                          width: `${Math.round(size * 0.66)}px`,
+                          height: `${Math.round(size * 0.66)}px`
+                        }}
+                      >
+                        <Icon size={Math.round(32 * zoomLevel)} color={color} strokeWidth={type === 'folder' ? 1.5 : 2} />
+                      </div>
+                      <input
+                        type="text"
+                        value={editingValue}
+                        onChange={(e) => setEditingValue(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') commitRename(a, editingValue);
+                          if (e.key === 'Escape') {
+                            setEditingId(null);
+                            if (!a.path) setAssets(prev => prev.filter(it => it.id !== a.id));
+                          }
+                        }}
+                        onBlur={() => commitRename(a, editingValue)}
+                        autoFocus
+                        className="text-xs text-center bg-black/50 text-white border border-blue-500 rounded px-1 w-full outline-none"
+                        onClick={(e) => e.stopPropagation()}
+                      />
                     </div>
-                    <input
-                      autoFocus
-                      value={editingValue}
-                      onChange={(e) => setEditingValue(e.target.value)}
-                      onKeyDown={(e) => {
-                        e.stopPropagation();
-                        if (e.key === 'Enter') {
-                          commitRename(a as any, editingValue);
-                        } else if (e.key === 'Escape') {
-                          // cancel inline edit
-                          setEditingId(null);
-                          // if it was a placeholder, remove it
-                          if (!a.path) setAssets(prev => prev.filter(it => it.id !== a.id));
-                        }
-                      }}
-                      onBlur={() => {
-                        commitRename(a as any, editingValue);
-                      }}
-                      className="text-[10px] text-center break-words w-full px-1 rounded"
-                      style={{ backgroundColor: 'transparent', color: theme.colors.text.primary, border: `1px solid ${theme.colors.border.default}`, outline: 'none' }}
+                  );
+                } else {
+                  return (
+                    <AssetTile
+                      key={a.id}
+                      id={a.id}
+                      name={a.name}
+                      type={a.type || (a.name.includes('.') ? 'file' : 'folder')}
+                      selected={selectedIds.has(a.id)}
+                      meta={a.meta}
+                      scale={zoomLevel}
+                      onClick={(e) => handleAssetClick(a, e)}
+                      onDoubleClick={(e) => handleAssetDoubleClick(a, e)}
+                      onContextMenu={(e, info) => handleAssetContextMenu(e, a, info)}
                     />
-                  </div>
-                ) : (
-                  <AssetTile key={a.id} id={a.id} name={a.name} type={a.type} meta={(a as any).meta} selected={selectedIds.has(a.id)} onClick={(e) => handleAssetClick(e, a.id)} onDoubleClick={() => { if (a.type === 'folder') openFolder(a as any); else if (onOpenAsset) onOpenAsset(a); }} onContextMenu={(_e, info) => {
-                    // If right-clicking on an unselected item, select only it
-                    if (!selectedIds.has(a.id)) {
-                      setSelectedIds(new Set([a.id]));
-                      setLastSelectedId(a.id);
-                    }
-                    setCtxX(_e.clientX);
-                    setCtxY(_e.clientY);
-                    setCtxType(info.type === 'folder' ? 'folder' : 'asset');
-                    setCtxTarget(a);
-                    setCtxVisible(true);
-                  }} />
-                )
-              ));
+                  );
+                }
+              });
             })()}
           </div>
-        </div>
-        {ctxVisible && ctxType && (
-          <ContextMenu
-            x={ctxX}
-            y={ctxY}
-            direction="up"
-            items={(ctxType === 'empty' ? [
-              { id: 'create_folder', label: 'Create Folder' },
-              { id: 'open_in_explorer', label: 'Open In Explorer' },
-              { id: 'paste', label: 'Paste', disabled: clipboard == null },
-              { id: 'import', label: 'Import' },
-              { id: 'sep1', type: 'separator' },
-              { id: 'create_material', label: 'Create Material' },
-              { id: 'create_level', label: 'Create Level' }
-            ] : ctxType === 'folder' ? [
-              { id: 'change_color', label: 'Change Color' },
-              { id: 'rename', label: 'Rename' },
-              { id: 'delete', label: 'Delete' },
-              { id: 'duplicate', label: 'Duplicate' },
-              { id: 'copy', label: 'Copy' }
-            ] : [
-              { id: 'delete', label: 'Delete' },
-              { id: 'rename', label: 'Rename' },
-              { id: 'duplicate', label: 'Duplicate' },
-              { id: 'copy', label: 'Copy' }
-            ]) as ContextMenuItem[]}
-            onSelect={(id) => {
-              if (id === 'create_folder') createFolder();
-              else if (id === 'paste') pasteClipboard();
-              else if (id === 'open_in_explorer') openInExplorer(ctxTarget ?? undefined);
-              else if (id === 'import') handleImport();
-              else if (id === 'rename' && ctxTarget) renameItem(ctxTarget as any);
-              else if (id === 'delete' && ctxTarget) deleteItem(ctxTarget as any);
-              else if (id === 'duplicate' && ctxTarget) duplicateItem(ctxTarget as any);
-              else if (id === 'copy' && ctxTarget) copyItem(ctxTarget as any);
-              else if (id === 'change_color' && ctxTarget) {
-                setColorPicker({ open: true, x: ctxX, y: ctxY, target: ctxTarget });
-              }
-              else if (id === 'create_material') createAsset('M_NewMaterial', 'Material');
-              else if (id === 'create_level') createAsset('L_NewLevel', 'Level');
-
-              const payload = { action: id, target: ctxTarget };
-              document.dispatchEvent(new CustomEvent('contentBrowserAction', { detail: payload }));
-              const targetStr = ctxTarget ? ` on ${ctxTarget.name}` : '';
-              onLog(`Context action: ${id}${targetStr}`, 'INFO');
-              setCtxVisible(false);
-            }}
-            onClose={() => setCtxVisible(false)}
-          />
-        )}
-      </div>
-      {toast && <Toast message={toast} onClose={() => setToast(null)} />}
-      <SimpleModal
-        title={modalTitle}
-        defaultValue={modalDefault}
-        open={modalOpen}
-        placeholder={''}
-        onCancel={() => { setModalOpen(false); setModalAction(null); }}
-        onSubmit={handleModalSubmit}
-      />
-      {colorPicker && colorPicker.open && (
-        <div style={{
-          position: 'absolute',
-          left: '50%',
-          top: '50%',
-          transform: 'translate(-50%, -50%)',
-          zIndex: 9999
-        }}>
-          <ColorPicker
-            initial={(colorPicker.target && colorPicker.target.meta && colorPicker.target.meta.color) ? (colorPicker.target.meta.color.startsWith('#') ? colorPicker.target.meta.color : ('#' + colorPicker.target.meta.color)) : '#ffffff'}
-            onPick={(hex) => {
-
-              // Update local folderTree state immediately
-              const updateNodeColor = (nodes: any[], targetPath: string, color: string): any[] => {
-                return nodes.map(node => {
-                  if (node.path === targetPath) {
-                    return { ...node, meta: { ...node.meta, color } };
+          {
+            ctxVisible && ctxType && (
+              <ContextMenu
+                x={ctxX}
+                y={ctxY}
+                direction="up"
+                items={(ctxType === 'empty' ? [
+                  { id: 'create_folder', label: 'Create Folder' },
+                  { id: 'open_in_explorer', label: 'Open In Explorer' },
+                  { id: 'paste', label: 'Paste', disabled: clipboard == null },
+                  { id: 'import', label: 'Import' },
+                  { id: 'sep1', type: 'separator' },
+                  { id: 'create_material', label: 'Create Material' },
+                  { id: 'create_level', label: 'Create Level' }
+                ] : ctxType === 'folder' ? [
+                  { id: 'change_color', label: 'Change Color' },
+                  { id: 'rename', label: 'Rename' },
+                  { id: 'delete', label: 'Delete' },
+                  { id: 'duplicate', label: 'Duplicate' },
+                  { id: 'copy', label: 'Copy' }
+                ] : [
+                  { id: 'delete', label: 'Delete' },
+                  { id: 'rename', label: 'Rename' },
+                  { id: 'duplicate', label: 'Duplicate' },
+                  { id: 'copy', label: 'Copy' }
+                ]) as ContextMenuItem[]}
+                onSelect={(id) => {
+                  if (id === 'create_folder') createFolder();
+                  else if (id === 'paste') pasteClipboard();
+                  else if (id === 'open_in_explorer') openInExplorer(ctxTarget ?? undefined);
+                  else if (id === 'import') handleImport();
+                  else if (id === 'rename' && ctxTarget) renameItem(ctxTarget as any);
+                  else if (id === 'delete' && ctxTarget) deleteItem(ctxTarget as any);
+                  else if (id === 'duplicate' && ctxTarget) duplicateItem(ctxTarget as any);
+                  else if (id === 'copy' && ctxTarget) copyItem(ctxTarget as any);
+                  else if (id === 'change_color' && ctxTarget) {
+                    setColorPicker({ open: true, x: ctxX, y: ctxY, target: ctxTarget });
                   }
-                  if (node.children && node.children.length > 0) {
-                    return { ...node, children: updateNodeColor(node.children, targetPath, color) };
+                  else if (id === 'create_material') createAsset('M_NewMaterial', 'Material');
+                  else if (id === 'create_level') createAsset('L_NewLevel', 'Level');
+
+                  const payload = { action: id, target: ctxTarget };
+                  document.dispatchEvent(new CustomEvent('contentBrowserAction', { detail: payload }));
+                  const targetStr = ctxTarget ? ` on ${ctxTarget.name}` : '';
+                  onLog(`Context action: ${id}${targetStr}`, 'INFO');
+                  setCtxVisible(false);
+                }}
+                onClose={() => setCtxVisible(false)}
+              />
+            )
+          }
+        </div >
+        {toast && <Toast message={toast} onClose={() => setToast(null)} />}
+        <SimpleModal
+          title={modalTitle}
+          defaultValue={modalDefault}
+          open={modalOpen}
+          placeholder={''}
+          onCancel={() => { setModalOpen(false); setModalAction(null); }}
+          onSubmit={handleModalSubmit}
+        />
+        {
+          colorPicker && colorPicker.open && (
+            <div style={{
+              position: 'absolute',
+              left: '50%',
+              top: '50%',
+              transform: 'translate(-50%, -50%)',
+              zIndex: 9999
+            }}>
+              <ColorPicker
+                initial={(colorPicker.target && colorPicker.target.meta && colorPicker.target.meta.color) ? (colorPicker.target.meta.color.startsWith('#') ? colorPicker.target.meta.color : ('#' + colorPicker.target.meta.color)) : '#ffffff'}
+                onPick={(hex) => {
+
+                  // Update local folderTree state immediately
+                  const updateNodeColor = (nodes: any[], targetPath: string, color: string): any[] => {
+                    return nodes.map(node => {
+                      if (node.path === targetPath) {
+                        return { ...node, meta: { ...node.meta, color } };
+                      }
+                      if (node.children && node.children.length > 0) {
+                        return { ...node, children: updateNodeColor(node.children, targetPath, color) };
+                      }
+                      return node;
+                    });
+                  };
+
+                  const targetPath = (colorPicker.target as any).path;
+                  setFolderTree(prev => updateNodeColor(prev, targetPath, hex));
+
+                  // Also update assets state for the content browser
+                  setAssets(prev => prev.map(asset =>
+                    asset.path === targetPath ? { ...asset, meta: { ...asset.meta, color: hex } } : asset
+                  ));
+
+                  const __webview = (window as any).chrome?.webview;
+                  if (__webview) {
+                    __webview.postMessage({ action: 'change-color', path: targetPath, color: hex });
+                    // Refresh content listing
+                    __webview.postMessage({ action: 'list-content', path: currentPath });
                   }
-                  return node;
-                });
-              };
-
-              const targetPath = (colorPicker.target as any).path;
-              setFolderTree(prev => updateNodeColor(prev, targetPath, hex));
-
-              // Also update assets state for the content browser
-              setAssets(prev => prev.map(asset =>
-                asset.path === targetPath ? { ...asset, meta: { ...asset.meta, color: hex } } : asset
-              ));
-
-              const __webview = (window as any).chrome?.webview;
-              if (__webview) {
-                __webview.postMessage({ action: 'change-color', path: targetPath, color: hex });
-                // Refresh content listing
-                __webview.postMessage({ action: 'list-content', path: currentPath });
-              }
-              setColorPicker(null);
-            }}
-            onCancel={() => setColorPicker(null)}
-          />
-        </div>
-      )}
-      {deletePending && (
-        <div style={{ position: 'absolute', right: 16, bottom: 16, zIndex: 60 }}>
-          <div className="flex items-center space-x-2 p-3 rounded shadow" style={{ backgroundColor: theme.colors.bg.secondary, border: `1px solid ${theme.colors.border.default}` }}>
-            <div className="text-sm" style={{ color: theme.colors.text.primary }}>Delete "{deletePending.name}"?</div>
-            <button className="px-3 py-1 rounded text-sm" style={{ backgroundColor: '#ef4444', color: '#fff' }} onClick={confirmDeleteNow}>Delete</button>
-            <button className="px-3 py-1 rounded text-sm" style={{ backgroundColor: theme.colors.bg.elevated, color: theme.colors.text.primary }} onClick={cancelDelete}>Cancel</button>
-          </div>
-        </div>
-      )}
+                  setColorPicker(null);
+                }}
+                onCancel={() => setColorPicker(null)}
+              />
+            </div>
+          )
+        }
+        {
+          deletePending && (
+            <div style={{ position: 'absolute', right: 16, bottom: 16, zIndex: 60 }}>
+              <div className="flex items-center space-x-2 p-3 rounded shadow" style={{ backgroundColor: theme.colors.bg.secondary, border: `1px solid ${theme.colors.border.default}` }}>
+                <div className="text-sm" style={{ color: theme.colors.text.primary }}>Delete "{deletePending.name}"?</div>
+                <button className="px-3 py-1 rounded text-sm" style={{ backgroundColor: '#ef4444', color: '#fff' }} onClick={confirmDeleteNow}>Delete</button>
+                <button className="px-3 py-1 rounded text-sm" style={{ backgroundColor: theme.colors.bg.elevated, color: theme.colors.text.primary }} onClick={cancelDelete}>Cancel</button>
+              </div>
+            </div>
+          )
+        }
+      </div >
     </div>
   );
 };
