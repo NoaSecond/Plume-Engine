@@ -111,7 +111,7 @@ export const TabSystem: React.FC<TabSystemProps> = ({ tabs, activeTabId, onTabCl
                     <div key={tab.id} className="relative flex h-full">
                         {/* Visual Drop Indicator Left */}
                         {dropIndicator === index && (
-                            <div className="absolute left-0 top-0 bottom-0 w-0.5 z-50 bg-blue-500 animate-pulse pointer-events-none" />
+                            <div className="absolute left-0 top-0 bottom-0 w-0.5 z-50 animate-pulse pointer-events-none" style={{ backgroundColor: theme.colors.accent.primary }} />
                         )}
 
                         <div
@@ -147,7 +147,7 @@ export const TabSystem: React.FC<TabSystemProps> = ({ tabs, activeTabId, onTabCl
 
                         {/* Visual Drop Indicator Right (for last item only mostly, or we render indicators uniformly) */}
                         {showIndicatorRight && (
-                            <div className="absolute right-0 top-0 bottom-0 w-0.5 z-50 bg-blue-500 animate-pulse pointer-events-none" />
+                            <div className="absolute right-0 top-0 bottom-0 w-0.5 z-50 animate-pulse pointer-events-none" style={{ backgroundColor: theme.colors.accent.primary }} />
                         )}
                     </div>
                 );

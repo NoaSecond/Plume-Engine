@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { ChevronRight, Search, Folder, X, ChevronDown, File, Upload } from 'lucide-react';
+import { ChevronRight, Search, Folder, X, ChevronDown, File as FileIcon, Upload, Box, Image as ImageIcon, Music, Layers, Globe, Bone, Film, FileCode } from 'lucide-react';
 import { AssetTile } from '../ui/Shared';
 import { ContextMenu, ContextMenuItem } from '../ui/ContextMenu';
 import { Toast } from '../ui/Toast';
@@ -166,45 +166,46 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
         if (data.type === 'content-list') messageReceivedRef.current = true;
         if (data.type === 'content-list' && Array.isArray(data.items)) {
           const respPath = data.path ? normalizePath(data.path) : 'Content';
-          const first = data.items[0];
-          if (respPath === 'Content' && first && first.children !== undefined) {
-            // normalize nodes and children recursively
-            const normalizeNode = (n: any) => {
-              const node = { ...n };
-              node.path = normalizePath(node.path || node.name || 'Content');
-              if (node.children && Array.isArray(node.children)) {
-                node.children = node.children.map((c: any) => {
-                  const child = { ...c };
-                  child.path = normalizePath(child.path || child.name || 'Content');
-                  if (child.children && Array.isArray(child.children)) {
-                    child.children = child.children.map((g: any) => ({
-                      ...g,
-                      path: normalizePath(g.path || g.name || 'Content')
-                    }));
-                  }
-                  return child;
-                });
-              }
-              return node;
-            };
-            const nodes = data.items.map((it: any) => normalizeNode(it));
+
+          // Helper to normalize nodes
+          const normalizeNode = (n: any) => {
+            const node = { ...n };
+            node.path = normalizePath(node.path || node.name || 'Content');
+            if (node.children && Array.isArray(node.children)) {
+              node.children = node.children.map((c: any) => {
+                const child = { ...c };
+                child.path = normalizePath(child.path || child.name || 'Content');
+                if (child.children && Array.isArray(child.children)) {
+                  child.children = child.children.map((g: any) => ({
+                    ...g,
+                    path: normalizePath(g.path || g.name || 'Content')
+                  }));
+                }
+                return child;
+              });
+            }
+            return node;
+          };
+
+          const nodes = data.items.map((it: any) => normalizeNode(it));
+
+          // Logic to split tree vs assets updates
+          const isRecursiveResponse = !!data.recursive;
+
+          if (respPath === 'Content' && isRecursiveResponse) {
             setFolderTree(nodes);
-            // Also populate the content pane with the top-level nodes when viewing Content
-            setAssets(nodes.map((it: any) => ({ id: it.id, name: it.name, type: it.type, path: it.path, meta: it.meta })));
-            // By default only expand the root; do NOT auto-expand all top-level nodes.
-            // Expand ancestors only when currentPath is inside that branch so the tree follows selection.
-            // Preserve existing expanded nodes
-            let newExpanded = new Set<string>(expandedIds);
-            newExpanded.add('root_content');
-            try {
-              const anc = findAncestorIds(nodes, normalizePath(currentPath || 'Content'));
-              if (anc) anc.forEach((id) => newExpanded.add(id));
-            } catch (e) { }
-            setExpandedIds(newExpanded);
-            if (!currentPath) setCurrentPath('Content');
-          } else {
-            // set assets for the current pane (normalize item paths)
-            setAssets(data.items.map((it: any) => ({ id: it.id, name: it.name, type: it.type, path: normalizePath(it.path || it.name), meta: it.meta })));
+          }
+
+          // Always update assets if the response matches our current view
+          const effectiveCurrent = normalizePath(currentPath || 'Content');
+          if (respPath === effectiveCurrent) {
+            setAssets(nodes.map((it: any) => ({
+              id: it.id,
+              name: it.name,
+              type: it.type,
+              path: it.path,
+              meta: it.meta
+            })));
           }
         }
         if (data.type === 'result') {
@@ -213,6 +214,14 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
           // Log to console instead of showing toast
           if (ok) {
             onLog(msg, 'INFO');
+            // Refresh content and tree on success to ensure UI is in sync
+            const __webview = (window as any).chrome?.webview;
+            if (__webview) {
+              // Refresh current view
+              __webview.postMessage({ action: 'list-content', path: currentPath || 'Content' });
+              // Refresh full tree structure (recursive)
+              __webview.postMessage({ action: 'list-content', path: 'Content', recursive: true });
+            }
           } else {
             onLog(msg, 'ERROR');
           }
@@ -251,20 +260,41 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
       }
       if (retryTimer) clearTimeout(retryTimer);
     };
-  }, [show]);
+  }, [show, currentPath]);
 
   // Load content for the current path when it changes or when panel opens with non-root path
   useEffect(() => {
     if (!show) return;
-    if (!currentPath || currentPath === 'Content') return;
 
-    // Only send content request if we're not at the root level
+    // Always ensure root is expanded, and expand ancestors if deeper
+    setExpandedIds(prev => {
+      const next = new Set<string>(); // Start fresh to auto-collapse unused branches
+      next.add('root_content');
+
+      if (currentPath && currentPath !== 'Content' && folderTree.length > 0) {
+        try {
+          const anc = findAncestorIds(folderTree, normalizePath(currentPath));
+          if (anc) anc.forEach(id => next.add(id));
+
+          // Also explicitly expand direct parents in tree if they matched
+          folderTree.forEach(node => {
+            if (currentPath!.startsWith(node.path + '/')) {
+              next.add(node.id);
+            }
+          });
+        } catch (e) { }
+      }
+      return next;
+    });
+
+    // Request content load
     const __webview = (window as any).chrome?.webview;
     if (__webview) {
-      console.log('Loading content for path:', currentPath);
-      __webview.postMessage({ action: 'list-content', path: currentPath });
+      // If expanding root, we likely already requested it via trySend on mount, but harmless to request again
+      // unless it causes flicker. previous loop protection prevents tree destruction.
+      __webview.postMessage({ action: 'list-content', path: currentPath || 'Content' });
     }
-  }, [show, currentPath]);
+  }, [show, currentPath, folderTree]);
 
   const createAsset = (defaultName: string, type: string) => {
     const __webview = (window as any).chrome?.webview;
@@ -601,6 +631,22 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
   // Recursive tree node renderer
   const TreeNode: React.FC<{ node: any; depth: number }> = ({ node, depth }) => {
     const isExpanded = expandedIds.has(node.id);
+
+    // Filter children for display in tree
+    const visibleChildren = React.useMemo(() => {
+      if (!node.children) return [];
+      const hidden = new Set<string>();
+      node.children.forEach((c: any) => {
+        const meta = c.meta as any;
+        if (c.name.endsWith('.plumeasset') && meta?.source) hidden.add(meta.source);
+      });
+      return node.children.filter((c: any) =>
+        !hidden.has(c.name) &&
+        c.name !== '.plume_meta' &&
+        !c.name.endsWith('.plume_meta')
+      );
+    }, [node.children]);
+
     const childrenRef = React.useRef<HTMLDivElement | null>(null);
     React.useEffect(() => {
       const el = childrenRef.current;
@@ -615,7 +661,44 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
           el.style.opacity = '0';
         }
       } catch (e) { }
-    }, [isExpanded, node.children]);
+    }, [isExpanded, visibleChildren]);
+
+    // Icon logic
+    // Determine icon type data
+    let iconColor = "#9ca3af";
+    if (theme?.colors?.text?.secondary) iconColor = theme.colors.text.secondary;
+    const type = node.type ? node.type.toLowerCase() : '';
+    const name = node.name ? node.name.toLowerCase() : '';
+
+    // Logic for color only
+    if (type === 'folder') {
+      iconColor = node.meta?.color ? (node.meta.color.startsWith('#') ? node.meta.color : ('#' + node.meta.color)) : '#eab308';
+    }
+    else if (type === 'staticmesh' || type === 'mesh' || name.endsWith('.plume_mesh') || name.endsWith('.fbx') || name.endsWith('.obj')) {
+      iconColor = "#5DE2E7";
+    }
+    else if (type === 'texture' || type === 'image' || name.endsWith('.png') || name.endsWith('.jpg') || name.endsWith('.tga')) {
+      iconColor = "#D05C5E";
+    }
+    else if (type === 'soundwave' || type === 'sound' || name.endsWith('.wav') || name.endsWith('.mp3')) {
+      iconColor = "#CC6CE7";
+    }
+    else if (type === 'material' || name.endsWith('.plumematerial')) {
+      iconColor = "#7DDA58";
+    }
+    else if (type === 'level' || type === 'map' || name.endsWith('.plumemap') || name.endsWith('.map')) {
+      iconColor = "#FE9900";
+    }
+    else if (type === 'skeletalmesh' || name.endsWith('.plumeskel')) {
+      iconColor = "#FFECA1";
+    }
+    else if (type === 'animationsequence' || type === 'anim' || name.endsWith('.plumeanim')) {
+      iconColor = "#BFD641";
+    }
+    else if (type === 'script' || name.endsWith('.ts') || name.endsWith('.js')) {
+      iconColor = "#22c55e";
+    }
+
     return (
       <div>
         <div
@@ -654,17 +737,37 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
           }}
         >
           <div onClick={(e) => { e.stopPropagation(); toggleExpand(node.id); }} style={{ width: 16 }}>
-            {node.children && node.children.length > 0 ? (
+            {visibleChildren && visibleChildren.length > 0 ? (
               isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />
             ) : (
               <span style={{ display: 'inline-block', width: 12 }} />
             )}
           </div>
-          {node.type === 'folder' ? (
-            <Folder size={12} className="mr-2" style={{ color: node.meta?.color ? (node.meta.color.startsWith('#') ? node.meta.color : ('#' + node.meta.color)) : '#eab308' }} fill={node.meta?.color ? (node.meta.color.startsWith('#') ? node.meta.color : ('#' + node.meta.color)) : '#eab308'} />
-          ) : (
-            <File size={12} className="mr-2" style={{ color: theme.colors.text.secondary }} />
-          )}
+
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 14, height: 14, minWidth: 14, flexShrink: 0, marginRight: 8 }}>
+            {type === 'folder' ? (
+              <Folder size={14} color={iconColor} stroke={iconColor} fill="none" strokeWidth={1.5} />
+            ) : (type === 'staticmesh' || type === 'mesh' || name.endsWith('.plume_mesh') || name.endsWith('.fbx') || name.endsWith('.obj') ? (
+              <Box size={14} color={iconColor} stroke={iconColor} fill="none" strokeWidth={2} />
+            ) : (type === 'texture' || type === 'image' || name.endsWith('.png') || name.endsWith('.jpg') || name.endsWith('.tga') ? (
+              <ImageIcon size={14} color={iconColor} stroke={iconColor} fill="none" strokeWidth={2} />
+            ) : (type === 'soundwave' || type === 'sound' || name.endsWith('.wav') || name.endsWith('.mp3') ? (
+              <Music size={14} color={iconColor} stroke={iconColor} fill="none" strokeWidth={2} />
+            ) : (type === 'material' || name.endsWith('.plumematerial') ? (
+              <Layers size={14} color={iconColor} stroke={iconColor} fill="none" strokeWidth={2} />
+            ) : (type === 'level' || type === 'map' || name.endsWith('.plumemap') || name.endsWith('.map') ? (
+              <Globe size={14} color={iconColor} stroke={iconColor} fill="none" strokeWidth={2} />
+            ) : (type === 'skeletalmesh' || name.endsWith('.plumeskel') ? (
+              <Bone size={14} color={iconColor} stroke={iconColor} fill="none" strokeWidth={2} />
+            ) : (type === 'animationsequence' || type === 'anim' || name.endsWith('.plumeanim') ? (
+              <Film size={14} color={iconColor} stroke={iconColor} fill="none" strokeWidth={2} />
+            ) : (type === 'script' || name.endsWith('.ts') || name.endsWith('.js') ? (
+              <FileCode size={14} color={iconColor} stroke={iconColor} fill="none" strokeWidth={2} />
+            ) : (
+              <FileIcon size={14} color={iconColor} stroke={iconColor} fill="none" strokeWidth={2} />
+            )))))))))}
+          </div>
+
           <span style={{ fontWeight: currentPath === (node.path || node.name) ? 600 : 400 }}>{node.name}</span>
         </div>
         <div ref={childrenRef} style={{
@@ -673,7 +776,7 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
           transition: 'max-height 220ms cubic-bezier(.2,.9,.2,1), opacity 180ms ease',
           opacity: isExpanded ? 1 : 0
         }}>
-          {node.children && node.children.length > 0 && node.children.map((c: any) => (
+          {visibleChildren.map((c: any) => (
             <TreeNode key={c.id} node={c} depth={depth + 1} />
           ))}
         </div>
@@ -836,7 +939,7 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
             {(
               <TreeNode
                 key={'root_content'}
-                node={{ id: 'root_content', name: 'Content', type: 'folder', path: 'Content', children: folderTree && folderTree.length ? folderTree : assets.filter(a => a.type === 'folder') }}
+                node={{ id: 'root_content', name: 'Content', type: 'folder', path: 'Content', children: folderTree && folderTree.length ? folderTree : assets }}
                 depth={0}
               />
             )}
@@ -920,7 +1023,7 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
                       {a.type === 'folder' ? (
                         <Folder size={32} style={{ color: a.meta?.color ? (a.meta.color.startsWith('#') ? a.meta.color : ('#' + a.meta.color)) : '#eab308' }} />
                       ) : (
-                        <File size={32} style={{ color: theme.colors.text.secondary }} />
+                        <FileIcon size={32} style={{ color: theme.colors.text.secondary }} />
                       )}
                     </div>
                     <input

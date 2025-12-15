@@ -984,23 +984,28 @@ void InitWebView(const std::string& htmlPath) {
                                             list["type"] = "content-list";
                                             list["path"] = rel;
                                             list["items"] = nlohmann::json::array();
+                                            list["recursive"] = recursive;
+                                            // Helper to recursively build tree
+                                            std::function<nlohmann::json(const fs::path&)> buildTree;
+                                            buildTree = [&](const fs::path& p) -> nlohmann::json {
+                                                nlohmann::json node = buildNode(p);
+                                                if (fs::is_directory(p)) {
+                                                    node["children"] = nlohmann::json::array();
+                                                    try {
+                                                        for (auto& c : fs::directory_iterator(p)) {
+                                                            node["children"].push_back(buildTree(c.path()));
+                                                        }
+                                                    } catch(...) {}
+                                                }
+                                                return node;
+                                            };
+
                                             try {
                                                 if (fs::exists(target) && fs::is_directory(target)) {
                                                     if (recursive) {
-                                                        // walk top-level entries and include children for folders
+                                                        // Fully recursive walk
                                                         for (auto& entry : fs::directory_iterator(target)) {
-                                                            nlohmann::json node = buildNode(entry.path());
-                                                            if (entry.is_directory()) {
-                                                                node["children"] = nlohmann::json::array();
-                                                                try {
-                                                                    for (auto& c : fs::directory_iterator(entry.path())) {
-                                                                        nlohmann::json child = buildNode(c.path());
-                                                                        // don't recurse deeply for performance; children will not have grandchildren
-                                                                        node["children"].push_back(child);
-                                                                    }
-                                                                } catch(...) {}
-                                                            }
-                                                            list["items"].push_back(node);
+                                                            list["items"].push_back(buildTree(entry.path()));
                                                         }
                                                     } else {
                                                         for (auto& entry : fs::directory_iterator(target)) {

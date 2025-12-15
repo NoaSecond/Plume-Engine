@@ -44,12 +44,12 @@ export default function App() {
         const parsed = JSON.parse(saved);
         // Ensure scene is always there? Or trust storage. 
         // Let's ensure at least Basic Scene is present if array is empty, though logic below handles that.
-        return parsed.length > 0 ? parsed : [{ id: 'scene', title: 'Main Scene', type: 'scene', closable: false }];
+        return parsed.length > 0 ? parsed : [{ id: 'scene', title: 'EmptyLevel', type: 'scene', closable: false }];
       } catch (e) {
         console.error("Failed to load tabs", e);
       }
     }
-    return [{ id: 'scene', title: 'Main Scene', type: 'scene', closable: false }];
+    return [{ id: 'scene', title: 'EmptyLevel', type: 'scene', closable: false }];
   });
 
   const [activeTabId, setActiveTabId] = useState<string>(() => {

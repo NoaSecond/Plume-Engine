@@ -40,15 +40,14 @@ namespace Plume {
             buffer << file.rdbuf();
             m_Scene->DeserializeFromJson(buffer.str());
         } else {
-            // Create default
+            // Create default in-memory scene (EmptyLevel state)
             m_Scene->CreateEntity("Scene_Root", EntityType::Folder);
             m_Scene->CreateEntity("Sun_Light", EntityType::Light, "Directional");
             m_Scene->CreateEntity("Main_Camera", EntityType::Camera);
             m_Scene->CreateEntity("Rotating_Cube_CPP", EntityType::Mesh, "Cube");
             
-            // Save to file
-            std::ofstream file(assetPath);
-            file << m_Scene->SerializeToJson();
+            // DO NOT save to file automatically.
+            // This is now an transient "EmptyLevel".
         }
     }
 
