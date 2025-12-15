@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { useTheme } from '../../ThemeContext';
-import { X, Box, Globe, Image as ImageIcon, Music, File, Layers, Bone, Film, Settings, Package, Plug, Folder } from 'lucide-react';
+import { X, Box, Globe, Image as ImageIcon, Music, File, Layers, Bone, Film, Settings, Package, Plug, Folder, Terminal, FileCode } from 'lucide-react';
 
 export interface Tab {
     id: string;
     title: string;
-    type: 'scene' | 'static-mesh' | 'texture' | 'sound' | 'material' | 'level' | 'skeletal-mesh' | 'animation-sequence' | 'editor-preferences' | 'project-settings' | 'plugin-manager' | 'content-browser';
+    type: 'scene' | 'static-mesh' | 'texture' | 'sound' | 'material' | 'level' | 'skeletal-mesh' | 'animation-sequence' | 'editor-preferences' | 'project-settings' | 'plugin-manager' | 'content-browser' | 'console';
     data?: any; // e.g. entityId or filename
     closable: boolean;
 }
@@ -38,6 +38,7 @@ export const TabSystem: React.FC<TabSystemProps> = ({ tabs, activeTabId, onTabCl
             case 'project-settings': return <Package size={14} className="mr-2" />;
             case 'plugin-manager': return <Plug size={14} className="mr-2" />;
             case 'content-browser': return <Folder size={14} className="mr-2" />;
+            case 'console': return <Terminal size={14} className="mr-2" />;
             default: return <File size={14} className="mr-2" />;
         }
     };

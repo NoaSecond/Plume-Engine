@@ -776,6 +776,16 @@ export default function App() {
                   }}
                 />
               )}
+              {tab.type === 'console' && (
+                <ConsolePanel
+                  logs={logs}
+                  onClear={() => setLogs([])}
+                  onExecuteCommand={handleExecuteCommand}
+                  isOpen={true}
+                  setIsOpen={() => handleTabClose(tab.id)}
+                  isDocked={true}
+                />
+              )}
             </div>
           );
         })}
@@ -842,6 +852,17 @@ export default function App() {
         onExecuteCommand={(cmd) => handleExecuteCommand(cmd)}
         isOpen={showConsole}
         setIsOpen={setShowConsole}
+        onDock={() => {
+          const existing = tabs.find(t => t.type === 'console');
+          if (existing) {
+            setActiveTabId(existing.id);
+          } else {
+            const newTabId = `console-${Date.now()}`;
+            setTabs(prev => [...prev, { id: newTabId, title: 'Console', type: 'console', closable: true }]);
+            setActiveTabId(newTabId);
+          }
+          setShowConsole(false);
+        }}
       />
 
       {/* Footer / Status Bar - Persistent */}
