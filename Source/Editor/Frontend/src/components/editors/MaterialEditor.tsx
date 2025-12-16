@@ -28,6 +28,7 @@ import MathNode from './MaterialNodes/MathNode';
 import TextureNode from './MaterialNodes/TextureNode';
 import { NodeSearchMenu, NodeTypeItem } from './NodeSearchMenu';
 import { NodeContextMenu } from './NodeContextMenu';
+import { Maximize, Lock, Unlock, ZoomIn as ZoomInIcon, ZoomOut as ZoomOutIcon, Save } from 'lucide-react';
 
 interface MaterialEditorProps {
     assetId: string;
@@ -56,47 +57,61 @@ const initialEdges: Edge[] = [
     { id: 'e2-1', source: '2', target: '1', targetHandle: 'base-color', animated: true },
 ];
 
-const SaveButton = ({ theme, onSave, disabled, forceActive }: { theme: any, onSave: () => void, disabled?: boolean, forceActive?: boolean }) => {
+const ToolbarButton = ({ theme, onClick, disabled, forceActive, icon: Icon, label, tooltip, shortcut, active: externalActive }: any) => {
     const [hover, setHover] = useState(false);
-    const [active, setActive] = useState(false);
-
-    const isActive = active || forceActive;
+    const [localActive, setLocalActive] = useState(false);
+    const active = localActive || forceActive || externalActive;
+    const tooltipText = tooltip || label;
 
     return (
         <button
-            title="Save (Ctrl+S)"
+            title={shortcut ? `${tooltipText} (${shortcut})` : tooltipText}
             style={{
-                background: isActive ? theme.colors.accent.primary : (disabled ? theme.colors.bg.secondary : (hover ? theme.colors.accent.primary + '40' : theme.colors.bg.secondary)),
-                color: isActive || hover ? '#fff' : (disabled ? theme.colors.text.muted : theme.colors.text.secondary),
-                border: `1px solid ${isActive || hover ? theme.colors.accent.primary : theme.colors.border.default}`,
+                background: active ? theme.colors.accent.primary : (disabled ? theme.colors.bg.secondary : (hover ? theme.colors.accent.primary + '40' : theme.colors.bg.secondary)),
+                color: active || hover ? '#fff' : (disabled ? theme.colors.text.muted : theme.colors.text.secondary),
+                border: `1px solid ${active || hover ? theme.colors.accent.primary : theme.colors.border.default}`,
                 borderRadius: theme.borderRadius.md,
-                padding: '6px 12px',
+                padding: label ? '6px 12px' : '6px',
+                minWidth: label ? 'auto' : '32px',
+                height: '32px',
                 fontSize: '12px',
                 fontWeight: 600,
                 cursor: disabled ? 'default' : 'pointer',
                 display: 'flex',
                 alignItems: 'center',
+                justifyContent: 'center',
                 gap: '6px',
                 boxShadow: disabled ? 'none' : theme.shadows.md,
                 transition: 'all 0.1s ease',
-                transform: isActive ? 'translateY(1px)' : 'none',
+                transform: active ? 'translateY(1px)' : 'none',
                 opacity: disabled ? 0.5 : 1,
-                pointerEvents: disabled ? 'none' : 'auto'
+                pointerEvents: disabled ? 'none' : 'auto',
+                outline: 'none'
             }}
             onMouseEnter={() => !disabled && setHover(true)}
-            onMouseLeave={() => { setHover(false); setActive(false); }}
-            onMouseDown={() => !disabled && setActive(true)}
-            onMouseUp={() => setActive(false)}
-            onClick={onSave}
+            onMouseLeave={() => { setHover(false); setLocalActive(false); }}
+            onMouseDown={() => !disabled && setLocalActive(true)}
+            onMouseUp={() => setLocalActive(false)}
+            onClick={onClick}
             disabled={disabled}
         >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
-                <polyline points="17 21 17 13 7 13 7 21"></polyline>
-                <polyline points="7 3 7 8 15 8"></polyline>
-            </svg>
-            Save
+            <Icon size={16} />
+            {label}
         </button>
+    );
+};
+
+const EditorToolbar = ({ theme, onSave, onFitView, onLock, onZoomIn, onZoomOut, isDirty, isInteractive, isSaving, isFitting, isLocking, isZoomingIn, isZoomingOut }: any) => {
+    return (
+        <div style={{ display: 'flex', gap: '8px', padding: '4px' }}>
+            <ToolbarButton theme={theme} onClick={onSave} icon={Save} label="Save" shortcut="Ctrl+S" disabled={!isDirty} forceActive={isSaving} />
+            <div style={{ width: '1px', background: theme.colors.border.default, margin: '0 4px', height: '24px', alignSelf: 'center' }} />
+            <ToolbarButton theme={theme} onClick={onFitView} icon={Maximize} tooltip="Fit View" shortcut="Ctrl+F" forceActive={isFitting} />
+            <ToolbarButton theme={theme} onClick={onLock} icon={isInteractive ? Unlock : Lock} tooltip={isInteractive ? "Lock Interactivity" : "Unlock Interactivity"} shortcut="Ctrl+L" forceActive={isLocking} active={!isInteractive} />
+            <div style={{ width: '1px', background: theme.colors.border.default, margin: '0 4px', height: '24px', alignSelf: 'center' }} />
+            <ToolbarButton theme={theme} onClick={onZoomIn} icon={ZoomInIcon} tooltip="Zoom In" shortcut="Scroll Up" forceActive={isZoomingIn} />
+            <ToolbarButton theme={theme} onClick={onZoomOut} icon={ZoomOutIcon} tooltip="Zoom Out" shortcut="Scroll Down" forceActive={isZoomingOut} />
+        </div>
     );
 };
 
@@ -108,12 +123,69 @@ export const MaterialEditor: React.FC<MaterialEditorProps> = ({ assetId, name, o
     const [nodes, setNodes] = useNodesState([]);
     const [edges, setEdges] = useEdgesState([]);
     const [isDirty, setIsDirty] = useState(false);
+    const [isInteractive, setIsInteractive] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
+    const [isFitting, setIsFitting] = useState(false);
+    const [isLocking, setIsLocking] = useState(false);
+    const [isZoomingIn, setIsZoomingIn] = useState(false);
+    const [isZoomingOut, setIsZoomingOut] = useState(false);
 
     const setDirty = useCallback((dirty: boolean) => {
         setIsDirty(dirty);
         if (onDirtyChange) onDirtyChange(dirty);
     }, [onDirtyChange]);
+
+    const handleSave = useCallback(() => {
+        if (!isDirty) return;
+        setIsSaving(true);
+        setTimeout(() => setIsSaving(false), 200);
+
+        // Construct payload
+        const materialData = {
+            nodes: nodes.map(n => ({ ...n, selected: false })),
+            edges: edges.map(e => ({ ...e, selected: false })),
+            name: name
+        };
+
+        const payload = {
+            action: 'save-asset',
+            assetId,
+            type: 'Material',
+            content: JSON.stringify(materialData)
+        };
+
+        if ((window as any).chrome?.webview) {
+            (window as any).chrome.webview.postMessage(payload);
+        } else {
+            console.log("Mock Save:", payload);
+        }
+
+        setDirty(false); // Optimistic
+    }, [isDirty, nodes, edges, name, assetId, setDirty]);
+
+    const handleFitView = useCallback(() => {
+        setIsFitting(true);
+        setTimeout(() => setIsFitting(false), 200);
+        reactFlowInstance?.fitView({ padding: 0.2, duration: 200 });
+    }, [reactFlowInstance]);
+
+    const handleLock = useCallback(() => {
+        setIsLocking(true);
+        setTimeout(() => setIsLocking(false), 200);
+        setIsInteractive(prev => !prev);
+    }, []);
+
+    const handleZoomIn = useCallback(() => {
+        setIsZoomingIn(true);
+        setTimeout(() => setIsZoomingIn(false), 200);
+        reactFlowInstance?.zoomIn();
+    }, [reactFlowInstance]);
+
+    const handleZoomOut = useCallback(() => {
+        setIsZoomingOut(true);
+        setTimeout(() => setIsZoomingOut(false), 200);
+        reactFlowInstance?.zoomOut();
+    }, [reactFlowInstance]);
 
     const onEdgesChange = useCallback((changes: EdgeChange[]) => {
         const isMeaningfulChange = changes.some(c => c.type !== 'select');
@@ -251,7 +323,7 @@ export const MaterialEditor: React.FC<MaterialEditorProps> = ({ assetId, name, o
     }, [nodes, setNodes, setDirty]);
 
     const copyNodes = useCallback((nodes: Node[]) => {
-        console.log("Copying nodes", nodes);
+        // Copy logic to be implemented
     }, []);
 
     const createComment = useCallback((targetNodes: Node[], pos?: { x: number, y: number }) => {
@@ -301,29 +373,6 @@ export const MaterialEditor: React.FC<MaterialEditorProps> = ({ assetId, name, o
         }));
     }, [setNodes]);
 
-    const handleSave = useCallback(() => {
-        const materialData = {
-            nodes,
-            edges,
-        };
-
-        const payload = {
-            action: 'save-asset',
-            assetId,
-            type: 'Material',
-            content: JSON.stringify(materialData)
-        };
-
-        console.log('Saving Material:', payload);
-
-        if ((window as any).chrome?.webview) {
-            (window as any).chrome.webview.postMessage(payload);
-        }
-
-        setIsSaving(true);
-        setTimeout(() => setIsSaving(false), 200);
-        setDirty(false);
-    }, [nodes, edges, assetId, setDirty]);
 
     // Shortcuts
     const onKeyDown = useCallback((event: React.KeyboardEvent) => {
@@ -364,6 +413,33 @@ export const MaterialEditor: React.FC<MaterialEditorProps> = ({ assetId, name, o
             }
         }
 
+        // Fit View 'Ctrl+F'
+        if ((event.key === 'f' || event.key === 'F') && (event.ctrlKey || event.metaKey)) {
+            event.preventDefault();
+            handleFitView();
+            return;
+        }
+
+        // Toggle Interactivity 'Ctrl+L'
+        if ((event.key === 'l' || event.key === 'L') && (event.ctrlKey || event.metaKey)) {
+            event.preventDefault();
+            handleLock();
+            return;
+        }
+
+        // Zoom In = (plus)
+        if ((event.key === '=' || event.key === '+') && (event.ctrlKey || event.metaKey)) {
+            event.preventDefault();
+            handleZoomIn();
+            return;
+        }
+        // Zoom Out - (minus)
+        if ((event.key === '-' || event.key === '_') && (event.ctrlKey || event.metaKey)) {
+            event.preventDefault();
+            handleZoomOut();
+            return;
+        }
+
         // Duplicate Ctrl+D
         if ((event.key === 'd' || event.key === 'D') && (event.ctrlKey || event.metaKey)) {
             event.preventDefault();
@@ -397,7 +473,6 @@ export const MaterialEditor: React.FC<MaterialEditorProps> = ({ assetId, name, o
             const data = (e.data) ? e.data : (e.detail) ? e.detail : e;
             if (data?.action === 'asset-data' && data.assetId === assetId) {
                 try {
-                    console.log("MaterialEditor received data:", data);
                     let loaded = false;
                     if (data.content && data.content.length > 0) {
                         const content = JSON.parse(data.content);
@@ -638,6 +713,7 @@ export const MaterialEditor: React.FC<MaterialEditorProps> = ({ assetId, name, o
                 <div className="flex-1" style={{ height: '100%' }}>
                     <ReactFlow
                         id={assetId}
+                        className={!isInteractive ? "locked-interaction" : ""}
                         nodes={nodes}
                         edges={edges}
                         nodeTypes={nodeTypes}
@@ -656,7 +732,8 @@ export const MaterialEditor: React.FC<MaterialEditorProps> = ({ assetId, name, o
                         style={{ backgroundColor: theme.colors.bg.primary }}
                         panOnDrag={[2]}
                         selectionOnDrag={true}
-                        panOnScroll={true}
+                        panOnScroll={false}
+                        zoomOnScroll={true}
                         selectionMode={SelectionMode.Partial}
                         multiSelectionKeyCode={['Control', 'Shift', 'Meta']}
                         selectionKeyCode={null}
@@ -664,42 +741,36 @@ export const MaterialEditor: React.FC<MaterialEditorProps> = ({ assetId, name, o
                     >
                         <style>
                             {`
-                              .react-flow__controls {
-                                background-color: ${theme.colors.bg.secondary} !important;
-                                border: 1px solid ${theme.colors.border.default} !important;
-                                border-radius: ${theme.borderRadius.sm} !important;
-                                box-shadow: ${theme.shadows.sm} !important;
-                              }
-                              .react-flow__controls-button {
-                                background-color: ${theme.colors.bg.secondary} !important;
-                                border-bottom: 1px solid ${theme.colors.border.default} !important;
-                                color: ${theme.colors.text.primary} !important;
-                                width: 25px;
-                                height: 25px;
-                              }
-                              .react-flow__controls-button:last-child {
-                                 border-bottom: none !important;
-                               }
-                              .react-flow__controls-button:hover {
-                                background-color: ${theme.colors.bg.tertiary} !important;
-                                color: ${theme.colors.accent.primary} !important;
-                              }
-                              .react-flow__controls-button svg {
-                                fill: currentColor !important;
-                              }
-                              .react-flow__selection {
-                                background-color: ${theme.colors.selection.background} !important;
-                                border: 1px solid ${theme.colors.selection.border} !important;
-                              }
-                              .react-flow__nodesselection {
-                                display: none !important;
-                              }
+                                .locked-interaction .react-flow__node,
+                                .locked-interaction .react-flow__edge {
+                                    pointer-events: none !important;
+                                }
+                                .react-flow__selection {
+                                    background-color: ${theme.colors.selection.background} !important;
+                                    border: 1px solid ${theme.colors.selection.border} !important;
+                                }
+                                .react-flow__nodesselection {
+                                    display: none !important;
+                                }
                             `}
                         </style>
                         <Background color="#555" gap={16} />
-                        <Controls position="top-right" />
-                        <Panel position="top-left">
-                            <SaveButton theme={theme} onSave={handleSave} disabled={!isDirty} forceActive={isSaving} />
+                        <Panel position="top-right">
+                            <EditorToolbar
+                                theme={theme}
+                                onSave={handleSave}
+                                onFitView={handleFitView}
+                                onLock={handleLock}
+                                onZoomIn={handleZoomIn}
+                                onZoomOut={handleZoomOut}
+                                isDirty={isDirty}
+                                isInteractive={isInteractive}
+                                isSaving={isSaving}
+                                isFitting={isFitting}
+                                isLocking={isLocking}
+                                isZoomingIn={isZoomingIn}
+                                isZoomingOut={isZoomingOut}
+                            />
                         </Panel>
                     </ReactFlow>
                 </div>

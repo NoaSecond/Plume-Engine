@@ -1356,8 +1356,6 @@ void InitWebView(const std::string& htmlPath) {
                                                 fs::path base = fs::path(g_app.uiFolder).parent_path();
                                                 fs::path fullPath = base / assetId;
                                                 
-                                                std::cout << "[Backend] Saving asset: " << fullPath.string() << std::endl;
-                                                
                                                 try {
                                                     if (fullPath.has_parent_path()) {
                                                         fs::create_directories(fullPath.parent_path());
@@ -1379,17 +1377,11 @@ void InitWebView(const std::string& htmlPath) {
                                                         ofs.write(content.data(), content.size());
                                                         ofs.close();
                                                         sendResult(true, "Saved");
-                                                        std::cout << "[Backend] Save success." << std::endl;
                                                     } else {
-                                                        std::cerr << "[Backend] Failed to open file for writing: " << fullPath.string() << std::endl;
                                                         sendResult(false, "Failed to write file");
                                                     }
-                                                } catch(const std::exception& e) { 
-                                                    std::cerr << "[Backend] Exception during save: " << e.what() << std::endl;
-                                                    sendResult(false, "Exception during save"); 
                                                 } catch(...) {
-                                                    std::cerr << "[Backend] Unknown exception during save" << std::endl;
-                                                    sendResult(false, "Unknown Exception during save");
+                                                    sendResult(false, "Exception during save");
                                                 }
                                             }
                                             return S_OK;
@@ -1404,8 +1396,6 @@ void InitWebView(const std::string& htmlPath) {
                                                 fs::path base = fs::path(g_app.uiFolder).parent_path();
                                                 fs::path fullPath = base / assetId;
                                                 
-                                                std::cout << "[Backend] Loading asset: " << fullPath.string() << std::endl;
-
                                                 std::string content = "";
                                                 if (fs::exists(fullPath)) {
                                                     try {
@@ -1423,21 +1413,9 @@ void InitWebView(const std::string& htmlPath) {
                                                                 // Read remaining content
                                                                 std::vector<char> buffer((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
                                                                 content.assign(buffer.begin(), buffer.end());
-                                                                
-                                                                std::cout << "[Backend] Load success. Size: " << content.size() << std::endl;
-                                                            } else {
-                                                                std::cerr << "[Backend] Invalid magic header: " << magic << std::endl;
                                                             }
-                                                        } else {
-                                                            std::cerr << "[Backend] Failed to open file for reading" << std::endl;
                                                         }
-                                                    } catch(const std::exception& e) {
-                                                        std::cerr << "[Backend] Exception during load: " << e.what() << std::endl;
-                                                    } catch (...) {
-                                                        std::cerr << "[Backend] Unknown exception during load" << std::endl;
-                                                    }
-                                                } else {
-                                                    std::cerr << "[Backend] File not found: " << fullPath.string() << std::endl;
+                                                    } catch(...) {}
                                                 }
                                                 
                                                 nlohmann::json out;
