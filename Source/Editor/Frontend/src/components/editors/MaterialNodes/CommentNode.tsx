@@ -43,6 +43,9 @@ const CommentNode = ({ id, data, selected }: NodeProps) => {
     };
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
+        // Prevent ReactFlow from intercepting keys like Ctrl+A, Backspace, Delete, etc.
+        e.stopPropagation();
+
         if (e.key === 'Enter') {
             handleSubmit();
         }

@@ -1344,6 +1344,114 @@ void InitWebView(const std::string& htmlPath) {
                                             return S_OK;
                                         }
 
+                                        if (action == "save-asset") {
+                                            std::string assetId = j.value("assetId", std::string());
+                                            std::string content = j.value("content", std::string());
+                                            std::string type = j.value("type", "Material");
+
+                                            // Strip asset:// if present
+                                            if (assetId.find("asset://") == 0) assetId = assetId.substr(8);
+                                            
+                                            if (!assetId.empty()) {
+                                                fs::path base = fs::path(g_app.uiFolder).parent_path();
+                                                fs::path fullPath = base / assetId;
+                                                
+                                                std::cout << "[Backend] Saving asset: " << fullPath.string() << std::endl;
+                                                
+                                                try {
+                                                    if (fullPath.has_parent_path()) {
+                                                        fs::create_directories(fullPath.parent_path());
+                                                    }
+
+                                                    std::ofstream ofs(fullPath, std::ios::binary);
+                                                    if (ofs.is_open()) {
+                                                        ofs.write("PLAS", 4);
+                                                        uint32_t ver = 1;
+                                                        ofs.write(reinterpret_cast<char*>(&ver), 4);
+                                                        
+                                                        nlohmann::json meta;
+                                                        meta["type"] = type;
+                                                        std::string metaStr = meta.dump();
+                                                        uint32_t metaLen = (uint32_t)metaStr.size();
+                                                        ofs.write(reinterpret_cast<char*>(&metaLen), 4);
+                                                        ofs.write(metaStr.data(), metaLen);
+                                                        
+                                                        ofs.write(content.data(), content.size());
+                                                        ofs.close();
+                                                        sendResult(true, "Saved");
+                                                        std::cout << "[Backend] Save success." << std::endl;
+                                                    } else {
+                                                        std::cerr << "[Backend] Failed to open file for writing: " << fullPath.string() << std::endl;
+                                                        sendResult(false, "Failed to write file");
+                                                    }
+                                                } catch(const std::exception& e) { 
+                                                    std::cerr << "[Backend] Exception during save: " << e.what() << std::endl;
+                                                    sendResult(false, "Exception during save"); 
+                                                } catch(...) {
+                                                    std::cerr << "[Backend] Unknown exception during save" << std::endl;
+                                                    sendResult(false, "Unknown Exception during save");
+                                                }
+                                            }
+                                            return S_OK;
+                                        }
+
+                                        if (action == "load-asset") {
+                                            std::string assetId = j.value("assetId", std::string());
+                                            // Strip asset:// if present
+                                            if (assetId.find("asset://") == 0) assetId = assetId.substr(8);
+
+                                            if (!assetId.empty()) {
+                                                fs::path base = fs::path(g_app.uiFolder).parent_path();
+                                                fs::path fullPath = base / assetId;
+                                                
+                                                std::cout << "[Backend] Loading asset: " << fullPath.string() << std::endl;
+
+                                                std::string content = "";
+                                                if (fs::exists(fullPath)) {
+                                                    try {
+                                                        std::ifstream ifs(fullPath, std::ios::binary);
+                                                        if (ifs.is_open()) {
+                                                            char magic[5] = {0};
+                                                            ifs.read(magic, 4);
+                                                            if (std::string(magic) == "PLAS") {
+                                                                uint32_t ver; ifs.read(reinterpret_cast<char*>(&ver), 4);
+                                                                uint32_t metaLen; ifs.read(reinterpret_cast<char*>(&metaLen), 4);
+                                                                
+                                                                // Skip metadata
+                                                                ifs.seekg(metaLen, std::ios::cur);
+                                                                
+                                                                // Read remaining content
+                                                                std::vector<char> buffer((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
+                                                                content.assign(buffer.begin(), buffer.end());
+                                                                
+                                                                std::cout << "[Backend] Load success. Size: " << content.size() << std::endl;
+                                                            } else {
+                                                                std::cerr << "[Backend] Invalid magic header: " << magic << std::endl;
+                                                            }
+                                                        } else {
+                                                            std::cerr << "[Backend] Failed to open file for reading" << std::endl;
+                                                        }
+                                                    } catch(const std::exception& e) {
+                                                        std::cerr << "[Backend] Exception during load: " << e.what() << std::endl;
+                                                    } catch (...) {
+                                                        std::cerr << "[Backend] Unknown exception during load" << std::endl;
+                                                    }
+                                                } else {
+                                                    std::cerr << "[Backend] File not found: " << fullPath.string() << std::endl;
+                                                }
+                                                
+                                                nlohmann::json out;
+                                                out["action"] = "asset-data";
+                                                out["assetId"] = assetId;
+                                                out["content"] = content;
+                                                
+                                                std::string s = out.dump();
+                                                std::wstring wides = utf8_to_wstr(s);
+                                                if (g_app.webview) g_app.webview->PostWebMessageAsJson(wides.c_str());
+                                            }
+                                            return S_OK;
+                                        }
+
                                         // Import file (open file dialog)
                                         if (action == "import-file") {
                                             std::string path = j.value("path", std::string());

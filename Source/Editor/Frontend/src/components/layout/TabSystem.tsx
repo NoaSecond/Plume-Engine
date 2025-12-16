@@ -8,6 +8,7 @@ export interface Tab {
     type: 'scene' | 'static-mesh' | 'texture' | 'sound' | 'material' | 'material-editor' | 'level' | 'skeletal-mesh' | 'animation-sequence' | 'editor-preferences' | 'project-settings' | 'plugin-manager' | 'content-browser' | 'console';
     data?: any; // e.g. entityId or filename
     closable: boolean;
+    isDirty?: boolean;
 }
 
 interface TabSystemProps {
@@ -134,6 +135,12 @@ export const TabSystem: React.FC<TabSystemProps> = ({ tabs, activeTabId, onTabCl
                         >
                             {getIcon(tab.type)}
                             <span className="truncate flex-1 mr-2">{tab.title}</span>
+
+                            {/* Dirty Indicator */}
+                            {tab.isDirty && (
+                                <div className="min-w-[6px] min-h-[6px] w-[6px] h-[6px] rounded-full mr-2" style={{ backgroundColor: theme.colors.accent.primary }} />
+                            )}
+
                             {tab.closable && (
                                 <button
                                     onClick={(e) => {

@@ -12,10 +12,12 @@ import ReactFlow, {
     ReactFlowInstance,
     NodeMouseHandler,
     SelectionMode,
-    getRectOfNodes,
+    getNodesBounds,
     NodeChange,
     applyNodeChanges,
-    Panel
+    applyEdgeChanges,
+    Panel,
+    EdgeChange
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { useTheme } from '../../ThemeContext';
@@ -30,6 +32,7 @@ import { NodeContextMenu } from './NodeContextMenu';
 interface MaterialEditorProps {
     assetId: string;
     name: string;
+    onDirtyChange?: (dirty: boolean) => void;
 }
 
 const initialNodes: Node[] = [
@@ -38,7 +41,6 @@ const initialNodes: Node[] = [
         type: 'result',
         data: { label: 'Result Node' },
         position: { x: 600, y: 100 },
-        // Result node properties configuration
     },
     {
         id: '2',
@@ -54,33 +56,39 @@ const initialEdges: Edge[] = [
     { id: 'e2-1', source: '2', target: '1', targetHandle: 'base-color', animated: true },
 ];
 
-const SaveButton = ({ theme }: { theme: any }) => {
+const SaveButton = ({ theme, onSave, disabled, forceActive }: { theme: any, onSave: () => void, disabled?: boolean, forceActive?: boolean }) => {
     const [hover, setHover] = useState(false);
     const [active, setActive] = useState(false);
 
+    const isActive = active || forceActive;
+
     return (
         <button
+            title="Save (Ctrl+S)"
             style={{
-                background: active ? theme.colors.accent.primary : (hover ? theme.colors.accent.primary + '40' : theme.colors.bg.secondary),
-                color: active || hover ? '#fff' : theme.colors.text.secondary,
-                border: `1px solid ${hover ? theme.colors.accent.primary : theme.colors.border.default}`,
+                background: isActive ? theme.colors.accent.primary : (disabled ? theme.colors.bg.secondary : (hover ? theme.colors.accent.primary + '40' : theme.colors.bg.secondary)),
+                color: isActive || hover ? '#fff' : (disabled ? theme.colors.text.muted : theme.colors.text.secondary),
+                border: `1px solid ${isActive || hover ? theme.colors.accent.primary : theme.colors.border.default}`,
                 borderRadius: theme.borderRadius.md,
                 padding: '6px 12px',
                 fontSize: '12px',
                 fontWeight: 600,
-                cursor: 'pointer',
+                cursor: disabled ? 'default' : 'pointer',
                 display: 'flex',
                 alignItems: 'center',
                 gap: '6px',
-                boxShadow: theme.shadows.md,
+                boxShadow: disabled ? 'none' : theme.shadows.md,
                 transition: 'all 0.1s ease',
-                transform: active ? 'translateY(1px)' : 'none'
+                transform: isActive ? 'translateY(1px)' : 'none',
+                opacity: disabled ? 0.5 : 1,
+                pointerEvents: disabled ? 'none' : 'auto'
             }}
-            onMouseEnter={() => setHover(true)}
+            onMouseEnter={() => !disabled && setHover(true)}
             onMouseLeave={() => { setHover(false); setActive(false); }}
-            onMouseDown={() => setActive(true)}
+            onMouseDown={() => !disabled && setActive(true)}
             onMouseUp={() => setActive(false)}
-            onClick={() => console.log('Save clicked')}
+            onClick={onSave}
+            disabled={disabled}
         >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
@@ -92,26 +100,32 @@ const SaveButton = ({ theme }: { theme: any }) => {
     );
 };
 
-export const MaterialEditor: React.FC<MaterialEditorProps> = ({ assetId, name }) => {
+export const MaterialEditor: React.FC<MaterialEditorProps> = ({ assetId, name, onDirtyChange }) => {
     const { theme } = useTheme();
     const reactFlowWrapper = useRef<HTMLDivElement>(null);
     const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null);
 
-    // Initial Data Injection
-    const nodesWithData = useMemo(() => {
-        return initialNodes.map(n => {
-            if (n.id === '1') {
-                return { ...n, data: { ...n.data, materialName: name } };
-            }
-            return n;
-        });
-    }, [name]);
+    const [nodes, setNodes] = useNodesState([]);
+    const [edges, setEdges] = useEdgesState([]);
+    const [isDirty, setIsDirty] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
 
-    const [nodes, setNodes] = useNodesState(nodesWithData);
-    const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+    const setDirty = useCallback((dirty: boolean) => {
+        setIsDirty(dirty);
+        if (onDirtyChange) onDirtyChange(dirty);
+    }, [onDirtyChange]);
+
+    const onEdgesChange = useCallback((changes: EdgeChange[]) => {
+        const isMeaningfulChange = changes.some(c => c.type !== 'select');
+        if (isMeaningfulChange) setDirty(true);
+        setEdges((eds) => applyEdgeChanges(changes, eds));
+    }, [setDirty, setEdges]);
 
     // Protect Result Node from deletion
     const onNodesChange = useCallback((changes: NodeChange[]) => {
+        const isMeaningfulChange = changes.some(c => c.type !== 'select');
+        if (isMeaningfulChange) setDirty(true);
+
         const filteredChanges = changes.filter(c => {
             if (c.type === 'remove') {
                 const node = nodes.find(n => n.id === c.id);
@@ -120,7 +134,7 @@ export const MaterialEditor: React.FC<MaterialEditorProps> = ({ assetId, name })
             return true;
         });
         setNodes((nds) => applyNodeChanges(filteredChanges, nds));
-    }, [nodes, setNodes]);
+    }, [nodes, setNodes, setDirty]);
 
     const nodeTypes = useMemo(() => ({
         result: ResultNode,
@@ -135,7 +149,10 @@ export const MaterialEditor: React.FC<MaterialEditorProps> = ({ assetId, name })
     const [menu, setMenu] = useState<{ x: number, y: number, isOpen: boolean, connectStartNode?: string, connectStartHandle?: string } | null>(null);
     const [nodeMenu, setNodeMenu] = useState<{ x: number, y: number, node: Node } | null>(null);
 
-    const onConnect = useCallback((params: Connection) => setEdges((eds) => addEdge(params, eds)), [setEdges]);
+    const onConnect = useCallback((params: Connection) => {
+        setDirty(true);
+        setEdges((eds) => addEdge(params, eds));
+    }, [setEdges, setDirty]);
 
     const onConnectStart = useCallback((_event: any, { nodeId, handleId }: any) => {
         setMenu(prev => (prev ? { ...prev, connectStartNode: nodeId, connectStartHandle: handleId } : { x: 0, y: 0, isOpen: false, connectStartNode: nodeId, connectStartHandle: handleId }));
@@ -183,6 +200,7 @@ export const MaterialEditor: React.FC<MaterialEditorProps> = ({ assetId, name })
             targetPosition: Position.Left,
         };
         setNodes((nds) => nds.concat(newNode));
+        setDirty(true); // New node = dirty
         if (menu.connectStartNode) {
             const newEdge: Edge = {
                 id: `e-${menu.connectStartNode}-${newNode.id}`,
@@ -194,7 +212,7 @@ export const MaterialEditor: React.FC<MaterialEditorProps> = ({ assetId, name })
             setEdges((eds) => addEdge(newEdge, eds));
         }
         setMenu(null);
-    }, [menu, reactFlowInstance, setNodes, setEdges]);
+    }, [menu, reactFlowInstance, setNodes, setEdges, setDirty]);
 
     const closeMenu = useCallback(() => { setMenu(null); setNodeMenu(null); }, []);
 
@@ -221,14 +239,16 @@ export const MaterialEditor: React.FC<MaterialEditorProps> = ({ assetId, name })
                 selected: true
             }));
         setNodes(nds => nds.map(n => ({ ...n, selected: false })).concat(newNodes));
-    }, [setNodes]);
+        if (newNodes.length > 0) setDirty(true);
+    }, [setNodes, setDirty]);
 
     const deleteNodes = useCallback((ids: string[]) => {
         // Filter out result node id
         const resultNode = nodes.find(n => n.type === 'result');
         const safeIds = ids.filter(id => id !== resultNode?.id);
+        if (safeIds.length > 0) setDirty(true);
         setNodes(nds => nds.filter(n => !safeIds.includes(n.id)));
-    }, [nodes, setNodes]);
+    }, [nodes, setNodes, setDirty]);
 
     const copyNodes = useCallback((nodes: Node[]) => {
         console.log("Copying nodes", nodes);
@@ -239,7 +259,7 @@ export const MaterialEditor: React.FC<MaterialEditorProps> = ({ assetId, name })
         let newNode: Node;
 
         if (targetNodes.length > 0) {
-            const rect = getRectOfNodes(targetNodes);
+            const rect = getNodesBounds(targetNodes);
             newNode = {
                 id: `comment-${Date.now()}`,
                 type: 'comment',
@@ -250,22 +270,27 @@ export const MaterialEditor: React.FC<MaterialEditorProps> = ({ assetId, name })
                 zIndex: -1
             };
         } else if (pos && reactFlowInstance) {
-            const position = reactFlowInstance.project(pos);
+            const position = reactFlowInstance.screenToFlowPosition(pos);
             newNode = {
                 id: `comment-${Date.now()}`,
                 type: 'comment',
-                position: { x: position.x, y: position.y },
                 data: { label: 'Comment', color: theme.colors.accent.primary },
-                style: { width: 300, height: 200 },
+                position: position,
+                dragHandle: '.comment-drag-handle',
+                height: 100,
+                width: 200,
                 selected: true,
                 zIndex: -1
             };
+            // Fix legacy createComment structure which differed
+            newNode.style = { width: 300, height: 200 };
         } else {
             return;
         }
 
         setNodes(nds => [newNode, ...nds.map(n => ({ ...n, selected: false }))]);
-    }, [setNodes, reactFlowInstance]);
+        setDirty(true);
+    }, [setNodes, reactFlowInstance, theme, setDirty]);
 
     const startRename = useCallback((id: string) => {
         setNodes((nds) => nds.map((node) => {
@@ -276,15 +301,49 @@ export const MaterialEditor: React.FC<MaterialEditorProps> = ({ assetId, name })
         }));
     }, [setNodes]);
 
+    const handleSave = useCallback(() => {
+        const materialData = {
+            nodes,
+            edges,
+        };
+
+        const payload = {
+            action: 'save-asset',
+            assetId,
+            type: 'Material',
+            content: JSON.stringify(materialData)
+        };
+
+        console.log('Saving Material:', payload);
+
+        if ((window as any).chrome?.webview) {
+            (window as any).chrome.webview.postMessage(payload);
+        }
+
+        setIsSaving(true);
+        setTimeout(() => setIsSaving(false), 200);
+        setDirty(false);
+    }, [nodes, edges, assetId, setDirty]);
+
     // Shortcuts
     const onKeyDown = useCallback((event: React.KeyboardEvent) => {
         const selected = nodes.filter(n => n.selected);
+
+        // Save Ctrl+S
+        if ((event.key === 's' || event.key === 'S') && (event.ctrlKey || event.metaKey)) {
+            event.preventDefault();
+            if (isDirty) {
+                handleSave();
+            }
+            return;
+        }
 
         // Alignment 'Q'
         if (event.key === 'q' || event.key === 'Q') {
             if (selected.length > 1) {
                 const avgY = selected.reduce((sum, n) => sum + n.position.y, 0) / selected.length;
                 setNodes(nds => nds.map(n => n.selected ? { ...n, position: { ...n.position, y: avgY } } : n));
+                setDirty(true);
             }
         }
 
@@ -315,7 +374,7 @@ export const MaterialEditor: React.FC<MaterialEditorProps> = ({ assetId, name })
         if ((event.key === 'c' || event.key === 'C') && (event.ctrlKey || event.metaKey)) {
             copyNodes(selected);
         }
-    }, [nodes, setNodes, createComment, duplicateNodes, copyNodes, startRename]);
+    }, [nodes, setNodes, createComment, duplicateNodes, copyNodes, startRename, setDirty, handleSave]);
 
     const handleNodeDataChange = (id: string, key: string, value: any) => {
         setNodes((nds) => nds.map((node) => {
@@ -324,9 +383,78 @@ export const MaterialEditor: React.FC<MaterialEditorProps> = ({ assetId, name })
             }
             return node;
         }));
+        setDirty(true);
     };
 
     const selectedNodes = nodes.filter(n => n.selected);
+
+
+    // Load Data Effect
+    const hasLoaded = useRef(false);
+
+    React.useEffect(() => {
+        const handleMessage = (e: any) => {
+            const data = (e.data) ? e.data : (e.detail) ? e.detail : e;
+            if (data?.action === 'asset-data' && data.assetId === assetId) {
+                try {
+                    console.log("MaterialEditor received data:", data);
+                    let loaded = false;
+                    if (data.content && data.content.length > 0) {
+                        const content = JSON.parse(data.content);
+                        if (content.nodes && content.nodes.length > 0) {
+                            const loadedNodes = content.nodes.map((n: any) => ({ ...n, selected: false }));
+                            setNodes(loadedNodes);
+                            loaded = true;
+                        }
+                        if (content.edges) {
+                            const loadedEdges = content.edges.map((e: any) => ({ ...e, selected: false }));
+                            setEdges(loadedEdges);
+                        }
+                    }
+
+                    // Fallback to default if no nodes loaded (e.g. new file)
+                    if (!loaded) {
+                        const defaults = initialNodes.map(n => {
+                            if (n.id === '1') return { ...n, data: { ...n.data, materialName: name } };
+                            return n;
+                        });
+                        setNodes(defaults);
+                        setEdges(initialEdges);
+                    }
+
+                    setDirty(false);
+
+                    // Fit View
+                    setTimeout(() => {
+                        if (reactFlowInstance) {
+                            reactFlowInstance.fitView({ padding: 0.2, duration: 200 });
+                        }
+                    }, 100);
+
+                } catch (err) {
+                    console.error("Failed to parse material data", err);
+                }
+            }
+        };
+
+        if ((window as any).chrome?.webview) {
+            (window as any).chrome.webview.addEventListener('message', handleMessage);
+            if (!hasLoaded.current) {
+                (window as any).chrome.webview.postMessage({ action: 'load-asset', assetId });
+                hasLoaded.current = true;
+            }
+        } else {
+            window.addEventListener('message', handleMessage);
+        }
+
+        return () => {
+            if ((window as any).chrome?.webview) {
+                (window as any).chrome.webview.removeEventListener('message', handleMessage);
+            } else {
+                window.removeEventListener('message', handleMessage);
+            }
+        };
+    }, [assetId, setNodes, setEdges, setDirty, name, reactFlowInstance]);
 
     return (
         <div style={{ width: '100%', height: '100%', display: 'flex' }} onKeyDown={onKeyDown} tabIndex={0} onMouseMove={onMouseMove}>
@@ -509,6 +637,7 @@ export const MaterialEditor: React.FC<MaterialEditorProps> = ({ assetId, name })
             >
                 <div className="flex-1" style={{ height: '100%' }}>
                     <ReactFlow
+                        id={assetId}
                         nodes={nodes}
                         edges={edges}
                         nodeTypes={nodeTypes}
@@ -550,7 +679,7 @@ export const MaterialEditor: React.FC<MaterialEditorProps> = ({ assetId, name })
                               }
                               .react-flow__controls-button:last-child {
                                  border-bottom: none !important;
-                              }
+                               }
                               .react-flow__controls-button:hover {
                                 background-color: ${theme.colors.bg.tertiary} !important;
                                 color: ${theme.colors.accent.primary} !important;
@@ -570,7 +699,7 @@ export const MaterialEditor: React.FC<MaterialEditorProps> = ({ assetId, name })
                         <Background color="#555" gap={16} />
                         <Controls position="top-right" />
                         <Panel position="top-left">
-                            <SaveButton theme={theme} />
+                            <SaveButton theme={theme} onSave={handleSave} disabled={!isDirty} forceActive={isSaving} />
                         </Panel>
                     </ReactFlow>
                 </div>

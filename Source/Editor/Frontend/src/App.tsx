@@ -840,7 +840,11 @@ export default function App() {
                 <TextureViewer assetId={typeof tab.data === 'string' ? tab.data : (tab.data?.entityId || tab.data?.assetId || '')} name={tab.title} />
               )}
               {tab.type === 'material-editor' && (
-                <MaterialEditor assetId={typeof tab.data === 'string' ? tab.data : (tab.data?.entityId || tab.data?.assetId || '')} name={tab.title} />
+                <MaterialEditor
+                  assetId={typeof tab.data === 'string' ? tab.data : (tab.data?.entityId || tab.data?.assetId || '')}
+                  name={tab.title}
+                  onDirtyChange={(dirty) => setTabs(prev => prev.map(t => t.id === tab.id ? { ...t, isDirty: dirty } : t))}
+                />
               )}
               {tab.type === 'sound' && (
                 <SoundViewer assetId={typeof tab.data === 'string' ? tab.data : (tab.data?.entityId || tab.data?.assetId || '')} name={tab.title} />
