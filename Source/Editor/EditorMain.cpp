@@ -512,6 +512,7 @@ void InitWebView(const std::string& htmlPath) {
 
                             // Register asset:// protocol handler
                             g_app.webview->AddWebResourceRequestedFilter(L"asset://*", COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL);
+                            g_app.webview->AddWebResourceRequestedFilter(L"https://plume-assets/*", COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL);
                             EventRegistrationToken token;
                             g_app.webview->add_WebResourceRequested(
                                 Callback<ICoreWebView2WebResourceRequestedEventHandler>(
@@ -524,12 +525,20 @@ void InitWebView(const std::string& htmlPath) {
                                         std::wstring wuri(uri);
                                         CoTaskMemFree(uri);
 
-                                        // Parse URI: asset://Content/File.plumeasset
-                                        // path part starts after asset://
+                                        // Parse URI: asset://Content/File.plumeasset OR https://plume-assets/Content/File
+                                        // path part starts after asset:// or https://plume-assets/
                                         size_t schemePos = wuri.find(L"asset://");
-                                        if (schemePos == std::wstring::npos) return S_OK;
-
-                                        std::wstring relPathW = wuri.substr(schemePos + 8);
+                                        std::wstring relPathW;
+                                        if (schemePos != std::wstring::npos) {
+                                            relPathW = wuri.substr(schemePos + 8);
+                                        } else {
+                                            schemePos = wuri.find(L"https://plume-assets/");
+                                            if (schemePos != std::wstring::npos) {
+                                                relPathW = wuri.substr(schemePos + 21);
+                                            } else {
+                                                return S_OK;
+                                            }
+                                        }
                                         // Convert to narrow string for filesystem
                                         int size = WideCharToMultiByte(CP_UTF8, 0, relPathW.c_str(), (int)relPathW.size(), NULL, 0, NULL, NULL);
                                         std::string relPath(size, 0);

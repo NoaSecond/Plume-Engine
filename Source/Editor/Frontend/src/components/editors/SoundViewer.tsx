@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import WaveSurfer from 'wavesurfer.js';
 import { useTheme } from '../../ThemeContext';
-import { Play, Pause, Square, Repeat, Volume2, VolumeX, AlertTriangle } from 'lucide-react';
+import { Play, Pause, Square, Repeat, Volume2, VolumeX, AlertTriangle, SkipBack } from 'lucide-react';
 
 interface SoundViewerProps {
     assetId: string; // Is actually the path or ID
@@ -19,29 +19,38 @@ export const SoundViewer: React.FC<SoundViewerProps> = ({ assetId, name }) => {
     const [volume, setVolume] = useState(1);
     const [isMuted, setIsMuted] = useState(false);
     const [loop, setLoop] = useState(false);
+    const loopRef = useRef(loop); // Ref to access loop state in event listeners
     const [isWaveformAvailable, setIsWaveformAvailable] = useState(true);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+    // Update loopRef whenever loop state changes
+    useEffect(() => {
+        loopRef.current = loop;
+    }, [loop]);
 
     useEffect(() => {
         if (!containerRef.current) return;
 
         setErrorMessage(null);
-        // We assume waveform is unavailable by default for asset:// streams unless we can fetch them
-        setIsWaveformAvailable(false);
+        // We assume waveform is available to try loading it
+        setIsWaveformAvailable(true);
+
 
         const audio = new Audio();
         audioRef.current = audio;
 
-        // Construct URL using asset:// protocol
+        // Construct URL using https://plume-assets/ protocol for Fetch support
         // We do NOT replace extension because the backend likely expects the .plumeasset ID
         let url = assetId;
 
-        // Ensure asset:// prefix
-        if (!url.startsWith('asset://')) {
-            // If assetId is just "Content/File.plumeasset", prepend asset://
-            // If it starts with "/" or similar, handle accordingly, but typically it cleans to "Content/..."
+        // Ensure protocol prefix
+        if (url.startsWith('asset://')) {
+            // Replace asset:// with https://plume-assets/
+            url = url.replace('asset://', 'https://plume-assets/');
+        } else if (!url.startsWith('https://plume-assets/')) {
+            // If assetId is just "Content/File.plumeasset", prepend https://plume-assets/
             const cleanPath = url.startsWith('/') ? url.substring(1) : url;
-            url = `asset://${cleanPath}`;
+            url = `https://plume-assets/${cleanPath}`;
         }
 
         console.log(`SoundViewer setup for: ${url} (Original: ${assetId})`);
@@ -56,21 +65,23 @@ export const SoundViewer: React.FC<SoundViewerProps> = ({ assetId, name }) => {
             cursorColor: theme.colors.text.primary,
             barWidth: 2,
             barGap: 3,
-            height: 200,
+            height: containerRef.current.clientHeight,
             barRadius: 3,
             normalize: true,
             media: audio,
-            // Provide dummy peaks to disable internal Fetch
-            peaks: [new Float32Array(100).fill(0)]
+
         };
 
         const wavesurfer = WaveSurfer.create(options);
 
-        // Retry logic state (unused if we trust asset://)
-        // let retries = 0;
-
         const onError = (err: any) => {
+            // Ignore AbortError (happens during cleanup/fast swtiching)
+            if (err.name === 'AbortError' || (typeof err === 'string' && err.includes('aborted'))) {
+                return;
+            }
             console.error("WaveSurfer Error:", err);
+            // If waveform generation fails, we fall back to unavailable state
+            setIsWaveformAvailable(false);
         };
 
         const onAudioError = () => {
@@ -86,6 +97,7 @@ export const SoundViewer: React.FC<SoundViewerProps> = ({ assetId, name }) => {
 
         wavesurfer.on('ready', () => {
             setDuration(wavesurfer.getDuration());
+            setIsWaveformAvailable(true);
         });
 
         audio.onloadedmetadata = () => {
@@ -102,10 +114,19 @@ export const SoundViewer: React.FC<SoundViewerProps> = ({ assetId, name }) => {
         });
 
         wavesurfer.on('finish', () => {
-            setIsPlaying(false);
+            if (loopRef.current) {
+                wavesurfer.play();
+                // Stay playing
+            } else {
+                setIsPlaying(false);
+            }
         });
 
         wavesurferRef.current = wavesurfer;
+
+        // Trigger loading of the audio file to generate the waveform
+        // Must be done AFTER listeners are attached to catch errors
+        wavesurfer.load(url);
 
         return () => {
             wavesurfer.destroy();
@@ -121,10 +142,44 @@ export const SoundViewer: React.FC<SoundViewerProps> = ({ assetId, name }) => {
         };
     }, []);
 
+    // Keyboard Shortcuts
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            // Only trigger if we are focused within the editor or globally if desired? 
+            // For now, global within the webview seems appropriate for a focused tool.
+            // Check if input is focused to avoid typing conflict
+            if (document.activeElement instanceof HTMLInputElement || document.activeElement instanceof HTMLTextAreaElement) {
+                return;
+            }
+
+            switch (e.code) {
+                case 'Space':
+                    e.preventDefault();
+                    togglePlay();
+                    break;
+                case 'KeyL':
+                    toggleLoop();
+                    break;
+                case 'KeyM':
+                    toggleMute();
+                    break;
+                case 'Backspace':
+                case 'Home':
+                    rewind();
+                    break;
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [isPlaying, loop, isMuted, volume]); // Dependencies needed for toggle functions to see correct state? 
+    // Wait, toggle functions use refs or state setters?
+    // togglePlay uses waveSurferRef and setIsPlaying(!isPlaying). Needs isPlaying dependency.
+
     const togglePlay = () => {
         if (wavesurferRef.current) {
             wavesurferRef.current.playPause();
-            setIsPlaying(!isPlaying);
+            setIsPlaying((prev) => !prev);
         }
     };
 
@@ -136,10 +191,19 @@ export const SoundViewer: React.FC<SoundViewerProps> = ({ assetId, name }) => {
         }
     };
 
+    const rewind = () => {
+        if (wavesurferRef.current) {
+            wavesurferRef.current.seekTo(0);
+            setCurrentTime(0);
+            // If it was playing, it continues playing.
+        }
+    }
+
     const toggleMute = () => {
         if (wavesurferRef.current) {
-            wavesurferRef.current.setMuted(!isMuted);
-            setIsMuted(!isMuted);
+            const nextMute = !isMuted;
+            wavesurferRef.current.setMuted(nextMute);
+            setIsMuted(nextMute);
         }
     };
 
@@ -152,26 +216,9 @@ export const SoundViewer: React.FC<SoundViewerProps> = ({ assetId, name }) => {
     };
 
     const toggleLoop = () => {
-        setLoop(!loop);
+        setLoop((prev) => !prev);
+        // loop logic is handled in 'finish' event via ref
     };
-
-    useEffect(() => {
-        const ws = wavesurferRef.current;
-        if (!ws) return;
-
-        const onFinish = () => {
-            if (loop) ws.play();
-            else setIsPlaying(false);
-        };
-
-        ws.un('finish', onFinish);
-        ws.on('finish', onFinish);
-
-        return () => {
-            ws.un('finish', onFinish);
-        }
-    }, [loop]);
-
 
     const formatTime = (seconds: number) => {
         if (!seconds || isNaN(seconds)) return "0:00";
@@ -189,23 +236,13 @@ export const SoundViewer: React.FC<SoundViewerProps> = ({ assetId, name }) => {
             backgroundColor: theme.colors.bg.primary,
             color: theme.colors.text.primary
         }}>
-            {/* Header */}
-            <div
-                className="h-8 border-b flex items-center px-4 text-xs font-bold"
-                style={{
-                    backgroundColor: theme.colors.bg.secondary,
-                    borderColor: theme.colors.border.default,
-                    color: theme.colors.text.primary
-                }}
-            >
-                Sound Viewer: {name}
-            </div>
+
 
             {/* Content */}
             <div className="flex-1 flex flex-col items-center justify-center p-8">
                 {/* Waveform */}
                 <div
-                    className="w-full h-[200px] mb-8 rounded-lg overflow-hidden relative"
+                    className="w-full flex-1 mb-8 rounded-lg overflow-hidden relative"
                     style={{
                         border: `1px solid ${theme.colors.border.subtle}`,
                         backgroundColor: 'rgba(0,0,0,0.2)'
@@ -236,9 +273,18 @@ export const SoundViewer: React.FC<SoundViewerProps> = ({ assetId, name }) => {
                     {/* Playback Controls */}
                     <div className="flex items-center gap-2">
                         <button
+                            onClick={rewind}
+                            className="p-2 rounded hover:bg-white/10 transition-colors"
+                            title="Rewind (Home)"
+                            disabled={!!errorMessage}
+                        >
+                            <SkipBack fill="currentColor" size={20} />
+                        </button>
+
+                        <button
                             onClick={togglePlay}
                             className="p-2 rounded hover:bg-white/10 transition-colors"
-                            title={isPlaying ? "Pause" : "Play"}
+                            title={isPlaying ? "Pause (Space)" : "Play (Space)"}
                             disabled={!!errorMessage}
                         >
                             {isPlaying ? <Pause fill="currentColor" size={20} /> : <Play fill="currentColor" size={20} />}
@@ -251,10 +297,13 @@ export const SoundViewer: React.FC<SoundViewerProps> = ({ assetId, name }) => {
                         >
                             <Square fill="currentColor" size={16} />
                         </button>
+
+                        <div className="w-px h-6 bg-gray-700 mx-2" />
+
                         <button
                             onClick={toggleLoop}
                             className={`p-2 rounded hover:bg-white/10 transition-colors ${loop ? 'text-blue-400' : ''}`}
-                            title="Toggle Loop"
+                            title="Toggle Loop (L)"
                             style={{ color: loop ? theme.colors.accent.primary : 'inherit' }}
                         >
                             <Repeat size={16} />
@@ -271,7 +320,11 @@ export const SoundViewer: React.FC<SoundViewerProps> = ({ assetId, name }) => {
 
                     {/* Volume */}
                     <div className="flex items-center gap-2">
-                        <button onClick={toggleMute} className="p-1 hover:text-white transition-colors">
+                        <button
+                            onClick={toggleMute}
+                            className="p-1 hover:text-white transition-colors"
+                            title="Mute (M)"
+                        >
                             {isMuted || volume === 0 ? <VolumeX size={16} /> : <Volume2 size={16} />}
                         </button>
                         <input
@@ -285,6 +338,18 @@ export const SoundViewer: React.FC<SoundViewerProps> = ({ assetId, name }) => {
                         />
                     </div>
                 </div>
+            </div>
+
+            {/* Footer */}
+            <div
+                className="h-8 border-t flex items-center px-4 text-xs"
+                style={{
+                    backgroundColor: theme.colors.bg.secondary,
+                    borderColor: theme.colors.border.default,
+                    color: theme.colors.text.secondary
+                }}
+            >
+                <span>Path: {assetId}</span>
             </div>
         </div>
     );

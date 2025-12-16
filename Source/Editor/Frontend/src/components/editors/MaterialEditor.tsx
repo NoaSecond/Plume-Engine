@@ -86,8 +86,20 @@ export const MaterialEditor: React.FC<MaterialEditorProps> = ({ assetId, name })
                         `}
                     </style>
                     <Background color="#555" gap={16} />
-                    <Controls />
+                    <Controls position="top-right" />
                 </ReactFlow>
+            </div>
+
+            {/* Footer */}
+            <div
+                className="h-8 border-t flex items-center px-4 text-xs"
+                style={{
+                    backgroundColor: theme.colors.bg.secondary,
+                    borderColor: theme.colors.border.default,
+                    color: theme.colors.text.secondary
+                }}
+            >
+                <span>Path: {assetId}</span>
             </div>
         </div>
     );

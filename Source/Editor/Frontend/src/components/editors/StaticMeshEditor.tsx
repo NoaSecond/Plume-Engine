@@ -71,6 +71,17 @@ export const StaticMeshEditor: React.FC<StaticMeshEditorProps> = ({ entityId, on
                     <DetailsPanel selectedEntity={localEntities[0]} setEntities={setLocalEntities} />
                 </div>
             </div>
+            {/* Footer */}
+            <div
+                className="h-8 border-t flex items-center px-4 text-xs"
+                style={{
+                    backgroundColor: theme.colors.bg.secondary,
+                    borderColor: theme.colors.border.default,
+                    color: theme.colors.text.secondary
+                }}
+            >
+                <span>Path: {entityId}</span>
+            </div>
         </div>
     );
 };
