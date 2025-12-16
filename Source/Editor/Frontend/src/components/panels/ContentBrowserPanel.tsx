@@ -100,6 +100,7 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (e.repeat) return;
       const { ctrlKey, key } = e;
       const keyLower = key.toLowerCase();
 
