@@ -110,8 +110,11 @@ void ExportSceneData() {
 }
 
 void ExportThemeData() {
-    // Create a default theme file for the splash screen
+    // Create a default theme file for the splash screen ONLY if it doesn't exist
+    // This allows the user's preference (saved via save-theme) to persist
     std::string dataPath = g_app.uiFolder + "/theme_data.js";
+    if (fs::exists(dataPath)) return;
+
     std::string tempPath = dataPath + ".tmp";
     
     std::ofstream file(tempPath);
@@ -1387,6 +1390,37 @@ void InitWebView(const std::string& htmlPath) {
                                             return S_OK;
                                         }
 
+                                        if (action == "save-theme") {
+                                            std::string name = j.value("name", "plume-dark");
+                                            std::string accent = j.value("accent", "#4FC3F7");
+                                            
+                                            std::string dataPath = g_app.uiFolder + "/theme_data.js";
+                                            std::string tempPath = dataPath + ".tmp";
+                                            
+                                            std::ofstream file(tempPath);
+                                            if (file.is_open()) {
+                                                file << "window.PLUME_THEME_DATA = {";
+                                                file << "\"name\": \"" << name << "\",";
+                                                file << "\"colors\": {";
+                                                file << "\"accent\": {";
+                                                file << "\"primary\": \"" << accent << "\"";
+                                                file << "}";
+                                                file << "}";
+                                                file << "}};";
+                                                file.close();
+                                                try {
+                                                    if (fs::exists(dataPath)) fs::remove(dataPath);
+                                                    fs::rename(tempPath, dataPath);
+                                                    sendResult(true, "Theme saved");
+                                                } catch(...) {
+                                                    sendResult(false, "Failed to save theme");
+                                                }
+                                            } else {
+                                                sendResult(false, "Failed to open theme file");
+                                            }
+                                            return S_OK;
+                                        }
+
                                         if (action == "load-asset") {
                                             std::string assetId = j.value("assetId", std::string());
                                             // Strip asset:// if present
@@ -1823,9 +1857,32 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     // Enable high DPI support
     SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
     
-    // Créer et afficher le splash screen
     fs::path exePath = fs::current_path();
+
+    // 1. Resolve UI Folder EARLY so we can load theme matching the user preference
+    // Localiser les fichiers UI
+    fs::path uiEntryPath = exePath / ".." / "UI" / "index.html";
+    if (!fs::exists(uiEntryPath)) {
+        uiEntryPath = exePath / "UI" / "index.html";
+    }
     
+    // Resolve the UI entry to a canonical absolute path
+    std::string resolvedUiFolder;
+    try {
+        if (fs::exists(uiEntryPath)) {
+             fs::path resolved = fs::canonical(uiEntryPath);
+             resolvedUiFolder = resolved.parent_path().string();
+        } else {
+             // Will fail later properly if not found, but we need something for splash if possible
+             resolvedUiFolder = (exePath / ".." / "UI").string(); // Fallback guess
+        }
+    } catch(...) {
+        fs::path resolved = fs::absolute(uiEntryPath);
+        resolvedUiFolder = resolved.parent_path().string();
+    }
+    g_app.uiFolder = resolvedUiFolder;
+    
+    // Créer et afficher le splash screen
     // Chercher l'image du splash screen
     fs::path splashImagePath = exePath / ".." / ".." / "Assets" / "Branding" / "splash_image.png";
     if (!fs::exists(splashImagePath)) {
@@ -1916,31 +1973,14 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     pluginManager.InitializeAll();
     splash.UpdateProgress(0.5f, "Plugins loaded!");
     
-    // Localiser les fichiers UI
-    fs::path uiEntryPath = exePath / ".." / "UI" / "index.html";
-    if (!fs::exists(uiEntryPath)) {
-        uiEntryPath = exePath / "UI" / "index.html";
-    }
+    // Verification du fichier UI (already resolved at start, checking existence now)
     if (!fs::exists(uiEntryPath)) {
         splash.Hide();
         MessageBoxA(NULL, "Cannot find UI/index.html", "Error", MB_OK | MB_ICONERROR);
         return 1;
     }
-    
-    // Resolve the UI entry to a canonical absolute path (collapse any "..")
-    std::string resolvedUiFolder;
-    try {
-        fs::path resolved = fs::canonical(uiEntryPath);
-        resolvedUiFolder = resolved.parent_path().string();
-    } catch(...) {
-        // Fallback to absolute path if canonicalization fails
-        fs::path resolved = fs::absolute(uiEntryPath);
-        resolvedUiFolder = resolved.parent_path().string();
-    }
 
-    g_app.uiFolder = resolvedUiFolder;
-
-    // Resolved UI folder (diagnostics suppressed)
+    // Resolved UI folder logging suppressed
     splash.UpdateProgress(0.55f, "Exporting data...");
     ExportSceneData();
     ExportPluginData();
