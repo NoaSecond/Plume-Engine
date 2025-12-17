@@ -2,7 +2,19 @@ import React, { useState } from 'react';
 import { Maximize, Lock, Unlock, ZoomIn as ZoomInIcon, ZoomOut as ZoomOutIcon, Save } from 'lucide-react';
 import { useLanguage } from '../../../LanguageContext';
 
-const ToolbarButton = ({ theme, onClick, disabled, forceActive, icon: Icon, label, tooltip, shortcut, active: externalActive }: any) => {
+interface ToolbarButtonProps {
+    theme: any;
+    onClick: () => void;
+    disabled?: boolean;
+    forceActive?: boolean;
+    icon: any;
+    label?: string;
+    tooltip?: string;
+    shortcut?: string;
+    active?: boolean;
+}
+
+const ToolbarButton = ({ theme, onClick, disabled, forceActive, icon: Icon, label, tooltip, shortcut, active: externalActive }: ToolbarButtonProps) => {
     const [hover, setHover] = useState(false);
     const [localActive, setLocalActive] = useState(false);
     const active = localActive || forceActive || externalActive;
@@ -65,7 +77,23 @@ const ToolbarButton = ({ theme, onClick, disabled, forceActive, icon: Icon, labe
     );
 };
 
-export const EditorToolbar = ({ theme, onSave, onFitView, onLock, onZoomIn, onZoomOut, isDirty, isInteractive, isSaving, isFitting, isLocking, isZoomingIn, isZoomingOut }: any) => {
+interface EditorToolbarProps {
+    theme: any;
+    onSave: () => void;
+    onFitView: () => void;
+    onLock: () => void;
+    onZoomIn: () => void;
+    onZoomOut: () => void;
+    isDirty: boolean;
+    isInteractive: boolean;
+    isSaving: boolean;
+    isFitting: boolean;
+    isLocking: boolean;
+    isZoomingIn: boolean;
+    isZoomingOut: boolean;
+}
+
+export const EditorToolbar = ({ theme, onSave, onFitView, onLock, onZoomIn, onZoomOut, isDirty, isInteractive, isSaving, isFitting, isLocking, isZoomingIn, isZoomingOut }: EditorToolbarProps) => {
     const { t } = useLanguage();
     return (
         <div style={{ display: 'flex', gap: '8px', padding: '4px' }}>

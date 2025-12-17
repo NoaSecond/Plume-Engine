@@ -138,7 +138,19 @@ export const MenuBarItem: React.FC<MenuBarItemProps> = ({ label, items, onAction
   );
 };
 
-export const AssetTile = ({ id, name, type, selected = false, onClick, onDoubleClick, onContextMenu, meta, scale = 1 }: { id?: string, name: string, type: string, selected?: boolean, onClick?: (e: React.MouseEvent) => void, onDoubleClick?: (e: React.MouseEvent) => void, onContextMenu?: (e: React.MouseEvent, info: { name: string, type: string }) => void, meta?: any, scale?: number }) => {
+export interface AssetTileProps {
+  id?: string;
+  name: string;
+  type: string;
+  selected?: boolean;
+  onClick?: (e: React.MouseEvent) => void;
+  onDoubleClick?: (e: React.MouseEvent) => void;
+  onContextMenu?: (e: React.MouseEvent, info: { name: string, type: string }) => void;
+  meta?: any;
+  scale?: number;
+}
+
+export const AssetTile = ({ id, name, type, selected = false, onClick, onDoubleClick, onContextMenu, meta, scale = 1 }: AssetTileProps) => {
   const { theme } = useTheme();
   const [isHovered, setIsHovered] = useState(false);
 

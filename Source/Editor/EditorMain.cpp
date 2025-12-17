@@ -2048,6 +2048,25 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
             ExportRenderingData();
             lastExport = now;
         }
+
+        // Broadcast FPS to frontend every 250ms
+        static auto lastFPSBroadcast = std::chrono::steady_clock::now();
+        if (std::chrono::duration_cast<std::chrono::milliseconds>(now - lastFPSBroadcast).count() >= 250) {
+            if (g_app.engine && g_app.webview) {
+               float fps = g_app.engine->GetFPS();
+               // Construct JSON: {"action": "fps-update", "fps": 123}
+               std::string msg = "{\"action\": \"fps-update\", \"fps\": " + std::to_string((int)std::round(fps)) + "}";
+               
+               // Convert to wstring
+               int size = MultiByteToWideChar(CP_UTF8, 0, msg.c_str(), (int)msg.size(), NULL, 0);
+               if (size > 0) {
+                   std::wstring wmsg(size, 0);
+                   MultiByteToWideChar(CP_UTF8, 0, msg.c_str(), (int)msg.size(), &wmsg[0], size);
+                   g_app.webview->PostWebMessageAsJson(wmsg.c_str());
+               }
+            }
+            lastFPSBroadcast = now;
+        }
         
         // Mettre à jour tous les plugins
         Plume::PluginManager::Get().UpdateAll();

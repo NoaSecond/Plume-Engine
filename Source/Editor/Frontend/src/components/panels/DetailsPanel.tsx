@@ -16,19 +16,18 @@ export const DetailsPanel: React.FC<DetailsPanelProps> = ({ selectedEntity, setE
     if (isNaN(val)) return;
 
     setEntities(prev => prev.map(e => {
-      if (e.id === selectedEntity.id) {
-        return {
-          ...e,
-          transform: {
-            ...e.transform,
-            [type]: {
-              ...e.transform[type],
-              [axis]: val
-            }
+      if (e.id !== selectedEntity.id) return e;
+
+      return {
+        ...e,
+        transform: {
+          ...e.transform,
+          [type]: {
+            ...e.transform[type],
+            [axis]: val
           }
-        };
-      }
-      return e;
+        }
+      };
     }));
   };
   const updateName = (name: string) => {

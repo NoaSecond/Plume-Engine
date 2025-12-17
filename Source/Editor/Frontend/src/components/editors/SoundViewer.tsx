@@ -9,6 +9,124 @@ interface SoundViewerProps {
     name: string;
 }
 
+interface AudioControlsProps {
+    isPlaying: boolean;
+    loop: boolean;
+    isMuted: boolean;
+    volume: number;
+    currentTime: number;
+    duration: number;
+    hasError: boolean;
+    theme: any;
+    t: (key: string) => string;
+    onRewind: () => void;
+    onTogglePlay: () => void;
+    onStop: () => void;
+    onToggleLoop: () => void;
+    onToggleMute: () => void;
+    onVolumeChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+}
+
+const AudioControls: React.FC<AudioControlsProps> = ({
+    isPlaying,
+    loop,
+    isMuted,
+    volume,
+    currentTime,
+    duration,
+    hasError,
+    theme,
+    t,
+    onRewind,
+    onTogglePlay,
+    onStop,
+    onToggleLoop,
+    onToggleMute,
+    onVolumeChange
+}) => {
+    const formatTime = (seconds: number) => {
+        if (!seconds || isNaN(seconds)) return "0:00";
+        const minutes = Math.floor(seconds / 60);
+        const secs = Math.floor(seconds % 60);
+        return `${minutes}:${secs < 10 ? '0' : ''}${secs}`;
+    };
+
+    return (
+        <div
+            className="w-full max-w-3xl flex items-center gap-4 p-4 rounded-lg"
+            style={{ backgroundColor: theme.colors.bg.secondary, border: `1px solid ${theme.colors.border.default}` }}
+        >
+            {/* Playback Controls */}
+            <div className="flex items-center gap-2">
+                <button
+                    onClick={onRewind}
+                    className="p-2 rounded hover:bg-white/10 transition-colors"
+                    title={t('sound.rewind')}
+                    disabled={hasError}
+                >
+                    <SkipBack fill="currentColor" size={20} />
+                </button>
+
+                <button
+                    onClick={onTogglePlay}
+                    className="p-2 rounded hover:bg-white/10 transition-colors"
+                    title={isPlaying ? t('sound.pause') : t('sound.play')}
+                    disabled={hasError}
+                >
+                    {isPlaying ? <Pause fill="currentColor" size={20} /> : <Play fill="currentColor" size={20} />}
+                </button>
+                <button
+                    onClick={onStop}
+                    className="p-2 rounded hover:bg-white/10 transition-colors"
+                    title={t('sound.stop')}
+                    disabled={hasError}
+                >
+                    <Square fill="currentColor" size={16} />
+                </button>
+
+                <div className="w-px h-6 bg-gray-700 mx-2" />
+
+                <button
+                    onClick={onToggleLoop}
+                    className={`p-2 rounded hover:bg-white/10 transition-colors ${loop ? 'text-blue-400' : ''}`}
+                    title={t('sound.loop')}
+                    style={{ color: loop ? theme.colors.accent.primary : 'inherit' }}
+                >
+                    <Repeat size={16} />
+                </button>
+            </div>
+
+            {/* Time */}
+            <div className="text-xs font-mono min-w-[100px] text-center">
+                {formatTime(currentTime)} / {formatTime(duration)}
+            </div>
+
+            {/* Spacer */}
+            <div className="flex-1" />
+
+            {/* Volume */}
+            <div className="flex items-center gap-2">
+                <button
+                    onClick={onToggleMute}
+                    className="p-1 hover:text-white transition-colors"
+                    title={t('sound.mute')}
+                >
+                    {isMuted || volume === 0 ? <VolumeX size={16} /> : <Volume2 size={16} />}
+                </button>
+                <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.05"
+                    value={isMuted ? 0 : volume}
+                    onChange={onVolumeChange}
+                    className="w-24 accent-blue-500 h-1"
+                />
+            </div>
+        </div>
+    );
+};
+
 export const SoundViewer: React.FC<SoundViewerProps> = ({ assetId, name }) => {
     const { theme } = useTheme();
     const { t } = useLanguage();
@@ -222,13 +340,6 @@ export const SoundViewer: React.FC<SoundViewerProps> = ({ assetId, name }) => {
         // loop logic is handled in 'finish' event via ref
     };
 
-    const formatTime = (seconds: number) => {
-        if (!seconds || isNaN(seconds)) return "0:00";
-        const minutes = Math.floor(seconds / 60);
-        const secs = Math.floor(seconds % 60);
-        return `${minutes}:${secs < 10 ? '0' : ''}${secs}`;
-    };
-
     return (
         <div style={{
             width: '100%',
@@ -268,78 +379,23 @@ export const SoundViewer: React.FC<SoundViewerProps> = ({ assetId, name }) => {
                 </div>
 
                 {/* Controls */}
-                <div
-                    className="w-full max-w-3xl flex items-center gap-4 p-4 rounded-lg"
-                    style={{ backgroundColor: theme.colors.bg.secondary, border: `1px solid ${theme.colors.border.default}` }}
-                >
-                    {/* Playback Controls */}
-                    <div className="flex items-center gap-2">
-                        <button
-                            onClick={rewind}
-                            className="p-2 rounded hover:bg-white/10 transition-colors"
-                            title={t('sound.rewind')}
-                            disabled={!!errorMessage}
-                        >
-                            <SkipBack fill="currentColor" size={20} />
-                        </button>
-
-                        <button
-                            onClick={togglePlay}
-                            className="p-2 rounded hover:bg-white/10 transition-colors"
-                            title={isPlaying ? t('sound.pause') : t('sound.play')}
-                            disabled={!!errorMessage}
-                        >
-                            {isPlaying ? <Pause fill="currentColor" size={20} /> : <Play fill="currentColor" size={20} />}
-                        </button>
-                        <button
-                            onClick={stop}
-                            className="p-2 rounded hover:bg-white/10 transition-colors"
-                            title={t('sound.stop')}
-                            disabled={!!errorMessage}
-                        >
-                            <Square fill="currentColor" size={16} />
-                        </button>
-
-                        <div className="w-px h-6 bg-gray-700 mx-2" />
-
-                        <button
-                            onClick={toggleLoop}
-                            className={`p-2 rounded hover:bg-white/10 transition-colors ${loop ? 'text-blue-400' : ''}`}
-                            title={t('sound.loop')}
-                            style={{ color: loop ? theme.colors.accent.primary : 'inherit' }}
-                        >
-                            <Repeat size={16} />
-                        </button>
-                    </div>
-
-                    {/* Time */}
-                    <div className="text-xs font-mono min-w-[100px] text-center">
-                        {formatTime(currentTime)} / {formatTime(duration)}
-                    </div>
-
-                    {/* Spacer */}
-                    <div className="flex-1" />
-
-                    {/* Volume */}
-                    <div className="flex items-center gap-2">
-                        <button
-                            onClick={toggleMute}
-                            className="p-1 hover:text-white transition-colors"
-                            title={t('sound.mute')}
-                        >
-                            {isMuted || volume === 0 ? <VolumeX size={16} /> : <Volume2 size={16} />}
-                        </button>
-                        <input
-                            type="range"
-                            min="0"
-                            max="1"
-                            step="0.05"
-                            value={isMuted ? 0 : volume}
-                            onChange={handleVolumeChange}
-                            className="w-24 accent-blue-500 h-1"
-                        />
-                    </div>
-                </div>
+                <AudioControls
+                    isPlaying={isPlaying}
+                    loop={loop}
+                    isMuted={isMuted}
+                    volume={volume}
+                    currentTime={currentTime}
+                    duration={duration}
+                    hasError={!!errorMessage}
+                    theme={theme}
+                    t={t}
+                    onRewind={rewind}
+                    onTogglePlay={togglePlay}
+                    onStop={stop}
+                    onToggleLoop={toggleLoop}
+                    onToggleMute={toggleMute}
+                    onVolumeChange={handleVolumeChange}
+                />
             </div>
 
             {/* Footer */}

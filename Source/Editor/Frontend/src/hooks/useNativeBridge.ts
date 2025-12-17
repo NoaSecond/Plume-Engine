@@ -63,6 +63,12 @@ export function useNativeBridge({
                         setMaxFpsCap(data.uiConfig.maxFPS);
                     }
                 }
+
+                if (action === 'fps-update') {
+                    if (typeof data.fps === 'number') {
+                        setFpsValue(data.fps);
+                    }
+                }
             } catch (e) {
                 console.warn('Error handling native message:', e);
             }

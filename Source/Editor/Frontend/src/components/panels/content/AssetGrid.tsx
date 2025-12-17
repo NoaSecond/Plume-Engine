@@ -23,6 +23,99 @@ interface AssetGridProps {
     handleAssetContextMenu: (e: React.MouseEvent, asset: Asset, info: any) => void;
 }
 
+// Helper for icon and color
+const getAssetConfig = (type: string, name: string, metaColor?: string, theme?: any) => {
+    // Default fallback
+    const defaultColor = theme?.colors?.text?.secondary || '#9ca3af';
+    let Icon = FileIcon;
+    let color = defaultColor;
+
+    if (type === 'folder') {
+        Icon = Folder;
+        color = metaColor ? (metaColor.startsWith('#') ? metaColor : '#' + metaColor) : '#eab308';
+    }
+    else if (['staticmesh', 'mesh'].includes(type) || name.endsWith('.plume_mesh') || name.endsWith('.fbx') || name.endsWith('.obj')) {
+        Icon = Box;
+        color = "#5DE2E7";
+    }
+    else if (['texture', 'image'].includes(type) || name.endsWith('.png') || name.endsWith('.jpg') || name.endsWith('.tga')) {
+        Icon = ImageIcon;
+        color = "#D05C5E";
+    }
+    else if (['soundwave', 'sound'].includes(type) || name.endsWith('.wav') || name.endsWith('.mp3')) {
+        Icon = Music;
+        color = "#CC6CE7";
+    }
+    else if (type === 'material' || name.endsWith('.plumematerial')) {
+        Icon = Layers;
+        color = "#7DDA58";
+    }
+    else if (['level', 'map'].includes(type) || name.endsWith('.plumemap') || name.endsWith('.map')) {
+        Icon = Globe;
+        color = "#FE9900";
+    }
+    else if (type === 'skeletalmesh' || name.endsWith('.plumeskel')) {
+        Icon = Bone;
+        color = "#FFECA1";
+    }
+    else if (['animationsequence', 'anim'].includes(type) || name.endsWith('.plumeanim')) {
+        Icon = Film;
+        color = "#BFD641";
+    }
+    else if (type === 'script' || name.endsWith('.ts') || name.endsWith('.js')) {
+        Icon = FileCode;
+        color = "#22c55e";
+    }
+    return { Icon, color };
+};
+
+const RenamingAsset = ({ asset, editingValue, setEditingValue, commitRename, setEditingId, setAssets, theme, zoomLevel }: any) => {
+    const type = asset.type ? asset.type.toLowerCase() : '';
+    const name = asset.name ? asset.name.toLowerCase() : '';
+    const { Icon, color } = getAssetConfig(type, name, asset.meta?.color, theme);
+    const baseSize = 96;
+    const size = Math.round(baseSize * zoomLevel);
+
+    return (
+        <div
+            className="flex flex-col items-center p-2 rounded cursor-pointer group transition-colors"
+            style={{
+                backgroundColor: theme.colors.selection.background,
+                border: `1px solid ${theme.colors.selection.border}`,
+                width: `${size}px`
+            }}
+        >
+            <div
+                className="rounded mb-2 flex items-center justify-center border shadow-sm relative overflow-hidden transition-transform"
+                style={{
+                    backgroundColor: theme.colors.bg.secondary,
+                    borderColor: theme.colors.border.default,
+                    width: `${Math.round(size * 0.66)}px`,
+                    height: `${Math.round(size * 0.66)}px`
+                }}
+            >
+                <Icon size={Math.round(32 * zoomLevel)} color={color} strokeWidth={type === 'folder' ? 1.5 : 2} />
+            </div>
+            <input
+                type="text"
+                value={editingValue}
+                onChange={(e) => setEditingValue(e.target.value)}
+                onKeyDown={(e) => {
+                    if (e.key === 'Enter') commitRename(asset, editingValue);
+                    if (e.key === 'Escape') {
+                        setEditingId(null);
+                        if (!asset.path) setAssets((prev: any[]) => prev.filter(it => it.id !== asset.id));
+                    }
+                }}
+                onBlur={() => commitRename(asset, editingValue)}
+                autoFocus
+                className="text-xs text-center bg-black/50 text-white border border-blue-500 rounded px-1 w-full outline-none"
+                onClick={(e) => e.stopPropagation()}
+            />
+        </div>
+    );
+};
+
 export const AssetGrid: React.FC<AssetGridProps> = ({
     assets,
     searchQuery,
@@ -60,96 +153,18 @@ export const AssetGrid: React.FC<AssetGridProps> = ({
         >
             {visibleAssets.map(a => {
                 if (a.id === editingId) {
-                    // INLINE RENAME RENDERING
-                    const type = a.type ? a.type.toLowerCase() : '';
-                    const name = a.name ? a.name.toLowerCase() : '';
-                    // Helper for icon and color
-                    const getAssetConfig = (type: string, name: string, metaColor?: string) => {
-                        let Icon = FileIcon;
-                        let color = theme.colors.text.secondary;
-
-                        if (type === 'folder') {
-                            Icon = Folder;
-                            color = metaColor ? (metaColor.startsWith('#') ? metaColor : '#' + metaColor) : '#eab308';
-                        }
-                        else if (['staticmesh', 'mesh'].includes(type) || name.endsWith('.plume_mesh') || name.endsWith('.fbx') || name.endsWith('.obj')) {
-                            Icon = Box;
-                            color = "#5DE2E7";
-                        }
-                        else if (['texture', 'image'].includes(type) || name.endsWith('.png') || name.endsWith('.jpg') || name.endsWith('.tga')) {
-                            Icon = ImageIcon;
-                            color = "#D05C5E";
-                        }
-                        else if (['soundwave', 'sound'].includes(type) || name.endsWith('.wav') || name.endsWith('.mp3')) {
-                            Icon = Music;
-                            color = "#CC6CE7";
-                        }
-                        else if (type === 'material' || name.endsWith('.plumematerial')) {
-                            Icon = Layers;
-                            color = "#7DDA58";
-                        }
-                        else if (['level', 'map'].includes(type) || name.endsWith('.plumemap') || name.endsWith('.map')) {
-                            Icon = Globe;
-                            color = "#FE9900";
-                        }
-                        else if (type === 'skeletalmesh' || name.endsWith('.plumeskel')) {
-                            Icon = Bone;
-                            color = "#FFECA1";
-                        }
-                        else if (['animationsequence', 'anim'].includes(type) || name.endsWith('.plumeanim')) {
-                            Icon = Film;
-                            color = "#BFD641";
-                        }
-                        else if (type === 'script' || name.endsWith('.ts') || name.endsWith('.js')) {
-                            Icon = FileCode;
-                            color = "#22c55e";
-                        }
-                        return { Icon, color };
-                    };
-
-                    const { Icon, color } = getAssetConfig(type, name, a.meta?.color);
-
-                    const baseSize = 96;
-                    const size = Math.round(baseSize * zoomLevel);
-
                     return (
-                        <div
+                        <RenamingAsset
                             key={a.id}
-                            className="flex flex-col items-center p-2 rounded cursor-pointer group transition-colors"
-                            style={{
-                                backgroundColor: theme.colors.selection.background,
-                                border: `1px solid ${theme.colors.selection.border}`,
-                                width: `${size}px`
-                            }}
-                        >
-                            <div
-                                className="rounded mb-2 flex items-center justify-center border shadow-sm relative overflow-hidden transition-transform"
-                                style={{
-                                    backgroundColor: theme.colors.bg.secondary,
-                                    borderColor: theme.colors.border.default,
-                                    width: `${Math.round(size * 0.66)}px`,
-                                    height: `${Math.round(size * 0.66)}px`
-                                }}
-                            >
-                                <Icon size={Math.round(32 * zoomLevel)} color={color} strokeWidth={type === 'folder' ? 1.5 : 2} />
-                            </div>
-                            <input
-                                type="text"
-                                value={editingValue}
-                                onChange={(e) => setEditingValue(e.target.value)}
-                                onKeyDown={(e) => {
-                                    if (e.key === 'Enter') commitRename(a, editingValue);
-                                    if (e.key === 'Escape') {
-                                        setEditingId(null);
-                                        if (!a.path) setAssets(prev => prev.filter(it => it.id !== a.id));
-                                    }
-                                }}
-                                onBlur={() => commitRename(a, editingValue)}
-                                autoFocus
-                                className="text-xs text-center bg-black/50 text-white border border-blue-500 rounded px-1 w-full outline-none"
-                                onClick={(e) => e.stopPropagation()}
-                            />
-                        </div>
+                            asset={a}
+                            editingValue={editingValue}
+                            setEditingValue={setEditingValue}
+                            commitRename={commitRename}
+                            setEditingId={setEditingId}
+                            setAssets={setAssets}
+                            theme={theme}
+                            zoomLevel={zoomLevel}
+                        />
                     );
                 } else {
                     return (
