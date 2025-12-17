@@ -15,7 +15,8 @@ interface ConsolePanelProps {
   onDock?: () => void;
 }
 
-export function ConsolePanel({ logs, onClear, onExecuteCommand, isOpen, setIsOpen, isDocked, onDock }: ConsolePanelProps) {
+export function ConsolePanel(props: ConsolePanelProps) {
+  const { logs, onClear, onExecuteCommand, isOpen, setIsOpen, isDocked, onDock } = props;
   const { theme } = useTheme();
   const { t } = useLanguage();
   const [command, setCommand] = useState('');

@@ -88,7 +88,7 @@ export const plumeDark: Theme = {
     border: {
       default: '#3A3A3A',      // Standard border
       subtle: '#2A2A2A',       // Subtle border
-      focus: '#4FC3F7',        // Bordure focus
+      focus: '#4FC3F7',        // Focus border
     },
     status: {
       success: '#4CAF50',
@@ -121,7 +121,7 @@ export const nebulaMidnight: Theme = {
   description: 'Stylized theme for dark environments and OLED screens',
   colors: {
     bg: {
-      primary: '#0A0A0F',      // Noir profond
+      primary: '#0A0A0F',      // Deep black
       secondary: '#12121A',    // Panel background
       tertiary: '#1A1A28',     // Elevated elements
       elevated: '#252538',     // Hover states
@@ -133,15 +133,15 @@ export const nebulaMidnight: Theme = {
       disabled: '#484860',     // Disabled text
     },
     accent: {
-      primary: '#DA70D6',      // Magenta doux
-      secondary: '#9D4EDD',    // Violet froid
+      primary: '#DA70D6',      // Soft magenta
+      secondary: '#9D4EDD',    // Cold violet
       hover: '#E98EF5',        // Hover state
       active: '#7B2CBF',       // Active state
     },
     border: {
-      default: '#2A2A48',      // Bordure standard
-      subtle: '#1A1A38',       // Bordure subtile
-      focus: '#DA70D6',        // Bordure focus
+      default: '#2A2A48',      // Standard border
+      subtle: '#1A1A38',       // Subtle border
+      focus: '#DA70D6',        // Focus border
     },
     status: {
       success: '#6FFFB0',
@@ -193,8 +193,8 @@ export const featherLight: Theme = {
     },
     border: {
       default: '#D0D0D0',      // Standard border
-      subtle: '#E0E0E0',       // Bordure subtile
-      focus: '#64B5F6',        // Bordure focus
+      subtle: '#E0E0E0',       // Subtle border
+      focus: '#64B5F6',        // Focus border
     },
     status: {
       success: '#66BB6A',
