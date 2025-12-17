@@ -3,6 +3,7 @@ import { Save, Trash2, MousePointer2, Move, Rotate3d, Scaling, Settings, Play, P
 import { IconButton } from '../ui/Shared';
 import { ToolType } from '../../types';
 import { useTheme } from '../../ThemeContext';
+import { useLanguage } from '../../LanguageContext';
 interface ToolbarProps {
   activeTool: ToolType; setActiveTool: (tool: ToolType) => void;
   onSave: () => void; onDelete: () => void;
@@ -10,6 +11,7 @@ interface ToolbarProps {
 }
 export const Toolbar: React.FC<ToolbarProps> = ({ activeTool, setActiveTool, onSave, onDelete, isPlaying, onPlay, onPause, onStop }) => {
   const { theme } = useTheme();
+  const { t } = useLanguage();
 
   return (
     <div
@@ -21,23 +23,23 @@ export const Toolbar: React.FC<ToolbarProps> = ({ activeTool, setActiveTool, onS
     >
       <div className="flex space-x-4 items-center">
         <div className="flex space-x-0.5">
-          <IconButton icon={Save} title="Save Current Level (Ctrl+S)" onClick={onSave} />
+          <IconButton icon={Save} title={t('toolbar.save_level')} onClick={onSave} />
         </div>
         <div
           className="h-6 w-px"
           style={{ backgroundColor: theme.colors.border.default }}
         ></div>
         <div className="flex space-x-1">
-          <IconButton icon={MousePointer2} active={activeTool === 'select'} onClick={() => setActiveTool('select')} title="Select" />
-          <IconButton icon={Move} active={activeTool === 'move'} onClick={() => setActiveTool('move')} title="Translate" />
-          <IconButton icon={Rotate3d} active={activeTool === 'rotate'} onClick={() => setActiveTool('rotate')} title="Rotate" />
-          <IconButton icon={Scaling} active={activeTool === 'scale'} onClick={() => setActiveTool('scale')} title="Scale" />
+          <IconButton icon={MousePointer2} active={activeTool === 'select'} onClick={() => setActiveTool('select')} title={t('toolbar.select')} />
+          <IconButton icon={Move} active={activeTool === 'move'} onClick={() => setActiveTool('move')} title={t('toolbar.translate')} />
+          <IconButton icon={Rotate3d} active={activeTool === 'rotate'} onClick={() => setActiveTool('rotate')} title={t('toolbar.rotate')} />
+          <IconButton icon={Scaling} active={activeTool === 'scale'} onClick={() => setActiveTool('scale')} title={t('toolbar.scale')} />
         </div>
         <div
           className="h-6 w-px"
           style={{ backgroundColor: theme.colors.border.default }}
         ></div>
-        <IconButton icon={Settings} title="Editor Settings" />
+        <IconButton icon={Settings} title={t('toolbar.settings')} />
       </div>
       <div className="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 flex space-x-1 items-center">
         {!isPlaying ? (
@@ -66,7 +68,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({ activeTool, setActiveTool, onS
             borderRightColor: theme.colors.border.default
           }}
         >
-          BUILD
+          {t('toolbar.build')}
         </span>
         <div className="flex space-x-1">
           <IconButton icon={Hammer} />

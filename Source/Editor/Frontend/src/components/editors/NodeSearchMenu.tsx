@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useTheme } from '../../ThemeContext';
+import { useLanguage } from '../../LanguageContext';
 
 export interface NodeTypeItem {
     label: string;
@@ -26,6 +27,7 @@ interface NodeSearchMenuProps {
 
 export const NodeSearchMenu: React.FC<NodeSearchMenuProps> = ({ x, y, onSelect, onClose }) => {
     const { theme } = useTheme();
+    const { t } = useLanguage();
     const [search, setSearch] = useState('');
     const inputRef = useRef<HTMLInputElement>(null);
     const menuRef = useRef<HTMLDivElement>(null);
@@ -92,7 +94,7 @@ export const NodeSearchMenu: React.FC<NodeSearchMenuProps> = ({ x, y, onSelect, 
                 <input
                     ref={inputRef}
                     type="text"
-                    placeholder="Search nodes..."
+                    placeholder={t('material.search_placeholder')}
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     style={{
@@ -115,7 +117,7 @@ export const NodeSearchMenu: React.FC<NodeSearchMenuProps> = ({ x, y, onSelect, 
             <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
                 {Object.keys(groupedNodes).length === 0 ? (
                     <div style={{ padding: '8px', color: theme.colors.text.muted, fontSize: '12px', textAlign: 'center' }}>
-                        No nodes found
+                        {t('material.no_nodes')}
                     </div>
                 ) : (
                     Object.entries(groupedNodes).map(([category, nodes]) => (
@@ -128,7 +130,7 @@ export const NodeSearchMenu: React.FC<NodeSearchMenuProps> = ({ x, y, onSelect, 
                                 color: theme.colors.text.muted,
                                 background: theme.colors.bg.tertiary
                             }}>
-                                {category}
+                                {t(`material.category.${category.toLowerCase()}`)}
                             </div>
                             {nodes.map((node) => (
                                 <div
@@ -145,7 +147,7 @@ export const NodeSearchMenu: React.FC<NodeSearchMenuProps> = ({ x, y, onSelect, 
                                     onMouseEnter={(e) => e.currentTarget.style.background = theme.colors.accent.primary + '20'}
                                     onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                                 >
-                                    {node.label}
+                                    {t(`material.node.${node.type}`)}
                                 </div>
                             ))}
                         </div>

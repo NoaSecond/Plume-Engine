@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useTheme } from '../../ThemeContext';
+import { useLanguage } from '../../LanguageContext';
 import { LogEntry } from '../../types';
 import { COMMANDS } from '../../data/commands';
 import { AppWindow } from 'lucide-react';
@@ -16,6 +17,7 @@ interface ConsolePanelProps {
 
 export function ConsolePanel({ logs, onClear, onExecuteCommand, isOpen, setIsOpen, isDocked, onDock }: ConsolePanelProps) {
   const { theme } = useTheme();
+  const { t } = useLanguage();
   const [command, setCommand] = useState('');
   const [showInfo, setShowInfo] = useState(true);
   const [showWarning, setShowWarning] = useState(true);
@@ -114,7 +116,7 @@ export function ConsolePanel({ logs, onClear, onExecuteCommand, isOpen, setIsOpe
         style={{ borderColor: theme.colors.border.default }}
       >
         <div className="flex items-center gap-3">
-          <span style={{ color: theme.colors.text.primary }}>Console</span>
+          <span style={{ color: theme.colors.text.primary }}>{t('console.title')}</span>
           <div className="flex items-center gap-2">
             <label className="flex items-center gap-1 cursor-pointer">
               <input
@@ -123,7 +125,7 @@ export function ConsolePanel({ logs, onClear, onExecuteCommand, isOpen, setIsOpe
                 onChange={(e) => setShowInfo(e.target.checked)}
                 className="w-3 h-3"
               />
-              <span style={{ color: theme.colors.text.secondary }}>Info</span>
+              <span style={{ color: theme.colors.text.secondary }}>{t('console.info')}</span>
             </label>
             <label className="flex items-center gap-1 cursor-pointer">
               <input
@@ -132,7 +134,7 @@ export function ConsolePanel({ logs, onClear, onExecuteCommand, isOpen, setIsOpe
                 onChange={(e) => setShowWarning(e.target.checked)}
                 className="w-3 h-3"
               />
-              <span style={{ color: theme.colors.status.warning }}>Warning</span>
+              <span style={{ color: theme.colors.status.warning }}>{t('console.warning')}</span>
             </label>
             <label className="flex items-center gap-1 cursor-pointer">
               <input
@@ -141,7 +143,7 @@ export function ConsolePanel({ logs, onClear, onExecuteCommand, isOpen, setIsOpe
                 onChange={(e) => setShowError(e.target.checked)}
                 className="w-3 h-3"
               />
-              <span style={{ color: theme.colors.status.error }}>Error</span>
+              <span style={{ color: theme.colors.status.error }}>{t('console.error')}</span>
             </label>
           </div>
         </div>
@@ -155,10 +157,10 @@ export function ConsolePanel({ logs, onClear, onExecuteCommand, isOpen, setIsOpe
                 border: `1px solid ${theme.colors.border.default}`
               }}
               onClick={onDock}
-              title="Dock Console"
+              title={t('console.dock_tooltip')}
             >
               <AppWindow size={10} />
-              Docker
+              {t('console.docker')}
             </button>
           )}
           <button
@@ -168,9 +170,9 @@ export function ConsolePanel({ logs, onClear, onExecuteCommand, isOpen, setIsOpe
               backgroundColor: theme.colors.bg.elevated,
               color: theme.colors.text.secondary,
             }}
-            title="Clear Console (Ctrl+L)"
+            title={t('console.clear_tooltip')}
           >
-            Clear (Ctrl+L)
+            {t('console.clear')}
           </button>
           <button
             onClick={() => setIsOpen(false)}
@@ -189,7 +191,7 @@ export function ConsolePanel({ logs, onClear, onExecuteCommand, isOpen, setIsOpe
       <div className="flex-1 overflow-y-auto font-mono text-xs p-2">
         {filteredLogs.length === 0 ? (
           <div style={{ color: theme.colors.text.muted }}>
-            Aucun log à afficher...
+            {t('console.no_logs')}
           </div>
         ) : (
           filteredLogs.map((log) => (
@@ -258,7 +260,7 @@ export function ConsolePanel({ logs, onClear, onExecuteCommand, isOpen, setIsOpe
               if (e.ctrlKey || e.altKey || e.metaKey || e.key === 'Escape') return;
               e.stopPropagation();
             }}
-            placeholder="Type 'help' to list commands"
+            placeholder={t('console.placeholder')}
             ref={inputRef}
             className="w-full px-2 py-1 text-xs font-mono rounded outline-none"
             style={{

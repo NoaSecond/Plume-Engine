@@ -1,17 +1,20 @@
 import { useState } from 'react';
 import { useTheme } from '../../ThemeContext';
+import { useLanguage } from '../../LanguageContext';
 import { themes, ThemeName } from '../../themes/index';
+import { Settings as SettingsIcon, Palette, Keyboard, ChevronDown } from 'lucide-react';
 
 interface EditorPreferencesProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
-type PreferenceTab = 'theme' | 'shortcuts';
+type PreferenceTab = 'general' | 'theme' | 'shortcuts';
 
 export function EditorPreferences({ isOpen, onClose }: EditorPreferencesProps) {
-  const { theme, currentTheme, setTheme } = useTheme();
-  const [activeTab, setActiveTab] = useState<PreferenceTab>('theme');
+  const { theme } = useTheme();
+  const { t } = useLanguage();
+  const [activeTab, setActiveTab] = useState<PreferenceTab>('general');
 
   // If used as a tab, we assume it's always "open" if rendered. 
   // We keep the prop for compatibility if needed, but we don't return null based on it 
@@ -34,30 +37,44 @@ export function EditorPreferences({ isOpen, onClose }: EditorPreferencesProps) {
         >
           <div className="p-2 space-y-1">
             <button
+              onClick={() => setActiveTab('general')}
+              className="w-full text-left px-3 py-2 rounded text-sm transition-colors hover:bg-opacity-70 flex items-center gap-2"
+              style={{
+                backgroundColor: activeTab === 'general' ? theme.colors.bg.elevated : 'transparent',
+                color: activeTab === 'general' ? theme.colors.text.primary : theme.colors.text.secondary
+              }}
+            >
+              <SettingsIcon size={16} />
+              {t('settings.general')}
+            </button>
+            <button
               onClick={() => setActiveTab('theme')}
-              className="w-full text-left px-3 py-2 rounded text-sm transition-colors hover:bg-opacity-70"
+              className="w-full text-left px-3 py-2 rounded text-sm transition-colors hover:bg-opacity-70 flex items-center gap-2"
               style={{
                 backgroundColor: activeTab === 'theme' ? theme.colors.bg.elevated : 'transparent',
                 color: activeTab === 'theme' ? theme.colors.text.primary : theme.colors.text.secondary
               }}
             >
-              Thèmes
+              <Palette size={16} />
+              {t('settings.theme')}
             </button>
             <button
               onClick={() => setActiveTab('shortcuts')}
-              className="w-full text-left px-3 py-2 rounded text-sm transition-colors hover:bg-opacity-70"
+              className="w-full text-left px-3 py-2 rounded text-sm transition-colors hover:bg-opacity-70 flex items-center gap-2"
               style={{
                 backgroundColor: activeTab === 'shortcuts' ? theme.colors.bg.elevated : 'transparent',
                 color: activeTab === 'shortcuts' ? theme.colors.text.primary : theme.colors.text.secondary
               }}
             >
-              Raccourcis
+              <Keyboard size={16} />
+              {t('settings.shortcuts')}
             </button>
           </div>
         </div>
 
         {/* Right Content */}
         <div className="flex-1 overflow-y-auto p-6">
+          {activeTab === 'general' && <GeneralSettings />}
           {activeTab === 'theme' && <ThemeSettings />}
           {activeTab === 'shortcuts' && <ShortcutSettings />}
         </div>
@@ -68,12 +85,13 @@ export function EditorPreferences({ isOpen, onClose }: EditorPreferencesProps) {
 
 function ThemeSettings() {
   const { theme, currentTheme, setTheme } = useTheme();
+  const { t } = useLanguage();
 
   return (
     <div className="space-y-6">
       <div>
         <h3 className="text-base font-semibold mb-3" style={{ color: theme.colors.text.primary }}>
-          Sélection du thème
+          {t('settings.select_theme')}
         </h3>
         <div className="grid grid-cols-1 gap-3">
           {Object.entries(themes).map(([key, themeData]) => {
@@ -179,8 +197,51 @@ function ColorPreview({ label, color }: { label: string; color: string }) {
   );
 }
 
+
+function GeneralSettings() {
+  const { theme } = useTheme();
+  const { language, setLanguage, t } = useLanguage();
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h3 className="text-base font-semibold mb-3" style={{ color: theme.colors.text.primary }}>
+          {t('settings.language')}
+        </h3>
+        <p className="text-sm mb-4" style={{ color: theme.colors.text.secondary }}>
+          {t('settings.language_description')}
+        </p>
+
+        <div className="relative inline-block w-64">
+          <select
+            value={language}
+            onChange={(e) => setLanguage(e.target.value as 'en' | 'fr')}
+            className="w-full appearance-none px-4 py-2 pr-8 rounded border focus:outline-none focus:ring-2 focus:ring-opacity-50"
+            style={{
+              backgroundColor: theme.colors.bg.secondary,
+              borderColor: theme.colors.border.default,
+              color: theme.colors.text.primary,
+              // We'll use the accent color for the focus ring if we could style it easily with style prop, 
+              // but focus ring is easier with tailwind classes or css variables. 
+              // For now standard border is enough.
+            }}
+          >
+            <option value="en">English (US)</option>
+            <option value="fr">Français (FR)</option>
+          </select>
+          <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2">
+            <ChevronDown size={16} color={theme.colors.text.secondary} />
+          </div>
+        </div>
+
+      </div>
+    </div>
+  );
+}
+
 function ShortcutSettings() {
   const { theme } = useTheme();
+  const { t } = useLanguage();
 
   const shortcutGroups = [
     {

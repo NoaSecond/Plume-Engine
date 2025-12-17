@@ -1,5 +1,6 @@
 import React from 'react';
 import { useTheme } from '../../ThemeContext';
+import { useLanguage } from '../../LanguageContext';
 
 interface TextureViewerProps {
     assetId: string; // This will act as the path for now
@@ -8,6 +9,7 @@ interface TextureViewerProps {
 
 export const TextureViewer: React.FC<TextureViewerProps> = ({ assetId, name }) => {
     const { theme } = useTheme();
+    const { t } = useLanguage();
 
     // Convert assetId (path) to a usable URL if needed. 
     // For the webview, we might need a specific protocol or just serve it relative if it's in the project.
@@ -106,7 +108,7 @@ export const TextureViewer: React.FC<TextureViewerProps> = ({ assetId, name }) =
                     color: theme.colors.text.secondary
                 }}
             >
-                <span>Path: {assetId}</span>
+                <span>{t('asset.path').replace('{path}', assetId)}</span>
             </div>
         </div>
     );

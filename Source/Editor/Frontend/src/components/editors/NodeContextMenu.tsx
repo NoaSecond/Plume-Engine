@@ -1,5 +1,6 @@
 import React from 'react';
 import { useTheme } from '../../ThemeContext';
+import { useLanguage } from '../../LanguageContext';
 import { Node } from 'reactflow';
 
 interface NodeContextMenuProps {
@@ -18,6 +19,7 @@ export const NodeContextMenu: React.FC<NodeContextMenuProps> = ({
     x, y, node, onClose, onDelete, onDuplicate, onComment, onRename, selectedNodes
 }) => {
     const { theme } = useTheme();
+    const { t } = useLanguage();
 
     const isResultNode = node.type === 'result';
     const isCommentNode = node.type === 'comment';
@@ -42,25 +44,25 @@ export const NodeContextMenu: React.FC<NodeContextMenuProps> = ({
             onContextMenu={(e) => e.preventDefault()}
         >
             <div style={{ padding: '4px 12px', fontSize: '10px', color: theme.colors.text.muted, textTransform: 'uppercase' }}>
-                {node.data.label || 'Node Actions'}
+                {node.data.label || t('material.node_actions')}
             </div>
 
             <div style={{ height: '1px', background: theme.colors.border.subtle, margin: '4px 0' }}></div>
 
             {isCommentNode && (
-                <MenuItem label="Rename (F2)" onClick={() => { onRename(node.id); onClose(); }} theme={theme} />
+                <MenuItem label={t('material.rename')} onClick={() => { onRename(node.id); onClose(); }} theme={theme} />
             )}
 
             {!isCommentNode && (
-                <MenuItem label="Comment Selection (Ctrl+/)" onClick={() => onComment(selectedNodes.length > 0 ? selectedNodes : [node])} theme={theme} />
+                <MenuItem label={t('material.comment')} onClick={() => onComment(selectedNodes.length > 0 ? selectedNodes : [node])} theme={theme} />
             )}
 
             {!isResultNode && (
                 <>
                     <div style={{ height: '1px', background: theme.colors.border.subtle, margin: '4px 0' }}></div>
-                    <MenuItem label="Copy (Ctrl+C)" onClick={() => { /* Clipboard logic */ onClose(); }} theme={theme} />
-                    <MenuItem label="Duplicate (Ctrl+D)" onClick={() => onDuplicate(node)} theme={theme} />
-                    <MenuItem label="Delete (Del)" onClick={() => onDelete(node.id)} theme={theme} danger />
+                    <MenuItem label={t('material.copy')} onClick={() => { /* Clipboard logic */ onClose(); }} theme={theme} />
+                    <MenuItem label={t('material.duplicate')} onClick={() => onDuplicate(node)} theme={theme} />
+                    <MenuItem label={t('material.delete')} onClick={() => onDelete(node.id)} theme={theme} danger />
                 </>
             )}
         </div>

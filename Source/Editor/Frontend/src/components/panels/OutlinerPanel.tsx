@@ -2,6 +2,7 @@
 import { Folder, Search, Lightbulb, Camera, Box, FolderPlus, Edit2, Copy, Trash2, ChevronRight, ChevronDown } from 'lucide-react';
 import { Entity } from '../../types';
 import { useTheme } from '../../ThemeContext';
+import { useLanguage } from '../../LanguageContext';
 
 interface EntityWithChildren extends Entity {
   children?: EntityWithChildren[];
@@ -9,29 +10,30 @@ interface EntityWithChildren extends Entity {
 }
 
 interface OutlinerPanelProps {
-  entities: Entity[]; 
-  selectedId: string | null; 
+  entities: Entity[];
+  selectedId: string | null;
   setSelectedId: (id: string | null) => void;
-  onAddEntity: (type: Entity['type']) => void; 
+  onAddEntity: (type: Entity['type']) => void;
   setEntities: React.Dispatch<React.SetStateAction<Entity[]>>;
-  onDuplicate: (ent: Entity) => void; 
+  onDuplicate: (ent: Entity) => void;
   onDelete: (id: string) => void;
 }
 
-export const OutlinerPanel: React.FC<OutlinerPanelProps> = ({ 
-  entities, 
-  selectedId, 
-  setSelectedId, 
-  onAddEntity, 
-  setEntities, 
-  onDuplicate, 
-  onDelete 
+export const OutlinerPanel: React.FC<OutlinerPanelProps> = ({
+  entities,
+  selectedId,
+  setSelectedId,
+  onAddEntity,
+  setEntities,
+  onDuplicate,
+  onDelete
 }) => {
   const { theme } = useTheme();
+  const { t } = useLanguage();
   const [renameId, setRenameId] = useState<string | null>(null);
   const [draggedIds, setDraggedIds] = useState<string[]>([]);
   const [dragOverFolder, setDragOverFolder] = useState<string | null>(null);
-  const [deletePending, setDeletePending] = useState<{id:string,name:string,items?:Entity[]}|null>(null);
+  const [deletePending, setDeletePending] = useState<{ id: string, name: string, items?: Entity[] } | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [lastSelectedId, setLastSelectedId] = useState<string | null>(null);
   const [clipboard, setClipboard] = useState<Entity | Entity[] | null>(null);
@@ -214,15 +216,15 @@ export const OutlinerPanel: React.FC<OutlinerPanelProps> = ({
     if (selectedEntities.length === 0) return;
 
     if (selectedEntities.length === 1) {
-      setDeletePending({ 
-        id: selectedEntities[0].id, 
+      setDeletePending({
+        id: selectedEntities[0].id,
         name: selectedEntities[0].name,
         items: selectedEntities
       });
     } else {
       const names = selectedEntities.map(e => e.name).join(', ');
-      setDeletePending({ 
-        id: 'multi', 
+      setDeletePending({
+        id: 'multi',
         name: `${selectedEntities.length} items (${names})`,
         items: selectedEntities
       });
@@ -231,10 +233,10 @@ export const OutlinerPanel: React.FC<OutlinerPanelProps> = ({
 
   const confirmDelete = () => {
     if (!deletePending || !deletePending.items) return;
-    
+
     const idsToDelete = new Set(deletePending.items.map(item => item.id));
     setEntities(prev => prev.filter(e => !idsToDelete.has(e.id)));
-    
+
     setSelectedIds(new Set());
     setSelectedId(null);
     setLastSelectedId(null);
@@ -244,13 +246,13 @@ export const OutlinerPanel: React.FC<OutlinerPanelProps> = ({
   const handleCopy = () => {
     const selectedEntities = entities.filter(ent => selectedIds.has(ent.id));
     if (selectedEntities.length === 0) return;
-    
+
     setClipboard(selectedEntities.length === 1 ? selectedEntities[0] : selectedEntities);
   };
 
   const handlePaste = () => {
     if (!clipboard) return;
-    
+
     const itemsToPaste = Array.isArray(clipboard) ? clipboard : [clipboard];
     itemsToPaste.forEach(item => {
       onDuplicate(item);
@@ -264,14 +266,14 @@ export const OutlinerPanel: React.FC<OutlinerPanelProps> = ({
     });
   };
 
-  const handleDragStart = (e: React.DragEvent, entityId: string) => { 
+  const handleDragStart = (e: React.DragEvent, entityId: string) => {
     // If dragging a selected item and there are multiple selections, drag all
     if (selectedIds.has(entityId)) {
       setDraggedIds(Array.from(selectedIds));
     } else {
       setDraggedIds([entityId]);
     }
-    e.dataTransfer.effectAllowed = "move"; 
+    e.dataTransfer.effectAllowed = "move";
   };
 
   const handleDragOver = (e: React.DragEvent, entityId: string, entityType: Entity['type']) => {
@@ -289,34 +291,34 @@ export const OutlinerPanel: React.FC<OutlinerPanelProps> = ({
     e.preventDefault();
     e.stopPropagation();
     setDragOverFolder(null);
-    
+
     if (draggedIds.length === 0) return;
-    
+
     // If dropping on a folder, set parent
     if (targetEntity && targetEntity.type === 'Folder') {
       const draggedEntities = entities.filter(ent => draggedIds.includes(ent.id));
-      
+
       // Don't allow dragging a folder into itself or its children
       if (draggedIds.includes(targetEntity.id)) {
         setDraggedIds([]);
         return;
       }
-      
+
       const updatedEntities = entities.map(e => {
         if (draggedIds.includes(e.id)) {
           return { ...e, parentId: targetEntity.id } as any;
         }
         return e;
       });
-      
+
       setEntities(updatedEntities);
       setDraggedIds([]);
-      
+
       // Expand the folder to show the new children
       setExpandedFolders(prev => new Set([...prev, targetEntity.id]));
       return;
     }
-    
+
     setDraggedIds([]);
   };
 
@@ -326,23 +328,23 @@ export const OutlinerPanel: React.FC<OutlinerPanelProps> = ({
   const renderEntity = (ent: EntityWithChildren, depth: number = 0): React.ReactNode => {
     const isExpanded = expandedFolders.has(ent.id);
     const hasChildren = ent.type === 'Folder' && ent.children && ent.children.length > 0;
-    
+
     return (
       <React.Fragment key={ent.id}>
-        <div 
-          draggable 
-          onDragStart={(e) => handleDragStart(e, ent.id)} 
+        <div
+          draggable
+          onDragStart={(e) => handleDragStart(e, ent.id)}
           onDragOver={(e) => handleDragOver(e, ent.id, ent.type)}
           onDragLeave={handleDragLeave}
-          onDrop={(e) => handleDrop(e, ent)} 
+          onDrop={(e) => handleDrop(e, ent)}
           onClick={(e) => handleEntityClick(e, ent.id)}
           className="flex items-center px-2 py-1 text-xs rounded cursor-pointer group border transition-colors"
           style={{
-            backgroundColor: selectedIds.has(ent.id) ? theme.colors.accent.primary : 
-                           dragOverFolder === ent.id ? theme.colors.accent.hover : 'transparent',
+            backgroundColor: selectedIds.has(ent.id) ? theme.colors.accent.primary :
+              dragOverFolder === ent.id ? theme.colors.accent.hover : 'transparent',
             color: selectedIds.has(ent.id) ? theme.colors.text.primary : theme.colors.text.secondary,
-            borderColor: selectedIds.has(ent.id) ? theme.colors.accent.secondary : 
-                        dragOverFolder === ent.id ? theme.colors.accent.primary : 'transparent',
+            borderColor: selectedIds.has(ent.id) ? theme.colors.accent.secondary :
+              dragOverFolder === ent.id ? theme.colors.accent.primary : 'transparent',
             paddingLeft: `${8 + depth * 16}px`
           }}
           onMouseEnter={(e) => {
@@ -369,62 +371,62 @@ export const OutlinerPanel: React.FC<OutlinerPanelProps> = ({
               {isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
             </button>
           )}
-          
+
           {/* Icon */}
-          {ent.type === 'Folder' ? <Folder size={12} className="mr-2 text-yellow-500"/> : 
-           ent.type === 'Light' ? <Lightbulb size={12} className="mr-2 text-yellow-200"/> : 
-           ent.type === 'Camera' ? <Camera size={12} className="mr-2 text-blue-300"/> : 
-           <Box size={12} className="mr-2 text-blue-400"/>}
-          
+          {ent.type === 'Folder' ? <Folder size={12} className="mr-2 text-yellow-500" /> :
+            ent.type === 'Light' ? <Lightbulb size={12} className="mr-2 text-yellow-200" /> :
+              ent.type === 'Camera' ? <Camera size={12} className="mr-2 text-blue-300" /> :
+                <Box size={12} className="mr-2 text-blue-400" />}
+
           {/* Name / Rename input */}
           {renameId === ent.id ? (
-            <input 
-              autoFocus 
-              className="flex-1 px-1 outline-none border rounded" 
+            <input
+              autoFocus
+              className="flex-1 px-1 outline-none border rounded"
               style={{
                 backgroundColor: theme.colors.bg.primary,
                 color: theme.colors.text.primary,
                 borderColor: theme.colors.accent.primary
               }}
-              defaultValue={ent.name} 
-              onBlur={() => setRenameId(null)} 
-              onKeyDown={(e) => { 
-                if(e.key === 'Enter') { 
-                  setEntities(entities.map(item => item.id === ent.id ? {...item, name: e.currentTarget.value} : item)); 
-                  setRenameId(null); 
+              defaultValue={ent.name}
+              onBlur={() => setRenameId(null)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  setEntities(entities.map(item => item.id === ent.id ? { ...item, name: e.currentTarget.value } : item));
+                  setRenameId(null);
                 } else if (e.key === 'Escape') {
                   setRenameId(null);
                 }
-              }} 
-              onClick={(e) => e.stopPropagation()} 
+              }}
+              onClick={(e) => e.stopPropagation()}
             />
           ) : (
             <span className="flex-1 truncate">{ent.name}</span>
           )}
-          
+
           {/* Action buttons */}
           <div className={`flex space-x-1 opacity-0 group-hover:opacity-100 ${selectedIds.has(ent.id) ? 'opacity-100' : ''}`}>
-            <button 
+            <button
               onClick={(e) => { e.stopPropagation(); setRenameId(ent.id); }}
-              title="Rename (F2)"
+              title={t('outliner.rename_tooltip')}
             >
-              <Edit2 size={10}/>
+              <Edit2 size={10} />
             </button>
-            <button 
+            <button
               onClick={(e) => { e.stopPropagation(); onDuplicate(ent); }}
-              title="Duplicate (Ctrl+D)"
+              title={t('outliner.duplicate_tooltip')}
             >
-              <Copy size={10}/>
+              <Copy size={10} />
             </button>
-            <button 
+            <button
               onClick={(e) => { e.stopPropagation(); handleDeleteSelected(); }}
-              title="Delete (Del)"
+              title={t('outliner.delete_tooltip')}
             >
-              <Trash2 size={10}/>
+              <Trash2 size={10} />
             </button>
           </div>
         </div>
-        
+
         {/* Render children if folder is expanded */}
         {hasChildren && isExpanded && ent.children!.map(child => renderEntity(child, depth + 1))}
       </React.Fragment>
@@ -432,21 +434,21 @@ export const OutlinerPanel: React.FC<OutlinerPanelProps> = ({
   };
 
   return (
-    <div 
+    <div
       className="h-1/2 flex flex-col"
       style={{ borderBottom: `1px solid ${theme.colors.border.default}` }}
     >
-      <div 
+      <div
         className="h-8 px-2 flex items-center justify-between text-xs font-bold"
-        style={{ 
+        style={{
           backgroundColor: theme.colors.bg.secondary,
           borderBottom: `1px solid ${theme.colors.border.default}`,
-          color: theme.colors.text.secondary 
+          color: theme.colors.text.secondary
         }}
       >
         <span>Hierarchy</span>
         <div className="flex space-x-1">
-          <button 
+          <button
             className="transition-colors"
             style={{ color: theme.colors.text.secondary }}
             onMouseEnter={(e) => e.currentTarget.style.color = theme.colors.text.primary}
@@ -454,13 +456,13 @@ export const OutlinerPanel: React.FC<OutlinerPanelProps> = ({
             onClick={() => onAddEntity('Folder')}
             title="Create Folder"
           >
-            <FolderPlus size={14}/>
+            <FolderPlus size={14} />
           </button>
-          <Search size={12} className="ml-2" style={{ color: theme.colors.text.muted }}/>
+          <Search size={12} className="ml-2" style={{ color: theme.colors.text.muted }} />
         </div>
       </div>
-      <div 
-        className="flex-1 overflow-y-auto p-1 select-none" 
+      <div
+        className="flex-1 overflow-y-auto p-1 select-none"
         onDragOver={(e) => e.preventDefault()}
         onClick={(e) => {
           // Deselect all when clicking on empty area
@@ -473,32 +475,32 @@ export const OutlinerPanel: React.FC<OutlinerPanelProps> = ({
       >
         {hierarchy.map(ent => renderEntity(ent))}
       </div>
-      
+
       {deletePending && (
         <div style={{ position: 'absolute', right: 16, bottom: 56, zIndex: 60 }}>
           <div className="flex items-center space-x-2 p-3 rounded shadow" style={{ backgroundColor: theme.colors.bg.secondary, border: `1px solid ${theme.colors.border.default}` }}>
             <div className="text-sm" style={{ color: theme.colors.text.primary }}>
-              Delete "{deletePending.name}"?
+              {t('outliner.delete_confirm').replace('{name}', deletePending.name)}
             </div>
-            <button 
-              className="px-3 py-1 rounded text-sm" 
-              style={{ backgroundColor: '#ef4444', color: '#fff' }} 
+            <button
+              className="px-3 py-1 rounded text-sm"
+              style={{ backgroundColor: '#ef4444', color: '#fff' }}
               onClick={confirmDelete}
             >
-              Delete
+              {t('outliner.delete')}
             </button>
-            <button 
-              className="px-3 py-1 rounded text-sm" 
-              style={{ backgroundColor: theme.colors.bg.elevated, color: theme.colors.text.primary }} 
+            <button
+              className="px-3 py-1 rounded text-sm"
+              style={{ backgroundColor: theme.colors.bg.elevated, color: theme.colors.text.primary }}
               onClick={() => setDeletePending(null)}
             >
-              Cancel
+              {t('outliner.cancel')}
             </button>
           </div>
         </div>
       )}
-      
-      <div 
+
+      <div
         className="h-6 text-[10px] flex items-center px-2"
         style={{
           backgroundColor: theme.colors.bg.secondary,
@@ -506,7 +508,7 @@ export const OutlinerPanel: React.FC<OutlinerPanelProps> = ({
           color: theme.colors.text.muted
         }}
       >
-        {entities.length} Actors {selectedIds.size > 0 && `(${selectedIds.size} selected)`}
+        {t('outliner.actors_count').replace('{count}', entities.length.toString())} {selectedIds.size > 0 && t('outliner.selected_count').replace('{count}', selectedIds.size.toString())}
       </div>
     </div>
   );

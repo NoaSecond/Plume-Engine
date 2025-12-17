@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client'
 import App from './App.tsx'
 import './index.css'
 import { ThemeProvider } from './ThemeContext'
+import { LanguageProvider } from './LanguageContext'
 
   // Aggressive Zoom Blocking (Runs before React)
   ; (function () {
@@ -56,8 +57,10 @@ import { ThemeProvider } from './ThemeContext'
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <ThemeProvider>
-      <App />
-    </ThemeProvider>
+    <LanguageProvider>
+      <ThemeProvider>
+        <App />
+      </ThemeProvider>
+    </LanguageProvider>
   </React.StrictMode>,
 )

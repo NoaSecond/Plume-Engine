@@ -16,9 +16,11 @@ import { DEFAULT_SCENE } from './data/constants';
 import { COMMANDS } from './data/commands';
 import { Entity, LogEntry, ToolType } from './types';
 import { useTheme } from './ThemeContext';
+import { useLanguage } from './LanguageContext';
 
 export default function App() {
   const { theme } = useTheme();
+  const { t } = useLanguage();
 
   // Plugin System State
   const [plugins, setPlugins] = useState<any[]>([]);
@@ -465,7 +467,6 @@ export default function App() {
     addLog('Plume Engine Editor initialized', 'INFO');
 
     return () => clearInterval(renderingInterval);
-    return () => clearInterval(renderingInterval);
   }, [addLog]);
 
   // Global Drag & Drop prevention (stop WebView from opening files)
@@ -633,7 +634,7 @@ export default function App() {
 
     // Command to open Static Mesh Tab for testing
     if (name === 'openmesh') {
-      const meshName = parts[1] || 'New Mesh';
+      const meshName = parts[1] || t('app.mesh.new');
       const newTabId = `mesh-${Date.now()}`;
       setTabs(prev => [...prev, { id: newTabId, title: meshName, type: 'static-mesh', data: { entityId: meshName }, closable: true }]);
       setActiveTabId(newTabId);
@@ -788,9 +789,9 @@ export default function App() {
         isPlaying={isPlaying}
         onSave={() => { }}
         onAbout={() => setShowAboutModal(true)}
-        onPreferences={() => handleOpenTab('editor-preferences', 'Editor Preferences')}
-        onPlugins={() => handleOpenTab('plugin-manager', 'Plugin Manager')}
-        onProjectSettings={() => handleOpenTab('project-settings', 'Project Settings')}
+        onPreferences={() => handleOpenTab('editor-preferences', t('app.tab.preferences'))}
+        onPlugins={() => handleOpenTab('plugin-manager', t('app.tab.plugins'))}
+        onProjectSettings={() => handleOpenTab('project-settings', t('app.tab.project_settings'))}
       />
 
       {/* Tab System Area */}
@@ -933,7 +934,7 @@ export default function App() {
         onClose={() => setShowContentBrowser(false)}
         onDock={() => {
           const newTabId = `content-browser-${Date.now()}`;
-          setTabs(prev => [...prev, { id: newTabId, title: 'Content Browser', type: 'content-browser', closable: true }]);
+          setTabs(prev => [...prev, { id: newTabId, title: t('browser.title'), type: 'content-browser', closable: true }]);
           setActiveTabId(newTabId);
           setShowContentBrowser(false);
         }}
@@ -954,7 +955,7 @@ export default function App() {
             setActiveTabId(existing.id);
           } else {
             const newTabId = `console-${Date.now()}`;
-            setTabs(prev => [...prev, { id: newTabId, title: 'Console', type: 'console', closable: true }]);
+            setTabs(prev => [...prev, { id: newTabId, title: t('console.title'), type: 'console', closable: true }]);
             setActiveTabId(newTabId);
           }
           setShowConsole(false);
@@ -980,7 +981,7 @@ export default function App() {
             }}
             className="hover:underline cursor-pointer"
           >
-            Content Browser (Ctrl+Space)
+            {t('footer.content_browser')}
           </button>
           <span style={{ color: theme.colors.border.default }}>|</span>
           <button
@@ -990,10 +991,10 @@ export default function App() {
             }}
             className="hover:underline cursor-pointer"
           >
-            Console (Ctrl+I)
+            {t('footer.console')}
           </button>
           <span style={{ color: theme.colors.border.default }}>|</span>
-          <span>{entities.length} entities</span>
+          <span>{t('footer.entities').replace('{count}', entities.length.toString())}</span>
         </div>
         <div className="flex items-center gap-3">
           {/* Plugins Section */}

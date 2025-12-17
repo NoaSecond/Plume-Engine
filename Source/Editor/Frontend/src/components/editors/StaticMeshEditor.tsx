@@ -3,6 +3,7 @@ import { Viewport } from '../viewport/Viewport';
 import { DetailsPanel } from '../panels/DetailsPanel'; // Reusing for now, might need specific one
 import { Entity, ToolType } from '../../types';
 import { useTheme } from '../../ThemeContext';
+import { useLanguage } from '../../LanguageContext';
 
 interface StaticMeshEditorProps {
     // Only minimal props needed for this isolated view
@@ -12,20 +13,21 @@ interface StaticMeshEditorProps {
 
 export const StaticMeshEditor: React.FC<StaticMeshEditorProps> = ({ entityId, onClose }) => {
     const { theme } = useTheme();
+    const { t } = useLanguage();
 
     // Local state for this editor - isolated from the main scene
     // In a real app, this might fetch the mesh data specifically
     const [localEntities, setLocalEntities] = useState<Entity[]>([
         {
             id: 'preview-mesh',
-            name: 'Preview Mesh',
+            name: t('mesh.preview_mesh'),
             type: 'Mesh',
             visible: true,
             transform: { position: { x: 0, y: 0, z: 0 }, rotation: { x: 0, y: 0, z: 0 }, scale: { x: 1, y: 1, z: 1 } }
         },
         {
             id: 'preview-light',
-            name: 'Preview Light',
+            name: t('mesh.preview_light'),
             type: 'Light',
             visible: true,
             transform: { position: { x: 50, y: 50, z: 50 }, rotation: { x: 45, y: 45, z: 0 }, scale: { x: 1, y: 1, z: 1 } }
@@ -64,8 +66,8 @@ export const StaticMeshEditor: React.FC<StaticMeshEditorProps> = ({ entityId, on
                     }}
                 >
                     <div className="p-4 border-b" style={{ borderColor: theme.colors.border.default, color: theme.colors.text.primary }}>
-                        <h3 className="font-bold">Mesh Details</h3>
-                        <p className="text-xs text-muted-foreground mt-2">Editing properties for {entityId}</p>
+                        <h3 className="font-bold">{t('mesh.details')}</h3>
+                        <p className="text-xs text-muted-foreground mt-2">{t('mesh.editing').replace('{id}', entityId)}</p>
                     </div>
                     {/* We can reuse DetailsPanel if it's generic enough, or build a custom one */}
                     <DetailsPanel selectedEntity={localEntities[0]} setEntities={setLocalEntities} />
@@ -80,7 +82,7 @@ export const StaticMeshEditor: React.FC<StaticMeshEditorProps> = ({ entityId, on
                     color: theme.colors.text.secondary
                 }}
             >
-                <span>Path: {entityId}</span>
+                <span>{t('asset.path').replace('{path}', entityId)}</span>
             </div>
         </div>
     );

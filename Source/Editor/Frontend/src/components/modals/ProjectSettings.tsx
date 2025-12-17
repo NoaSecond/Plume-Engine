@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, Monitor, Package, Settings, Info } from 'lucide-react';
 import { useTheme } from '../../ThemeContext';
+import { useLanguage } from '../../LanguageContext';
 
 interface ProjectSettingsProps {
   isOpen: boolean;
@@ -47,6 +48,7 @@ interface PhysicsSettings {
 
 export const ProjectSettings: React.FC<ProjectSettingsProps> = ({ isOpen, onClose }) => {
   const { theme } = useTheme();
+  const { t } = useLanguage();
   // isClosing removed
   const [activeTab, setActiveTab] = useState<'general' | 'rendering' | 'physics' | 'packaging'>('general');
 
@@ -104,10 +106,10 @@ export const ProjectSettings: React.FC<ProjectSettingsProps> = ({ isOpen, onClos
   };
 
   const tabs = [
-    { id: 'general' as const, label: 'General', icon: Settings },
-    { id: 'rendering' as const, label: 'Rendering', icon: Monitor },
-    { id: 'physics' as const, label: 'Physics', icon: Info },
-    { id: 'packaging' as const, label: 'Packaging', icon: Package }
+    { id: 'general' as const, label: t('project.tabs.general'), icon: Settings },
+    { id: 'rendering' as const, label: t('project.tabs.rendering'), icon: Monitor },
+    { id: 'physics' as const, label: t('project.tabs.physics'), icon: Info },
+    { id: 'packaging' as const, label: t('project.tabs.packaging'), icon: Package }
   ];
 
   return (
@@ -167,7 +169,7 @@ export const ProjectSettings: React.FC<ProjectSettingsProps> = ({ isOpen, onClos
                 e.currentTarget.style.backgroundColor = theme.colors.accent.primary;
               }}
             >
-              <span>Save</span>
+              <span>{t('project.save')}</span>
             </button>
           </div>
         </div>
@@ -179,12 +181,12 @@ export const ProjectSettings: React.FC<ProjectSettingsProps> = ({ isOpen, onClos
               {/* Section: Project Info */}
               <div>
                 <h3 className="text-lg font-medium mb-4" style={{ color: theme.colors.text.primary }}>
-                  Project Info
+                  {t('project.info.title')}
                 </h3>
                 <div className="grid grid-cols-1 gap-4 max-w-2xl">
                   <div>
                     <label className="block text-xs font-medium mb-1" style={{ color: theme.colors.text.secondary }}>
-                      Display Name
+                      {t('project.info.name')}
                     </label>
                     <input
                       type="text"
@@ -200,7 +202,7 @@ export const ProjectSettings: React.FC<ProjectSettingsProps> = ({ isOpen, onClos
                   </div>
                   <div>
                     <label className="block text-sm font-medium mb-1" style={{ color: theme.colors.text.secondary }}>
-                      Version
+                      {t('project.info.version')}
                     </label>
                     <input
                       type="text"
@@ -218,7 +220,7 @@ export const ProjectSettings: React.FC<ProjectSettingsProps> = ({ isOpen, onClos
                   </div>
                   <div>
                     <label className="block text-sm font-medium mb-1" style={{ color: theme.colors.text.secondary }}>
-                      Company Name
+                      {t('project.info.company')}
                     </label>
                     <input
                       type="text"
@@ -236,7 +238,7 @@ export const ProjectSettings: React.FC<ProjectSettingsProps> = ({ isOpen, onClos
                   </div>
                   <div>
                     <label className="block text-sm font-medium mb-1" style={{ color: theme.colors.text.secondary }}>
-                      Website
+                      {t('project.info.website')}
                     </label>
                     <input
                       type="url"
@@ -255,7 +257,7 @@ export const ProjectSettings: React.FC<ProjectSettingsProps> = ({ isOpen, onClos
                 </div>
                 <div className="mt-4">
                   <label className="block text-sm font-medium mb-1" style={{ color: theme.colors.text.secondary }}>
-                    Description
+                    {t('project.info.description')}
                   </label>
                   <textarea
                     value={projectInfo.description}
@@ -273,7 +275,7 @@ export const ProjectSettings: React.FC<ProjectSettingsProps> = ({ isOpen, onClos
                 </div>
                 <div className="mt-4">
                   <label className="block text-sm font-medium mb-1" style={{ color: theme.colors.text.secondary }}>
-                    Copyright
+                    {t('project.info.copyright')}
                   </label>
                   <input
                     type="text"
@@ -294,12 +296,12 @@ export const ProjectSettings: React.FC<ProjectSettingsProps> = ({ isOpen, onClos
               <div>
                 <h3 className="text-lg font-medium mb-4 flex items-center" style={{ color: theme.colors.text.primary }}>
                   <Settings size={18} className="mr-2" />
-                  Game Settings
+                  {t('project.game.title')}
                 </h3>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium mb-1" style={{ color: theme.colors.text.secondary }}>
-                      Start Level
+                      {t('project.game.start_level')}
                     </label>
                     <input
                       type="text"
@@ -317,13 +319,13 @@ export const ProjectSettings: React.FC<ProjectSettingsProps> = ({ isOpen, onClos
                   </div>
                   <div>
                     <label className="block text-sm font-medium mb-1" style={{ color: theme.colors.text.secondary }}>
-                      Game Splash Screen
+                      {t('project.game.splash')}
                     </label>
                     <input
                       type="text"
                       value={gameSettings.gameSplashScreen}
                       onChange={(e) => handleGameSettingsChange('gameSplashScreen', e.target.value)}
-                      placeholder="Path to splash screen image"
+                      placeholder={t('project.game.splash_placeholder')}
                       className="w-full px-3 py-2 text-sm rounded border transition-colors"
                       style={{
                         backgroundColor: theme.colors.bg.secondary,
@@ -336,13 +338,13 @@ export const ProjectSettings: React.FC<ProjectSettingsProps> = ({ isOpen, onClos
                   </div>
                   <div>
                     <label className="block text-sm font-medium mb-1" style={{ color: theme.colors.text.secondary }}>
-                      Game Icon
+                      {t('project.game.icon')}
                     </label>
                     <input
                       type="text"
                       value={gameSettings.gameIcon}
                       onChange={(e) => handleGameSettingsChange('gameIcon', e.target.value)}
-                      placeholder="Path to game icon"
+                      placeholder={t('project.game.icon_placeholder')}
                       className="w-full px-3 py-2 text-sm rounded border transition-colors"
                       style={{
                         backgroundColor: theme.colors.bg.secondary,
@@ -355,7 +357,7 @@ export const ProjectSettings: React.FC<ProjectSettingsProps> = ({ isOpen, onClos
                   </div>
                   <div>
                     <label className="block text-sm font-medium mb-1" style={{ color: theme.colors.text.secondary }}>
-                      Fullscreen Mode
+                      {t('project.game.fullscreen')}
                     </label>
                     <select
                       value={gameSettings.fullscreenMode}
@@ -369,16 +371,16 @@ export const ProjectSettings: React.FC<ProjectSettingsProps> = ({ isOpen, onClos
                       onFocus={(e) => e.currentTarget.style.borderColor = theme.colors.accent.primary}
                       onBlur={(e) => e.currentTarget.style.borderColor = theme.colors.border.default}
                     >
-                      <option value="windowed">Windowed</option>
-                      <option value="fullscreen">Fullscreen</option>
-                      <option value="borderless">Borderless Windowed</option>
+                      <option value="windowed">{t('project.game.modes.windowed')}</option>
+                      <option value="fullscreen">{t('project.game.modes.fullscreen')}</option>
+                      <option value="borderless">{t('project.game.modes.borderless')}</option>
                     </select>
                   </div>
                 </div>
                 <div className="mt-4 grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium mb-1" style={{ color: theme.colors.text.secondary }}>
-                      Default Width
+                      {t('project.game.width')}
                     </label>
                     <input
                       type="number"
@@ -397,7 +399,7 @@ export const ProjectSettings: React.FC<ProjectSettingsProps> = ({ isOpen, onClos
                   </div>
                   <div>
                     <label className="block text-sm font-medium mb-1" style={{ color: theme.colors.text.secondary }}>
-                      Default Height
+                      {t('project.game.height')}
                     </label>
                     <input
                       type="number"
@@ -423,12 +425,12 @@ export const ProjectSettings: React.FC<ProjectSettingsProps> = ({ isOpen, onClos
             <div className="space-y-6">
               <h3 className="text-lg font-medium mb-4 flex items-center" style={{ color: theme.colors.text.primary }}>
                 <Monitor size={18} className="mr-2" />
-                Rendering Settings
+                {t('project.rendering.title')}
               </h3>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium mb-1" style={{ color: theme.colors.text.secondary }}>
-                    Graphics API
+                    {t('project.rendering.api')}
                   </label>
                   <select
                     value={renderingSettings.graphicsAPI}
@@ -450,7 +452,7 @@ export const ProjectSettings: React.FC<ProjectSettingsProps> = ({ isOpen, onClos
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-1" style={{ color: theme.colors.text.secondary }}>
-                    Anti-Aliasing
+                    {t('project.rendering.aa')}
                   </label>
                   <select
                     value={renderingSettings.antiAliasing}
@@ -464,17 +466,17 @@ export const ProjectSettings: React.FC<ProjectSettingsProps> = ({ isOpen, onClos
                     onFocus={(e) => e.currentTarget.style.borderColor = theme.colors.accent.primary}
                     onBlur={(e) => e.currentTarget.style.borderColor = theme.colors.border.default}
                   >
-                    <option value="None">None</option>
-                    <option value="FXAA">FXAA</option>
-                    <option value="TAA">TAA</option>
-                    <option value="MSAA x2">MSAA x2</option>
-                    <option value="MSAA x4">MSAA x4</option>
-                    <option value="MSAA x8">MSAA x8</option>
+                    <option value="None">{t('project.options.none')}</option>
+                    <option value="FXAA">{t('project.aa.fxaa')}</option>
+                    <option value="TAA">{t('project.aa.taa')}</option>
+                    <option value="MSAA x2">{t('project.aa.msaa2')}</option>
+                    <option value="MSAA x4">{t('project.aa.msaa4')}</option>
+                    <option value="MSAA x8">{t('project.aa.msaa8')}</option>
                   </select>
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-1" style={{ color: theme.colors.text.secondary }}>
-                    Shadow Quality
+                    {t('project.rendering.shadows')}
                   </label>
                   <select
                     value={renderingSettings.shadowQuality}
@@ -488,15 +490,15 @@ export const ProjectSettings: React.FC<ProjectSettingsProps> = ({ isOpen, onClos
                     onFocus={(e) => e.currentTarget.style.borderColor = theme.colors.accent.primary}
                     onBlur={(e) => e.currentTarget.style.borderColor = theme.colors.border.default}
                   >
-                    <option value="Low">Low</option>
-                    <option value="Medium">Medium</option>
-                    <option value="High">High</option>
-                    <option value="Ultra">Ultra</option>
+                    <option value="Low">{t('project.options.low')}</option>
+                    <option value="Medium">{t('project.options.medium')}</option>
+                    <option value="High">{t('project.options.high')}</option>
+                    <option value="Ultra">{t('project.options.ultra')}</option>
                   </select>
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-1" style={{ color: theme.colors.text.secondary }}>
-                    Texture Quality
+                    {t('project.rendering.textures')}
                   </label>
                   <select
                     value={renderingSettings.textureQuality}
@@ -510,15 +512,15 @@ export const ProjectSettings: React.FC<ProjectSettingsProps> = ({ isOpen, onClos
                     onFocus={(e) => e.currentTarget.style.borderColor = theme.colors.accent.primary}
                     onBlur={(e) => e.currentTarget.style.borderColor = theme.colors.border.default}
                   >
-                    <option value="Low">Low</option>
-                    <option value="Medium">Medium</option>
-                    <option value="High">High</option>
-                    <option value="Ultra">Ultra</option>
+                    <option value="Low">{t('project.options.low')}</option>
+                    <option value="Medium">{t('project.options.medium')}</option>
+                    <option value="High">{t('project.options.high')}</option>
+                    <option value="Ultra">{t('project.options.ultra')}</option>
                   </select>
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-1" style={{ color: theme.colors.text.secondary }}>
-                    Max FPS
+                    {t('project.rendering.fps')}
                   </label>
                   <input
                     type="number"
@@ -538,7 +540,7 @@ export const ProjectSettings: React.FC<ProjectSettingsProps> = ({ isOpen, onClos
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-1" style={{ color: theme.colors.text.secondary }}>
-                    View Distance
+                    {t('project.rendering.distance')}
                   </label>
                   <input
                     type="number"
@@ -569,10 +571,10 @@ export const ProjectSettings: React.FC<ProjectSettingsProps> = ({ isOpen, onClos
                       accentColor: theme.colors.accent.primary
                     }}
                   />
-                  <span>Enable VSync</span>
+                  <span>{t('project.rendering.vsync')}</span>
                 </label>
                 <p className="text-xs mt-1 ml-6" style={{ color: theme.colors.text.muted }}>
-                  Synchronizes rendering with display refresh rate to prevent screen tearing.
+                  {t('project.rendering.vsync_desc')}
                 </p>
               </div>
             </div>
@@ -582,12 +584,12 @@ export const ProjectSettings: React.FC<ProjectSettingsProps> = ({ isOpen, onClos
             <div className="space-y-6">
               <h3 className="text-lg font-medium mb-4 flex items-center" style={{ color: theme.colors.text.primary }}>
                 <Info size={18} className="mr-2" />
-                Physics Engine Settings
+                {t('project.physics.title')}
               </h3>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium mb-1" style={{ color: theme.colors.text.secondary }}>
-                    Physics Engine
+                    {t('project.physics.engine')}
                   </label>
                   <select
                     value={physicsSettings.physicsEngine}
@@ -607,7 +609,7 @@ export const ProjectSettings: React.FC<ProjectSettingsProps> = ({ isOpen, onClos
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-1" style={{ color: theme.colors.text.secondary }}>
-                    Gravity
+                    {t('project.physics.gravity')}
                   </label>
                   <input
                     type="number"
@@ -626,7 +628,7 @@ export const ProjectSettings: React.FC<ProjectSettingsProps> = ({ isOpen, onClos
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-1" style={{ color: theme.colors.text.secondary }}>
-                    Default Material
+                    {t('project.physics.material')}
                   </label>
                   <input
                     type="text"
@@ -663,11 +665,11 @@ export const ProjectSettings: React.FC<ProjectSettingsProps> = ({ isOpen, onClos
           {activeTab === 'packaging' && (
             <div className="space-y-6">
               <h3 className="text-lg font-medium mb-4" style={{ color: theme.colors.text.primary }}>
-                Build & Packaging
+                {t('project.packaging.title')}
               </h3>
               <div>
                 <label className="block text-sm font-medium mb-2" style={{ color: theme.colors.text.secondary }}>
-                  Target Platforms
+                  {t('project.packaging.platforms')}
                 </label>
                 <div className="space-y-2">
                   {['windows', 'linux', 'macos'].map((platform) => (
@@ -684,7 +686,7 @@ export const ProjectSettings: React.FC<ProjectSettingsProps> = ({ isOpen, onClos
                         className="rounded"
                       />
                       <span className="text-sm capitalize" style={{ color: theme.colors.text.primary }}>
-                        {platform}
+                        {t(`project.platform.${platform}`)}
                       </span>
                     </label>
                   ))}

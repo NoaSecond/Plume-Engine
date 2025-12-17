@@ -21,7 +21,9 @@ import ReactFlow, {
     updateEdge
 } from 'reactflow';
 import 'reactflow/dist/style.css';
+import 'reactflow/dist/style.css';
 import { useTheme } from '../../ThemeContext';
+import { useLanguage } from '../../LanguageContext';
 import ResultNode from './MaterialNodes/ResultNode';
 import ColorNode from './MaterialNodes/ColorNode';
 import CommentNode from './MaterialNodes/CommentNode';
@@ -103,15 +105,16 @@ const ToolbarButton = ({ theme, onClick, disabled, forceActive, icon: Icon, labe
 };
 
 const EditorToolbar = ({ theme, onSave, onFitView, onLock, onZoomIn, onZoomOut, isDirty, isInteractive, isSaving, isFitting, isLocking, isZoomingIn, isZoomingOut }: any) => {
+    const { t } = useLanguage();
     return (
         <div style={{ display: 'flex', gap: '8px', padding: '4px' }}>
-            <ToolbarButton theme={theme} onClick={onSave} icon={Save} label="Save" shortcut="Ctrl+S" disabled={!isDirty} forceActive={isSaving} />
+            <ToolbarButton theme={theme} onClick={onSave} icon={Save} label={t('material.save')} shortcut="Ctrl+S" disabled={!isDirty} forceActive={isSaving} />
             <div style={{ width: '1px', background: theme.colors.border.default, margin: '0 4px', height: '24px', alignSelf: 'center' }} />
-            <ToolbarButton theme={theme} onClick={onFitView} icon={Maximize} tooltip="Fit View" shortcut="Ctrl+F" forceActive={isFitting} />
-            <ToolbarButton theme={theme} onClick={onLock} icon={isInteractive ? Unlock : Lock} tooltip={isInteractive ? "Lock Interactivity" : "Unlock Interactivity"} shortcut="Ctrl+L" forceActive={isLocking} active={!isInteractive} />
+            <ToolbarButton theme={theme} onClick={onFitView} icon={Maximize} tooltip={t('material.fit_view')} shortcut="Ctrl+F" forceActive={isFitting} />
+            <ToolbarButton theme={theme} onClick={onLock} icon={isInteractive ? Unlock : Lock} tooltip={isInteractive ? t('material.lock') : t('material.unlock')} shortcut="Ctrl+L" forceActive={isLocking} active={!isInteractive} />
             <div style={{ width: '1px', background: theme.colors.border.default, margin: '0 4px', height: '24px', alignSelf: 'center' }} />
-            <ToolbarButton theme={theme} onClick={onZoomIn} icon={ZoomInIcon} tooltip="Zoom In" shortcut="Scroll Up" forceActive={isZoomingIn} />
-            <ToolbarButton theme={theme} onClick={onZoomOut} icon={ZoomOutIcon} tooltip="Zoom Out" shortcut="Scroll Down" forceActive={isZoomingOut} />
+            <ToolbarButton theme={theme} onClick={onZoomIn} icon={ZoomInIcon} tooltip={t('material.zoom_in')} shortcut="Scroll Up" forceActive={isZoomingIn} />
+            <ToolbarButton theme={theme} onClick={onZoomOut} icon={ZoomOutIcon} tooltip={t('material.zoom_out')} shortcut="Scroll Down" forceActive={isZoomingOut} />
         </div>
     );
 };

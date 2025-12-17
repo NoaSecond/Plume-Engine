@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Search, X, CheckCircle2, Circle } from 'lucide-react';
 import { useTheme } from '../../ThemeContext';
+import { useLanguage } from '../../LanguageContext';
 
 interface PluginInfo {
   id: string;
@@ -21,6 +22,7 @@ interface PluginManagerProps {
 
 export const PluginManager: React.FC<PluginManagerProps> = ({ isOpen, onClose, plugins, onTogglePlugin }) => {
   const { theme } = useTheme();
+  const { t } = useLanguage();
   // plugins state moved to parent
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<'all' | 'enabled' | 'Official' | 'Community'>('all');
@@ -64,7 +66,7 @@ export const PluginManager: React.FC<PluginManagerProps> = ({ isOpen, onClose, p
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4" style={{ color: theme.colors.text.muted }} />
           <input
             type="text"
-            placeholder="Rechercher un plugin..."
+            placeholder={t('plugin.search_placeholder')}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-10 pr-4 py-2 rounded border focus:outline-none transition-colors"
@@ -94,7 +96,7 @@ export const PluginManager: React.FC<PluginManagerProps> = ({ isOpen, onClose, p
               }}
             >
               <div className="flex items-center justify-between">
-                <span>Tous les plugins</span>
+                <span>{t('plugin.all')}</span>
                 <span
                   className="text-xs px-2 py-0.5 rounded"
                   style={{ backgroundColor: theme.colors.bg.tertiary }}
@@ -113,7 +115,7 @@ export const PluginManager: React.FC<PluginManagerProps> = ({ isOpen, onClose, p
               }}
             >
               <div className="flex items-center justify-between">
-                <span>Plugins activés</span>
+                <span>{t('plugin.enabled')}</span>
                 <span
                   className="text-xs px-2 py-0.5 rounded"
                   style={{ backgroundColor: theme.colors.bg.tertiary }}
@@ -129,7 +131,7 @@ export const PluginManager: React.FC<PluginManagerProps> = ({ isOpen, onClose, p
               className="text-xs font-semibold px-3 py-2"
               style={{ color: theme.colors.text.muted }}
             >
-              CATÉGORIES
+              {t('plugin.categories')}
             </div>
 
             <button
@@ -141,7 +143,7 @@ export const PluginManager: React.FC<PluginManagerProps> = ({ isOpen, onClose, p
               }}
             >
               <div className="flex items-center justify-between">
-                <span>Officiels</span>
+                <span>{t('plugin.official')}</span>
                 <span
                   className="text-xs px-2 py-0.5 rounded"
                   style={{ backgroundColor: theme.colors.bg.tertiary }}
@@ -160,7 +162,7 @@ export const PluginManager: React.FC<PluginManagerProps> = ({ isOpen, onClose, p
               }}
             >
               <div className="flex items-center justify-between">
-                <span>Community</span>
+                <span>{t('plugin.community')}</span>
                 <span
                   className="text-xs px-2 py-0.5 rounded"
                   style={{ backgroundColor: theme.colors.bg.tertiary }}
@@ -178,10 +180,10 @@ export const PluginManager: React.FC<PluginManagerProps> = ({ isOpen, onClose, p
             <div className="flex items-center justify-center h-full">
               <div className="text-center">
                 <p className="text-lg" style={{ color: theme.colors.text.muted }}>
-                  No plugins found
+                  {t('plugin.none_found')}
                 </p>
                 <p className="text-sm mt-2" style={{ color: theme.colors.text.disabled }}>
-                  Try modifying your filters or search query
+                  {t('plugin.none_found_detail')}
                 </p>
               </div>
             </div>
@@ -219,7 +221,7 @@ export const PluginManager: React.FC<PluginManagerProps> = ({ isOpen, onClose, p
                               color: theme.colors.accent.primary
                             }}
                           >
-                            Officiel
+                            {t('plugin.official')}
                           </span>
                         )}
                       </div>
@@ -227,7 +229,7 @@ export const PluginManager: React.FC<PluginManagerProps> = ({ isOpen, onClose, p
                         {plugin.description}
                       </p>
                       <p className="text-xs mt-2" style={{ color: theme.colors.text.muted }}>
-                        Par {plugin.author}
+                        {t('plugin.by').replace('{author}', plugin.author)}
                       </p>
                     </div>
 
@@ -247,12 +249,12 @@ export const PluginManager: React.FC<PluginManagerProps> = ({ isOpen, onClose, p
                       {plugin.enabled ? (
                         <>
                           <CheckCircle2 className="w-4 h-4" />
-                          <span>Activé</span>
+                          <span>{t('plugin.activated')}</span>
                         </>
                       ) : (
                         <>
                           <Circle className="w-4 h-4" />
-                          <span>Désactivé</span>
+                          <span>{t('plugin.deactivated')}</span>
                         </>
                       )}
                     </button>

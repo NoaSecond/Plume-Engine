@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import WaveSurfer from 'wavesurfer.js';
 import { useTheme } from '../../ThemeContext';
+import { useLanguage } from '../../LanguageContext';
 import { Play, Pause, Square, Repeat, Volume2, VolumeX, AlertTriangle, SkipBack } from 'lucide-react';
 
 interface SoundViewerProps {
@@ -10,6 +11,7 @@ interface SoundViewerProps {
 
 export const SoundViewer: React.FC<SoundViewerProps> = ({ assetId, name }) => {
     const { theme } = useTheme();
+    const { t } = useLanguage();
     const containerRef = useRef<HTMLDivElement>(null);
     const wavesurferRef = useRef<WaveSurfer | null>(null);
     const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -89,7 +91,7 @@ export const SoundViewer: React.FC<SoundViewerProps> = ({ assetId, name }) => {
             if (!audioEl) return;
 
             console.error("Audio Element Error:", audioEl.error, "Src:", audioEl.src);
-            setErrorMessage("Failed to load audio asset.");
+            setErrorMessage(t('sound.load_error'));
         };
 
         wavesurfer.on('error', onError);
@@ -253,7 +255,7 @@ export const SoundViewer: React.FC<SoundViewerProps> = ({ assetId, name }) => {
                     {!isWaveformAvailable && !errorMessage && (
                         <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
                             <AlertTriangle size={32} className="text-yellow-500 mb-2 opacity-50" />
-                            <div className="text-xs text-muted-foreground opacity-50">Waveform Unavailable (Streamed Asset)</div>
+                            <div className="text-xs text-muted-foreground opacity-50">{t('sound.waveform_unavailable')}</div>
                         </div>
                     )}
 
@@ -275,7 +277,7 @@ export const SoundViewer: React.FC<SoundViewerProps> = ({ assetId, name }) => {
                         <button
                             onClick={rewind}
                             className="p-2 rounded hover:bg-white/10 transition-colors"
-                            title="Rewind (Home)"
+                            title={t('sound.rewind')}
                             disabled={!!errorMessage}
                         >
                             <SkipBack fill="currentColor" size={20} />
@@ -284,7 +286,7 @@ export const SoundViewer: React.FC<SoundViewerProps> = ({ assetId, name }) => {
                         <button
                             onClick={togglePlay}
                             className="p-2 rounded hover:bg-white/10 transition-colors"
-                            title={isPlaying ? "Pause (Space)" : "Play (Space)"}
+                            title={isPlaying ? t('sound.pause') : t('sound.play')}
                             disabled={!!errorMessage}
                         >
                             {isPlaying ? <Pause fill="currentColor" size={20} /> : <Play fill="currentColor" size={20} />}
@@ -292,7 +294,7 @@ export const SoundViewer: React.FC<SoundViewerProps> = ({ assetId, name }) => {
                         <button
                             onClick={stop}
                             className="p-2 rounded hover:bg-white/10 transition-colors"
-                            title="Stop"
+                            title={t('sound.stop')}
                             disabled={!!errorMessage}
                         >
                             <Square fill="currentColor" size={16} />
@@ -303,7 +305,7 @@ export const SoundViewer: React.FC<SoundViewerProps> = ({ assetId, name }) => {
                         <button
                             onClick={toggleLoop}
                             className={`p-2 rounded hover:bg-white/10 transition-colors ${loop ? 'text-blue-400' : ''}`}
-                            title="Toggle Loop (L)"
+                            title={t('sound.loop')}
                             style={{ color: loop ? theme.colors.accent.primary : 'inherit' }}
                         >
                             <Repeat size={16} />
@@ -323,7 +325,7 @@ export const SoundViewer: React.FC<SoundViewerProps> = ({ assetId, name }) => {
                         <button
                             onClick={toggleMute}
                             className="p-1 hover:text-white transition-colors"
-                            title="Mute (M)"
+                            title={t('sound.mute')}
                         >
                             {isMuted || volume === 0 ? <VolumeX size={16} /> : <Volume2 size={16} />}
                         </button>
@@ -349,7 +351,7 @@ export const SoundViewer: React.FC<SoundViewerProps> = ({ assetId, name }) => {
                     color: theme.colors.text.secondary
                 }}
             >
-                <span>Path: {assetId}</span>
+                <span>{t('asset.path').replace('{path}', assetId)}</span>
             </div>
         </div>
     );

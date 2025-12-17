@@ -2,6 +2,7 @@
 import { MenuBarItem } from '../ui/Shared';
 import { PlumeLogo } from '../ui/PlumeLogo';
 import { useTheme } from '../../ThemeContext';
+import { useLanguage } from '../../LanguageContext';
 import { Minus, Square, X } from 'lucide-react';
 
 interface HeaderProps {
@@ -15,6 +16,7 @@ interface HeaderProps {
 
 export const Header: React.FC<HeaderProps> = ({ isPlaying, onSave, onAbout, onPreferences, onPlugins, onProjectSettings }) => {
   const { theme } = useTheme();
+  const { t } = useLanguage();
 
   const handleHeaderMouseDown = (e: React.MouseEvent) => {
     // Allow drag only on header background, not on interactive elements
@@ -73,21 +75,67 @@ export const Header: React.FC<HeaderProps> = ({ isPlaying, onSave, onAbout, onPr
         <span className="ml-0.5" style={{ color: theme.colors.accent.primary }}>ENGINE</span>
       </div>
       <div className="flex space-x-1 h-full items-center">
-        <MenuBarItem label="File" items={['New Level', 'Open Level', 'Save', 'Save As', 'Import Asset', 'Export Project', 'Exit']} onAction={(a) => a === 'Save' && onSave()} />
-        <MenuBarItem label="Edit" items={['Undo', 'Redo', 'Editor Preferences', 'Project Settings']} onAction={(a) => {
-          if (a === 'Editor Preferences') onPreferences();
-          if (a === 'Project Settings') onProjectSettings();
-        }} />
-        <MenuBarItem label="Window" items={['Viewport', 'Outliner', 'Details', 'Content Browser', 'Console']} />
-        <MenuBarItem label="Tools" items={['Plugins', 'Build All']} onAction={(a) => a === 'Plugins' && onPlugins()} />
-        <MenuBarItem label="Help" items={['Website', 'Documentation', 'Repository', 'About']} onAction={(a) => a === 'About' && onAbout()} />
+        <MenuBarItem
+          label={t('menu.file')}
+          items={[
+            t('menu.file.new_level'),
+            t('menu.file.open_level'),
+            t('menu.file.save'),
+            t('menu.file.save_as'),
+            t('menu.file.import_asset'),
+            t('menu.file.export_project'),
+            t('menu.file.exit')
+          ]}
+          onAction={(a) => a === t('menu.file.save') && onSave()}
+        />
+        <MenuBarItem
+          label={t('menu.edit')}
+          items={[
+            t('menu.edit.undo'),
+            t('menu.edit.redo'),
+            t('menu.edit.preferences'),
+            t('menu.edit.project_settings')
+          ]}
+          onAction={(a) => {
+            if (a === t('menu.edit.preferences')) onPreferences();
+            if (a === t('menu.edit.project_settings')) onProjectSettings();
+          }}
+        />
+        <MenuBarItem
+          label={t('menu.window')}
+          items={[
+            t('menu.window.viewport'),
+            t('menu.window.outliner'),
+            t('menu.window.details'),
+            t('menu.window.content_browser'),
+            t('menu.window.console')
+          ]}
+        />
+        <MenuBarItem
+          label={t('menu.tools')}
+          items={[
+            t('menu.tools.plugins'),
+            t('menu.tools.build_all')
+          ]}
+          onAction={(a) => a === t('menu.tools.plugins') && onPlugins()}
+        />
+        <MenuBarItem
+          label={t('menu.help')}
+          items={[
+            t('menu.help.website'),
+            t('menu.help.documentation'),
+            t('menu.help.repository'),
+            t('menu.help.about')
+          ]}
+          onAction={(a) => a === t('menu.help.about') && onAbout()}
+        />
       </div>
       <div className="ml-auto flex items-center gap-2">
         <div className="text-xs font-mono" style={{ color: theme.colors.text.muted }}>
           {isPlaying ? (
-            <span className="animate-pulse" style={{ color: theme.colors.status.success }}>● RUNNING</span>
+            <span className="animate-pulse" style={{ color: theme.colors.status.success }}>● {t('header.running')}</span>
           ) : (
-            <span>EDITOR MODE</span>
+            <span>{t('header.editor_mode')}</span>
           )}
         </div>
         <div className="flex items-center gap-1">
@@ -101,7 +149,7 @@ export const Header: React.FC<HeaderProps> = ({ isPlaying, onSave, onAbout, onPr
             onMouseLeave={(e) => {
               e.currentTarget.style.backgroundColor = 'transparent';
             }}
-            title="Minimize"
+            title={t('header.minimize')}
           >
             <Minus size={16} />
           </button>
@@ -115,7 +163,7 @@ export const Header: React.FC<HeaderProps> = ({ isPlaying, onSave, onAbout, onPr
             onMouseLeave={(e) => {
               e.currentTarget.style.backgroundColor = 'transparent';
             }}
-            title="Maximize/Restore"
+            title={t('header.maximize')}
           >
             <Square size={14} />
           </button>
@@ -131,7 +179,7 @@ export const Header: React.FC<HeaderProps> = ({ isPlaying, onSave, onAbout, onPr
               e.currentTarget.style.backgroundColor = 'transparent';
               e.currentTarget.style.color = theme.colors.text.muted;
             }}
-            title="Close"
+            title={t('header.close')}
           >
             <X size={16} />
           </button>

@@ -6,6 +6,7 @@ import { Toast } from '../ui/Toast';
 import { SimpleModal } from '../ui/SimpleModal';
 import ColorPicker from '../ui/ColorPicker';
 import { useTheme } from '../../ThemeContext';
+import { useLanguage } from '../../LanguageContext';
 interface ContentBrowserProps {
   show: boolean;
   onClose: () => void;
@@ -18,6 +19,7 @@ interface ContentBrowserProps {
 }
 export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClose, onLog, searchQuery: propsSearchQuery, setSearchQuery: propsSetSearchQuery, onOpenAsset, isDocked, onDock }) => {
   const { theme } = useTheme();
+  const { t } = useLanguage();
   // Internal state for search if not controlled
   const [internalSearchQuery, setInternalSearchQuery] = useState('');
   const searchQuery = propsSearchQuery !== undefined ? propsSearchQuery : internalSearchQuery;
@@ -998,7 +1000,7 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
       >
         <div className="flex items-center space-x-2">
           <span className="font-bold text-sm" style={{ color: theme.colors.text.primary }}>
-            Content Browser
+            {t('browser.title')}
           </span>
 
           <div className="flex space-x-1 ml-4" style={{ color: theme.colors.text.secondary }}>
@@ -1020,7 +1022,7 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
             <button
               className="hover:bg-opacity-20 hover:bg-white rounded p-1 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               disabled={true}
-              title="Forward (not implemented)"
+              title={t('browser.forward_title')}
             >
               <ChevronRight size={16} />
             </button>
@@ -1042,7 +1044,7 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
             <input
               ref={searchInputRef}
               type="text"
-              placeholder="Filter assets... (Ctrl+K)"
+              placeholder={t('browser.search_placeholder')}
               className="bg-transparent border-none outline-none text-xs w-full"
               style={{ color: theme.colors.text.primary }}
               value={searchQuery}
@@ -1066,18 +1068,18 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
                 e.currentTarget.style.borderColor = theme.colors.border.default;
               }}
               onClick={onDock}
-              title="Open a new permanent docked Content Browser"
+              title={t('browser.docker_title')}
             >
               <AppWindow size={14} />
-              Docker
+              {t('browser.docker')}
             </button>
           )}
           <div className="flex items-center mx-2 bg-black/20 rounded p-0.5">
-            <button className="p-1 hover:bg-white/10 rounded" onClick={handleZoomOut} title="Zoom Out (Ctrl+Scroll Down)">
+            <button className="p-1 hover:bg-white/10 rounded" onClick={handleZoomOut} title={t('browser.zoom_out')}>
               <Minus size={12} style={{ color: theme.colors.text.secondary }} />
             </button>
             <span className="text-[10px] mx-1 w-8 text-center" style={{ color: theme.colors.text.muted }}>{Math.round(zoomLevel * 100)}%</span>
-            <button className="p-1 hover:bg-white/10 rounded" onClick={handleZoomIn} title="Zoom In (Ctrl+Scroll Up)">
+            <button className="p-1 hover:bg-white/10 rounded" onClick={handleZoomIn} title={t('browser.zoom_in')}>
               <Plus size={12} style={{ color: theme.colors.text.secondary }} />
             </button>
           </div>
@@ -1097,7 +1099,7 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
             onClick={handleImport}
           >
             <Upload size={14} />
-            Import
+            {t('browser.import')}
           </button>
           <button
             className="p-1 rounded ml-2 transition-colors"
@@ -1187,7 +1189,7 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
             >
               <div style={{ color: theme.colors.text.primary }} className="text-center">
                 <Upload size={32} className="mx-auto mb-2" />
-                <div className="text-sm font-medium">Drop files to import</div>
+                <div className="text-sm font-medium">{t('browser.drop_files')}</div>
               </div>
             </div>
           )}
@@ -1343,24 +1345,24 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
                 y={ctxY}
                 direction="up"
                 items={(ctxType === 'empty' ? [
-                  { id: 'create_folder', label: 'Create Folder' },
-                  { id: 'open_in_explorer', label: 'Open In Explorer' },
-                  { id: 'paste', label: 'Paste', disabled: clipboard == null },
-                  { id: 'import', label: 'Import' },
+                  { id: 'create_folder', label: t('browser.context.create_folder') },
+                  { id: 'open_in_explorer', label: t('browser.context.open_explorer') },
+                  { id: 'paste', label: t('browser.context.paste'), disabled: clipboard == null },
+                  { id: 'import', label: t('browser.context.import') },
                   { id: 'sep1', type: 'separator' },
-                  { id: 'create_material', label: 'Create Material' },
-                  { id: 'create_level', label: 'Create Level' }
+                  { id: 'create_material', label: t('browser.context.create_material') },
+                  { id: 'create_level', label: t('browser.context.create_level') }
                 ] : ctxType === 'folder' ? [
-                  { id: 'change_color', label: 'Change Color' },
-                  { id: 'rename', label: 'Rename' },
-                  { id: 'delete', label: 'Delete' },
-                  { id: 'duplicate', label: 'Duplicate' },
-                  { id: 'copy', label: 'Copy' }
+                  { id: 'change_color', label: t('browser.context.change_color') },
+                  { id: 'rename', label: t('browser.context.rename') },
+                  { id: 'delete', label: t('browser.context.delete') },
+                  { id: 'duplicate', label: t('browser.context.duplicate') },
+                  { id: 'copy', label: t('browser.context.copy') }
                 ] : [
-                  { id: 'delete', label: 'Delete' },
-                  { id: 'rename', label: 'Rename' },
-                  { id: 'duplicate', label: 'Duplicate' },
-                  { id: 'copy', label: 'Copy' }
+                  { id: 'delete', label: t('browser.context.delete') },
+                  { id: 'rename', label: t('browser.context.rename') },
+                  { id: 'duplicate', label: t('browser.context.duplicate') },
+                  { id: 'copy', label: t('browser.context.copy') }
                 ]) as ContextMenuItem[]}
                 onSelect={(id) => {
                   if (id === 'create_folder') createFolder();
@@ -1448,9 +1450,9 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
           deletePending && (
             <div style={{ position: 'absolute', right: 16, bottom: 16, zIndex: 60 }}>
               <div className="flex items-center space-x-2 p-3 rounded shadow" style={{ backgroundColor: theme.colors.bg.secondary, border: `1px solid ${theme.colors.border.default}` }}>
-                <div className="text-sm" style={{ color: theme.colors.text.primary }}>Delete "{deletePending.name}"?</div>
-                <button className="px-3 py-1 rounded text-sm" style={{ backgroundColor: '#ef4444', color: '#fff' }} onClick={confirmDeleteNow}>Delete</button>
-                <button className="px-3 py-1 rounded text-sm" style={{ backgroundColor: theme.colors.bg.elevated, color: theme.colors.text.primary }} onClick={cancelDelete}>Cancel</button>
+                <div className="text-sm" style={{ color: theme.colors.text.primary }}>{t('browser.delete_confirm').replace('{name}', deletePending.name)}</div>
+                <button className="px-3 py-1 rounded text-sm" style={{ backgroundColor: '#ef4444', color: '#fff' }} onClick={confirmDeleteNow}>{t('browser.delete')}</button>
+                <button className="px-3 py-1 rounded text-sm" style={{ backgroundColor: theme.colors.bg.elevated, color: theme.colors.text.primary }} onClick={cancelDelete}>{t('browser.cancel')}</button>
               </div>
             </div>
           )
