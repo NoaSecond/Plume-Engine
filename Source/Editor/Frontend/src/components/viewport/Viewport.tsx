@@ -88,7 +88,9 @@ export const Viewport: React.FC<ViewportProps> = ({ entities, selectedId, setSel
             });
           }
         }
-      } catch (e) { }
+      } catch (e) {
+        console.error("Error in camera tick:", e);
+      }
       rafId = requestAnimationFrame(tick);
     };
     rafId = requestAnimationFrame(tick);

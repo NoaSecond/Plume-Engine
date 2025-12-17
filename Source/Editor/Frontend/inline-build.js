@@ -1,5 +1,5 @@
 import fs from 'fs/promises';
-import { existsSync } from 'fs'; // Keep existsSync for simple checks or use stat, but fs/promises doesn't have exists
+
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -23,7 +23,7 @@ async function build() {
         const hrefMatch = attrs.match(/href=["']([^"']+)["']/);
         if (hrefMatch) {
           const cssPath = path.join(distDir, hrefMatch[1]);
-          if (existsSync(cssPath)) {
+          if (await fileExists(cssPath)) {
             const css = await fs.readFile(cssPath, 'utf-8');
             html = html.replace(m[0], () => `<style>${css}</style>`);
             await fs.unlink(cssPath).catch(() => { });
@@ -42,7 +42,7 @@ async function build() {
         const srcMatch = attrs.match(/src=["']([^"']+)["']/);
         if (srcMatch) {
           const jsPath = path.join(distDir, srcMatch[1]);
-          if (existsSync(jsPath)) {
+          if (await fileExists(jsPath)) {
             const js = await fs.readFile(jsPath, 'utf-8');
             html = html.replace(m[0], () => `<script type="module">${js}</script>`);
             await fs.unlink(jsPath).catch(() => { });
@@ -54,7 +54,7 @@ async function build() {
     await fs.writeFile(htmlFile, html);
 
     const assetsDir = path.join(distDir, 'assets');
-    if (existsSync(assetsDir)) {
+    if (await fileExists(assetsDir)) {
       const files = await fs.readdir(assetsDir);
       if (files.length === 0) {
         await fs.rmdir(assetsDir);
@@ -64,6 +64,15 @@ async function build() {
   } catch (err) {
     console.error('Error during inline build:', err);
     process.exit(1);
+  }
+}
+
+async function fileExists(path) {
+  try {
+    await fs.access(path);
+    return true;
+  } catch {
+    return false;
   }
 }
 

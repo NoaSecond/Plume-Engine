@@ -63,45 +63,51 @@ export const AssetGrid: React.FC<AssetGridProps> = ({
                     // INLINE RENAME RENDERING
                     const type = a.type ? a.type.toLowerCase() : '';
                     const name = a.name ? a.name.toLowerCase() : '';
-                    let Icon = FileIcon;
-                    let color = theme.colors.text.secondary;
+                    // Helper for icon and color
+                    const getAssetConfig = (type: string, name: string, metaColor?: string) => {
+                        let Icon = FileIcon;
+                        let color = theme.colors.text.secondary;
 
-                    if (type === 'folder') {
-                        Icon = Folder;
-                        color = a.meta?.color ? (a.meta.color.startsWith('#') ? a.meta.color : ('#' + a.meta.color)) : '#eab308';
-                    }
-                    else if (type === 'staticmesh' || type === 'mesh' || name.endsWith('.plume_mesh') || name.endsWith('.fbx') || name.endsWith('.obj')) {
-                        Icon = Box;
-                        color = "#5DE2E7";
-                    }
-                    else if (type === 'texture' || type === 'image' || name.endsWith('.png') || name.endsWith('.jpg') || name.endsWith('.tga')) {
-                        Icon = ImageIcon;
-                        color = "#D05C5E";
-                    }
-                    else if (type === 'soundwave' || type === 'sound' || name.endsWith('.wav') || name.endsWith('.mp3')) {
-                        Icon = Music;
-                        color = "#CC6CE7";
-                    }
-                    else if (type === 'material' || name.endsWith('.plumematerial')) {
-                        Icon = Layers;
-                        color = "#7DDA58";
-                    }
-                    else if (type === 'level' || type === 'map' || name.endsWith('.plumemap') || name.endsWith('.map')) {
-                        Icon = Globe;
-                        color = "#FE9900";
-                    }
-                    else if (type === 'skeletalmesh' || name.endsWith('.plumeskel')) {
-                        Icon = Bone;
-                        color = "#FFECA1";
-                    }
-                    else if (type === 'animationsequence' || type === 'anim' || name.endsWith('.plumeanim')) {
-                        Icon = Film;
-                        color = "#BFD641";
-                    }
-                    else if (type === 'script' || name.endsWith('.ts') || name.endsWith('.js')) {
-                        Icon = FileCode;
-                        color = "#22c55e";
-                    }
+                        if (type === 'folder') {
+                            Icon = Folder;
+                            color = metaColor ? (metaColor.startsWith('#') ? metaColor : '#' + metaColor) : '#eab308';
+                        }
+                        else if (['staticmesh', 'mesh'].includes(type) || name.endsWith('.plume_mesh') || name.endsWith('.fbx') || name.endsWith('.obj')) {
+                            Icon = Box;
+                            color = "#5DE2E7";
+                        }
+                        else if (['texture', 'image'].includes(type) || name.endsWith('.png') || name.endsWith('.jpg') || name.endsWith('.tga')) {
+                            Icon = ImageIcon;
+                            color = "#D05C5E";
+                        }
+                        else if (['soundwave', 'sound'].includes(type) || name.endsWith('.wav') || name.endsWith('.mp3')) {
+                            Icon = Music;
+                            color = "#CC6CE7";
+                        }
+                        else if (type === 'material' || name.endsWith('.plumematerial')) {
+                            Icon = Layers;
+                            color = "#7DDA58";
+                        }
+                        else if (['level', 'map'].includes(type) || name.endsWith('.plumemap') || name.endsWith('.map')) {
+                            Icon = Globe;
+                            color = "#FE9900";
+                        }
+                        else if (type === 'skeletalmesh' || name.endsWith('.plumeskel')) {
+                            Icon = Bone;
+                            color = "#FFECA1";
+                        }
+                        else if (['animationsequence', 'anim'].includes(type) || name.endsWith('.plumeanim')) {
+                            Icon = Film;
+                            color = "#BFD641";
+                        }
+                        else if (type === 'script' || name.endsWith('.ts') || name.endsWith('.js')) {
+                            Icon = FileCode;
+                            color = "#22c55e";
+                        }
+                        return { Icon, color };
+                    };
+
+                    const { Icon, color } = getAssetConfig(type, name, a.meta?.color);
 
                     const baseSize = 96;
                     const size = Math.round(baseSize * zoomLevel);

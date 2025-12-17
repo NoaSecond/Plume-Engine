@@ -65,7 +65,9 @@ const TreeNode: React.FC<{ node: any; depth: number } & Omit<FolderTreeProps, 'n
                 el.style.maxHeight = '0px';
                 el.style.opacity = '0';
             }
-        } catch (e) { }
+        } catch (e) {
+            // Element might operate in a detached state or during rapid updates
+        }
     }, [isExpanded, visibleChildren]);
 
     // Icon logic

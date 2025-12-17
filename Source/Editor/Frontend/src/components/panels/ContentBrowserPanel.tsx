@@ -251,13 +251,22 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
           __webview.postMessage({ action: 'list-content', path: 'Content' });
         }
       }
-    } catch (e) { }
+    } catch (e) {
+      console.warn("Failed to parse modal action:", e);
+    }
     setModalAction(null);
   };
 
   // Close context menu on click
   const handleContainerMouseDown = (e: React.MouseEvent) => {
     if (e.button === 0) setCtxVisible(false);
+  };
+
+  // Helper to get initial color safely
+  const getInitialColor = () => {
+    if (!colorPicker?.target?.meta?.color) return '#ffffff';
+    const c = colorPicker.target.meta.color;
+    return c.startsWith('#') ? c : '#' + c;
   };
 
   return (
@@ -538,7 +547,7 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
         {colorPicker && colorPicker.open && (
           <div style={{ position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%, -50%)', zIndex: 9999 }}>
             <ColorPicker
-              initial={(colorPicker.target && colorPicker.target.meta && colorPicker.target.meta.color) ? (colorPicker.target.meta.color.startsWith('#') ? colorPicker.target.meta.color : ('#' + colorPicker.target.meta.color)) : '#ffffff'}
+              initial={getInitialColor()}
               onPick={(hex) => {
                 const targetPath = (colorPicker.target as any).path;
                 // Update Browser hook folderTree if needed (recursive update)

@@ -202,12 +202,26 @@ export const AssetTile = ({ id, name, type, selected = false, onClick, onDoubleC
       const mcol: string = typeof meta.color === 'string' ? (meta.color as string) : '';
       if (mcol.length > 0) finalColor = mcol.startsWith('#') ? mcol : ('#' + mcol);
     }
-  } catch (e) { }
+  } catch (e) {
+    console.warn("Failed to parse meta color:", e);
+  }
 
   const displayName = name.replace(/\.(plumeasset|plume_mesh|fbx|obj|gltf|glb|png|jpg|jpeg|tga|bmp|wav|mp3|ogg|plumematerial|plumemap|plumeskel|plumeanim)$/i, '');
 
   const baseSize = 96; // w-24 equivalent roughly
   const size = Math.round(baseSize * scale);
+
+  const isMetaFile = name === '.plume_meta' || name.endsWith('.plume_meta');
+  const isFolder = type === 'folder';
+
+  // Determine styles based on state
+  const fill = isFolder ? 'none' : (isMetaFile ? finalColor : "none");
+  const stroke = isFolder || isMetaFile ? finalColor : finalColor;
+  const strokeWidth = isFolder || isMetaFile ? 1.5 : 2;
+
+  const textBgColor = selected
+    ? (theme.name === 'feather-light' ? theme.colors.accent.primary : 'transparent')
+    : 'transparent';
 
   return (
     <div
@@ -249,16 +263,16 @@ export const AssetTile = ({ id, name, type, selected = false, onClick, onDoubleC
         <Icon
           size={Math.round(32 * scale)}
           color={finalColor}
-          fill={type === 'folder' ? 'none' : (name === '.plume_meta' || name.endsWith('.plume_meta') ? finalColor : "none")}
-          stroke={type === 'folder' ? finalColor : (name === '.plume_meta' || name.endsWith('.plume_meta') ? finalColor : finalColor)}
-          strokeWidth={type === 'folder' || name === '.plume_meta' || name.endsWith('.plume_meta') ? 1.5 : 2}
+          fill={fill}
+          stroke={stroke}
+          strokeWidth={strokeWidth}
         />
       </div>
       <span
         className="text-[10px] text-center w-full px-1 rounded break-words whitespace-normal"
         style={{
           color: selected ? '#FFFFFF' : theme.colors.text.secondary,
-          backgroundColor: selected ? (theme.name === 'feather-light' ? theme.colors.accent.primary : 'transparent') : 'transparent', // Ensure contrast if light theme
+          backgroundColor: textBgColor,
           textShadow: selected ? '0px 1px 2px rgba(0,0,0,0.8)' : 'none', // Strong shadow for white text visibility
           fontWeight: 'normal',
           display: '-webkit-box',

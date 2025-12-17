@@ -250,7 +250,7 @@ export const Gizmo3D: React.FC<Gizmo3DProps> = ({ rotation, size = 80 }) => {
         if (labelXRef.current) { labelXRef.current.style.left = `${posX[0]}px`; labelXRef.current.style.top = `${posX[1]}px`; }
         if (labelYRef.current) { labelYRef.current.style.left = `${posY[0]}px`; labelYRef.current.style.top = `${posY[1]}px`; }
         if (labelZRef.current) { labelZRef.current.style.left = `${posZ[0]}px`; labelZRef.current.style.top = `${posZ[1]}px`; }
-      } catch (e) { /* ignore */ }
+      } catch (e) { console.warn("Gizmo3D projection error:", e); }
     };
 
     const resizeCanvasToDisplaySize = (canvas: HTMLCanvasElement, gl: WebGLRenderingContext) => {
@@ -262,7 +262,15 @@ export const Gizmo3D: React.FC<Gizmo3DProps> = ({ rotation, size = 80 }) => {
 
     render();
 
-    return () => { cancelAnimationFrame(ra); try { if (posBuf) gl.deleteBuffer(posBuf); if (idxBuf) gl.deleteBuffer(idxBuf); } catch (e) { } };
+    return () => {
+      cancelAnimationFrame(ra);
+      try {
+        if (posBuf) gl.deleteBuffer(posBuf);
+        if (idxBuf) gl.deleteBuffer(idxBuf);
+      } catch (e) {
+        console.warn("Error cleaning up Gizmo3D buffers:", e);
+      }
+    };
   }, []);
 
   const wrapperStyle: React.CSSProperties = { position: 'relative', width: size + 'px', height: size + 'px', pointerEvents: 'none' };
