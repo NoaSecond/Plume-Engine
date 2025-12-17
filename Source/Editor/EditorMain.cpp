@@ -516,6 +516,7 @@ void InitWebView(const std::string& htmlPath) {
                             // Register asset:// protocol handler
                             g_app.webview->AddWebResourceRequestedFilter(L"asset://*", COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL);
                             g_app.webview->AddWebResourceRequestedFilter(L"https://plume-assets/*", COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL);
+                            g_app.webview->AddWebResourceRequestedFilter(L"http://plume-assets/*", COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL);
                             EventRegistrationToken token;
                             g_app.webview->add_WebResourceRequested(
                                 Callback<ICoreWebView2WebResourceRequestedEventHandler>(
@@ -528,18 +529,23 @@ void InitWebView(const std::string& htmlPath) {
                                         std::wstring wuri(uri);
                                         CoTaskMemFree(uri);
 
-                                        // Parse URI: asset://Content/File.plumeasset OR https://plume-assets/Content/File
+                                        // Parse URI: asset://Content/File.plumeasset OR https://plume-assets/Content/File OR http://
                                         // path part starts after asset:// or https://plume-assets/
                                         size_t schemePos = wuri.find(L"asset://");
                                         std::wstring relPathW;
                                         if (schemePos != std::wstring::npos) {
                                             relPathW = wuri.substr(schemePos + 8);
                                         } else {
-                                            schemePos = wuri.find(L"https://plume-assets/");
+                                            schemePos = wuri.find(L"http://plume-assets/");
                                             if (schemePos != std::wstring::npos) {
-                                                relPathW = wuri.substr(schemePos + 21);
+                                                relPathW = wuri.substr(schemePos + 20); // http://plume-assets/ is 20 chars
                                             } else {
-                                                return S_OK;
+                                                schemePos = wuri.find(L"https://plume-assets/");
+                                                if (schemePos != std::wstring::npos) {
+                                                    relPathW = wuri.substr(schemePos + 21);
+                                                } else {
+                                                    return S_OK;
+                                                }
                                             }
                                         }
                                         // Convert to narrow string for filesystem

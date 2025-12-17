@@ -41,18 +41,18 @@ export const SoundViewer: React.FC<SoundViewerProps> = ({ assetId, name }) => {
         const audio = new Audio();
         audioRef.current = audio;
 
-        // Construct URL using https://plume-assets/ protocol for Fetch support
+        // Construct URL using http://plume-assets/ protocol for Fetch support (http avoids SSL issues locally)
         // We do NOT replace extension because the backend likely expects the .plumeasset ID
         let url = assetId;
 
         // Ensure protocol prefix
         if (url.startsWith('asset://')) {
-            // Replace asset:// with https://plume-assets/
-            url = url.replace('asset://', 'https://plume-assets/');
-        } else if (!url.startsWith('https://plume-assets/')) {
-            // If assetId is just "Content/File.plumeasset", prepend https://plume-assets/
+            // Replace asset:// with http://plume-assets/
+            url = url.replace('asset://', 'http://plume-assets/');
+        } else if (!url.startsWith('http://plume-assets/') && !url.startsWith('https://plume-assets/')) {
+            // If assetId is just "Content/File.plumeasset", prepend http://plume-assets/
             const cleanPath = url.startsWith('/') ? url.substring(1) : url;
-            url = `https://plume-assets/${cleanPath}`;
+            url = `http://plume-assets/${cleanPath}`;
         }
 
         console.log(`SoundViewer setup for: ${url} (Original: ${assetId})`);

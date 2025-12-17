@@ -154,6 +154,9 @@ export function useNativeBridge({
         }
 
         // Poll for rendering data updates every 500ms
+        // Disabled legacy polling to prevent ERR_FILE_NOT_FOUND spam. 
+        // Future implementation should use postMessage for camera/fps sync.
+        /*
         const renderingInterval = setInterval(() => {
             const script = document.createElement('script');
             script.src = './rendering_data.js?t=' + Date.now();
@@ -213,7 +216,10 @@ export function useNativeBridge({
             };
             document.body.appendChild(script);
         }, 500);
+        */
 
-        return () => clearInterval(renderingInterval);
+        return () => {
+            // clearInterval(renderingInterval); 
+        };
     }, [addLog, setPlugins, setShowFPS, showFPSRef, setVsyncEnabled, setMaxFpsCap, setRenderingAPI, setFpsValue, setCameraTransform, setEntities]);
 }
