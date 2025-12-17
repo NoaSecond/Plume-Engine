@@ -182,55 +182,118 @@ function ColorPreview({ label, color }: { label: string; color: string }) {
 function ShortcutSettings() {
   const { theme } = useTheme();
 
-  const shortcuts = [
-    { action: 'Save', keys: 'Ctrl + S' },
-    { action: 'Open Content Browser', keys: 'Ctrl + Space' },
-    { action: 'Search in Content Browser', keys: 'Ctrl + K' },
-    { action: 'Select All (Content Browser)', keys: 'Ctrl + A' },
-    { action: 'Copy', keys: 'Ctrl + C' },
-    { action: 'Paste', keys: 'Ctrl + V' },
-    { action: 'Rename', keys: 'F2' },
-    { action: 'Duplicate', keys: 'Ctrl + D' },
-    { action: 'Delete', keys: 'Delete' },
-    { action: 'Confirm Delete', keys: 'Enter' },
-    { action: 'Cancel Delete', keys: 'Escape' },
-    { action: 'Clear Console', keys: 'Ctrl + L' },
-    { action: 'Toggle Console', keys: 'Ctrl + I' },
-    { action: 'Play', keys: 'F5' },
-    { action: 'Stop', keys: 'Shift + F5' },
+  const shortcutGroups = [
+    {
+      category: 'General',
+      items: [
+        { action: 'Save', keys: 'Ctrl + S' },
+        { action: 'Copy', keys: 'Ctrl + C' },
+        { action: 'Paste', keys: 'Ctrl + V' },
+        { action: 'Undo', keys: 'Ctrl + Z' },
+        { action: 'Redo', keys: 'Ctrl + Y' },
+      ]
+    },
+    {
+      category: 'Content Browser',
+      items: [
+        { action: 'Open / Toggle', keys: 'Ctrl + Space' },
+        { action: 'Search', keys: 'Ctrl + K' },
+        { action: 'Select All', keys: 'Ctrl + A' },
+        { action: 'Rename Asset', keys: 'F2' },
+        { action: 'Duplicate Asset', keys: 'Ctrl + D' },
+        { action: 'Delete Asset', keys: 'Delete' },
+      ]
+    },
+    {
+      category: 'Console',
+      items: [
+        { action: 'Toggle Console', keys: 'Ctrl + I' },
+        { action: 'Clear Output', keys: 'Ctrl + L' },
+      ]
+    },
+    {
+      category: 'Material Editor',
+      items: [
+        { action: 'Align Nodes Vertically', keys: 'Q' },
+        { action: 'Create Comment', keys: 'Ctrl + /' },
+        { action: 'Fit View', keys: 'Ctrl + F' },
+        { action: 'Lock/Unlock Interactivity', keys: 'Ctrl + L' },
+        { action: 'Zoom In', keys: 'Ctrl + +' },
+        { action: 'Zoom Out', keys: 'Ctrl + -' },
+      ]
+    },
+    {
+      category: 'Audio Preview',
+      items: [
+        { action: 'Play / Pause', keys: 'Space' },
+        { action: 'Toggle Loop', keys: 'L' },
+        { action: 'Mute', keys: 'M' },
+        { action: 'Rewind', keys: 'Backspace / Home' }
+      ]
+    },
+    {
+      category: 'Viewport',
+      items: [
+        { action: 'Movement', keys: 'Z, Q, S, D / Arrow Keys' },
+        { action: 'Elevation', keys: 'Shift (Up), Ctrl (Down)' },
+        { action: 'Roll', keys: 'A, E' },
+        { action: 'Look', keys: 'Right Click + Mouse' }
+      ]
+    },
+    {
+      category: 'Simulation',
+      items: [
+        { action: 'Play', keys: 'F5' },
+        { action: 'Stop', keys: 'Shift + F5' },
+      ]
+    }
   ];
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <div>
         <h3 className="text-base font-semibold mb-3" style={{ color: theme.colors.text.primary }}>
           Keyboard Shortcuts
         </h3>
         <p className="text-sm mb-4" style={{ color: theme.colors.text.muted }}>
-          List of keyboard shortcuts available in the editor.
+          List of keyboard shortcuts arranged by category.
         </p>
       </div>
 
-      <div className="space-y-2">
-        {shortcuts.map((shortcut, index) => (
-          <div
-            key={index}
-            className="flex items-center justify-between p-3 rounded"
-            style={{ backgroundColor: theme.colors.bg.secondary }}
-          >
-            <span className="text-sm" style={{ color: theme.colors.text.primary }}>
-              {shortcut.action}
-            </span>
-            <span
-              className="text-xs font-mono px-2 py-1 rounded"
-              style={{
-                backgroundColor: theme.colors.bg.elevated,
-                color: theme.colors.text.secondary,
-                border: `1px solid ${theme.colors.border.default}`
-              }}
-            >
-              {shortcut.keys}
-            </span>
+      <div className="space-y-6">
+        {shortcutGroups.map((group, groupIndex) => (
+          <div key={groupIndex} className="space-y-3">
+            <h4 className="text-sm font-medium border-b pb-1" style={{
+              color: theme.colors.text.secondary,
+              borderColor: theme.colors.border.subtle || theme.colors.border.default
+            }}>
+              {group.category}
+            </h4>
+            <div className="space-y-1">
+              {group.items.map((shortcut, index) => (
+                <div
+                  key={index}
+                  className="flex items-center justify-between py-2 px-2 hover:bg-opacity-50 rounded"
+                  style={{
+                    backgroundColor: index % 2 === 0 ? 'transparent' : theme.colors.bg.secondary
+                  }}
+                >
+                  <span className="text-sm" style={{ color: theme.colors.text.primary }}>
+                    {shortcut.action}
+                  </span>
+                  <span
+                    className="text-xs font-mono px-2 py-1 rounded min-w-[30px] text-center"
+                    style={{
+                      backgroundColor: theme.colors.bg.elevated,
+                      color: theme.colors.text.secondary,
+                      border: `1px solid ${theme.colors.border.default}`
+                    }}
+                  >
+                    {shortcut.keys}
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
         ))}
       </div>
