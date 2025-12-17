@@ -17,7 +17,8 @@ import ReactFlow, {
     applyNodeChanges,
     applyEdgeChanges,
     Panel,
-    EdgeChange
+    EdgeChange,
+    updateEdge
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { useTheme } from '../../ThemeContext';
@@ -54,7 +55,7 @@ const initialNodes: Node[] = [
 ];
 
 const initialEdges: Edge[] = [
-    { id: 'e2-1', source: '2', target: '1', targetHandle: 'base-color', animated: true },
+    { id: 'e2-1', source: '2', target: '1', targetHandle: 'base-color', animated: false },
 ];
 
 const ToolbarButton = ({ theme, onClick, disabled, forceActive, icon: Icon, label, tooltip, shortcut, active: externalActive }: any) => {
@@ -217,8 +218,60 @@ export const MaterialEditor: React.FC<MaterialEditorProps> = ({ assetId, name, o
         texture: TextureNode
     }), []);
 
+    // Dynamic Edge Styling: Solid if path to Result, Dashed otherwise
+    React.useEffect(() => {
+        const resultNode = nodes.find(n => n.type === 'result');
+        if (!resultNode) return;
+
+        // Build adjacency list (Target -> EdgeIDs) for backward traversal
+        const targetToEdges = new Map<string, string[]>();
+        edges.forEach(edge => {
+            const existing = targetToEdges.get(edge.target) || [];
+            existing.push(edge.id);
+            targetToEdges.set(edge.target, existing);
+        });
+
+        const reachableEdgeIds = new Set<string>();
+        const stack = [resultNode.id];
+        const visitedNodes = new Set<string>([resultNode.id]);
+
+        while (stack.length > 0) {
+            const nodeId = stack.pop()!;
+            const incomingEdgeIds = targetToEdges.get(nodeId) || [];
+
+            incomingEdgeIds.forEach(edgeId => {
+                if (!reachableEdgeIds.has(edgeId)) {
+                    reachableEdgeIds.add(edgeId);
+                    const edge = edges.find(e => e.id === edgeId);
+                    if (edge && !visitedNodes.has(edge.source)) {
+                        visitedNodes.add(edge.source);
+                        stack.push(edge.source);
+                    }
+                }
+            });
+        }
+
+        let hasChanges = false;
+        const newEdges = edges.map(edge => {
+            const isReachable = reachableEdgeIds.has(edge.id);
+            // If reachable -> Solid (animated: false). If not -> Dashed (animated: true).
+            const shouldBeAnimated = !isReachable;
+            const strokeStyle = { stroke: 'url(#edge-gradient)', strokeWidth: 2 };
+
+            if (edge.animated !== shouldBeAnimated || edge.style?.stroke !== 'url(#edge-gradient)') {
+                hasChanges = true;
+                return { ...edge, animated: shouldBeAnimated, style: strokeStyle };
+            }
+            return edge;
+        });
+
+        if (hasChanges) {
+            setEdges(newEdges);
+        }
+    }, [edges, nodes, setEdges]);
+
     // Menu States
-    const [menu, setMenu] = useState<{ x: number, y: number, isOpen: boolean, connectStartNode?: string, connectStartHandle?: string } | null>(null);
+    const [menu, setMenu] = useState<{ x: number, y: number, isOpen: boolean, connectStartNode?: string, connectStartHandle?: string, connectStartType?: string, pendingEdges?: Edge[], isReconnecting?: boolean, tempNodeId?: string } | null>(null);
     const [nodeMenu, setNodeMenu] = useState<{ x: number, y: number, node: Node } | null>(null);
 
     const onConnect = useCallback((params: Connection) => {
@@ -226,27 +279,137 @@ export const MaterialEditor: React.FC<MaterialEditorProps> = ({ assetId, name, o
         setEdges((eds) => addEdge(params, eds));
     }, [setEdges, setDirty]);
 
-    const onConnectStart = useCallback((_event: any, { nodeId, handleId }: any) => {
-        setMenu(prev => (prev ? { ...prev, connectStartNode: nodeId, connectStartHandle: handleId } : { x: 0, y: 0, isOpen: false, connectStartNode: nodeId, connectStartHandle: handleId }));
+    const edgeUpdateSuccessful = useRef(true);
+    const connectStartParams = useRef<{ nodeId: string, handleId: string | null, handleType?: string } | null>(null);
+
+    const onEdgeUpdateStart = useCallback(() => {
+        edgeUpdateSuccessful.current = false;
+    }, []);
+
+    const onEdgeUpdate = useCallback((oldEdge: Edge, newConnection: Connection) => {
+        edgeUpdateSuccessful.current = true;
+        setDirty(true);
+        setEdges((els) => updateEdge(oldEdge, newConnection, els));
+    }, [setEdges, setDirty]);
+
+    const onEdgeUpdateEnd = useCallback((event: MouseEvent | TouchEvent, edge: Edge) => {
+        if (!edgeUpdateSuccessful.current) {
+            const { clientX, clientY } = (event as any).touches ? (event as any).touches[0] : event;
+
+            if (reactFlowInstance) {
+                const position = reactFlowInstance.screenToFlowPosition({ x: clientX, y: clientY });
+                const tempNodeId = `temp-${Date.now()}`;
+                const tempNode: Node = {
+                    id: tempNodeId,
+                    type: 'default',
+                    position,
+                    data: { label: '' },
+                    style: { width: 1, height: 1, opacity: 0, visibility: 'hidden' },
+                    draggable: false,
+                    connectable: false
+                };
+                setNodes(nds => nds.concat(tempNode));
+
+                setEdges(eds => eds.map(e => {
+                    if (e.id === edge.id) return { ...e, target: tempNodeId, targetHandle: null };
+                    return e;
+                }));
+
+                setMenu({ x: clientX, y: clientY, isOpen: true, pendingEdges: [edge], isReconnecting: true, tempNodeId });
+            } else {
+                setMenu({ x: clientX, y: clientY, isOpen: true, pendingEdges: [edge], isReconnecting: true });
+            }
+        }
+    }, [reactFlowInstance, setNodes, setEdges]);
+
+    const onConnectStart = useCallback((_event: any, { nodeId, handleId, handleType }: any) => {
+        connectStartParams.current = { nodeId, handleId, handleType };
+        setMenu(prev => (prev ? { ...prev, connectStartNode: nodeId, connectStartHandle: handleId, connectStartType: handleType } : { x: 0, y: 0, isOpen: false, connectStartNode: nodeId, connectStartHandle: handleId, connectStartType: handleType }));
     }, []);
 
     const onConnectEnd = useCallback((event: any) => {
         const targetIsPane = event.target.classList.contains('react-flow__pane');
-        if (targetIsPane && reactFlowWrapper.current && reactFlowInstance) {
+        if (targetIsPane && reactFlowWrapper.current && reactFlowInstance && connectStartParams.current) {
             const { clientX, clientY } = event instanceof TouchEvent ? event.touches[0] : event;
-            setMenu(prev => ({
-                x: clientX, y: clientY, isOpen: true,
-                connectStartNode: prev?.connectStartNode, connectStartHandle: prev?.connectStartHandle
-            }));
+            const { nodeId, handleId, handleType } = connectStartParams.current;
+
+            const position = reactFlowInstance.screenToFlowPosition({ x: clientX, y: clientY });
+            const tempNodeId = `temp-${Date.now()}`;
+            const tempNode: Node = {
+                id: tempNodeId,
+                type: 'default',
+                position,
+                data: { label: '' },
+                style: { width: 1, height: 1, opacity: 0, visibility: 'hidden' },
+                draggable: false,
+                connectable: false
+            };
+            let newPendingEdges: Edge[] = [];
+
+            if (handleType === 'target') {
+                newPendingEdges.push({
+                    id: `temp-edge-1-${Date.now()}`,
+                    source: tempNodeId,
+                    target: nodeId,
+                    targetHandle: handleId,
+                    animated: true
+                });
+            } else if (handleType === 'source') {
+                newPendingEdges.push({
+                    id: `temp-edge-2-${Date.now()}`,
+                    source: nodeId,
+                    sourceHandle: handleId,
+                    target: tempNodeId,
+                    animated: true
+                });
+            } else {
+                // Fallback: Add BOTH directions to ensure visual persistence
+                newPendingEdges.push({
+                    id: `temp-edge-1-${Date.now()}`,
+                    source: tempNodeId,
+                    target: nodeId,
+                    targetHandle: handleId,
+                    animated: true
+                });
+                newPendingEdges.push({
+                    id: `temp-edge-2-${Date.now()}`,
+                    source: nodeId,
+                    sourceHandle: handleId,
+                    target: tempNodeId,
+                    animated: true
+                });
+            }
+
+            setNodes(nds => nds.concat(tempNode));
+            setEdges(eds => [...eds, ...newPendingEdges]);
+
+            setMenu({
+                x: clientX,
+                y: clientY,
+                isOpen: true,
+                connectStartNode: nodeId,
+                connectStartHandle: handleId || undefined,
+                connectStartType: handleType,
+                pendingEdges: newPendingEdges,
+                isReconnecting: false,
+                tempNodeId
+            });
         } else {
             if (!menu?.isOpen) setMenu(null);
         }
-    }, [reactFlowInstance, menu?.isOpen]);
+    }, [reactFlowInstance, setNodes, setEdges, menu?.isOpen]);
 
     const onPaneClick = useCallback(() => {
+        if (menu?.pendingEdges) {
+            const pendingIds = new Set(menu.pendingEdges.map(e => e.id));
+            setEdges((eds) => eds.filter(e => !pendingIds.has(e.id)));
+        }
+        if (menu?.tempNodeId) {
+            setNodes(nds => nds.filter(n => n.id !== menu.tempNodeId));
+        }
         if (menu) setMenu(null);
         if (nodeMenu) setNodeMenu(null);
-    }, [menu, nodeMenu]);
+    }, [menu, nodeMenu, setEdges, setNodes]);
 
     const onPaneContextMenu = useCallback((event: React.MouseEvent) => {
         event.preventDefault();
@@ -271,22 +434,81 @@ export const MaterialEditor: React.FC<MaterialEditorProps> = ({ assetId, name, o
             sourcePosition: Position.Right,
             targetPosition: Position.Left,
         };
-        setNodes((nds) => nds.concat(newNode));
-        setDirty(true); // New node = dirty
-        if (menu.connectStartNode) {
-            const newEdge: Edge = {
-                id: `e-${menu.connectStartNode}-${newNode.id}`,
-                source: menu.connectStartNode,
-                sourceHandle: menu.connectStartHandle,
-                target: newNode.id,
-                animated: true
-            };
-            setEdges((eds) => addEdge(newEdge, eds));
+
+        setNodes((nds) => {
+            const nextNodes = menu.tempNodeId ? nds.filter(n => n.id !== menu.tempNodeId) : nds;
+            return nextNodes.concat(newNode);
+        });
+        setDirty(true);
+
+        const startNode = nodes.find(n => n.id === menu.connectStartNode);
+
+        let isTarget = false;
+        if (menu.connectStartType) {
+            isTarget = menu.connectStartType === 'target';
+        } else if (startNode) {
+            if (startNode.type === 'result') isTarget = true;
+            else if (startNode.type === 'math') isTarget = ['a', 'b'].includes(menu.connectStartHandle || '');
+            else if (startNode.type === 'texture') isTarget = (menu.connectStartHandle === 'uvs');
+        }
+
+        let newEdge: Edge | null = null;
+        if (!menu.isReconnecting && menu.connectStartNode) {
+            if (isTarget) {
+                newEdge = {
+                    id: `e-${newNode.id}-${menu.connectStartNode}`,
+                    source: newNode.id,
+                    target: menu.connectStartNode,
+                    targetHandle: menu.connectStartHandle,
+                    animated: true
+                };
+            } else {
+                newEdge = {
+                    id: `e-${menu.connectStartNode}-${newNode.id}`,
+                    source: menu.connectStartNode,
+                    sourceHandle: menu.connectStartHandle,
+                    target: newNode.id,
+                    animated: true
+                };
+            }
+        }
+
+        setEdges((eds) => {
+            let nextEdges = eds;
+            // Remove pending temp edges (unless reconnecting active edge)
+            if (menu.pendingEdges && !menu.isReconnecting) {
+                const pendingIds = new Set(menu.pendingEdges.map(e => e.id));
+                nextEdges = nextEdges.filter(e => !pendingIds.has(e.id));
+            }
+
+            if (menu.isReconnecting && menu.pendingEdges && menu.pendingEdges[0]) {
+                return nextEdges.map(e => {
+                    if (e.id === menu.pendingEdges![0].id) {
+                        if (e.target === menu.tempNodeId) return { ...e, target: newNode.id, targetHandle: null };
+                        if (e.source === menu.tempNodeId) return { ...e, source: newNode.id, sourceHandle: null };
+                    }
+                    return e;
+                });
+            } else if (newEdge) {
+                return addEdge(newEdge, nextEdges);
+            }
+            return nextEdges;
+        });
+
+        setMenu(null);
+    }, [menu, reactFlowInstance, setNodes, setEdges, setDirty, nodes]);
+
+    const closeMenu = useCallback(() => {
+        if (menu?.pendingEdges) {
+            const pendingIds = new Set(menu.pendingEdges.map(e => e.id));
+            setEdges((eds) => eds.filter(e => !pendingIds.has(e.id)));
+        }
+        if (menu?.tempNodeId) {
+            setNodes(nds => nds.filter(n => n.id !== menu.tempNodeId));
         }
         setMenu(null);
-    }, [menu, reactFlowInstance, setNodes, setEdges, setDirty]);
-
-    const closeMenu = useCallback(() => { setMenu(null); setNodeMenu(null); }, []);
+        setNodeMenu(null);
+    }, [menu, setEdges, setNodes]);
 
     const mousePos = useRef({ x: 0, y: 0 });
 
@@ -375,8 +597,11 @@ export const MaterialEditor: React.FC<MaterialEditorProps> = ({ assetId, name, o
 
 
     // Shortcuts
+    // Shortcuts
     const onKeyDown = useCallback((event: React.KeyboardEvent) => {
         const selected = nodes.filter(n => n.selected);
+        const target = event.target as HTMLElement;
+        const isInput = ['INPUT', 'TEXTAREA'].includes(target.tagName) || target.isContentEditable;
 
         // Save Ctrl+S
         if ((event.key === 's' || event.key === 'S') && (event.ctrlKey || event.metaKey)) {
@@ -387,6 +612,8 @@ export const MaterialEditor: React.FC<MaterialEditorProps> = ({ assetId, name, o
             return;
         }
 
+        if (isInput || (menu && menu.isOpen) || nodeMenu) return;
+
         // Alignment 'Q'
         if (event.key === 'q' || event.key === 'Q') {
             if (selected.length > 1) {
@@ -396,8 +623,9 @@ export const MaterialEditor: React.FC<MaterialEditorProps> = ({ assetId, name, o
             }
         }
 
-        // Comment 'C'
-        if ((event.key === 'c' || event.key === 'C') && !event.ctrlKey) {
+        // Comment 'Ctrl + /'
+        if (event.key === '/' && (event.ctrlKey || event.metaKey)) {
+            event.preventDefault();
             if (selected.length > 0) {
                 createComment(selected);
             } else {
@@ -450,7 +678,7 @@ export const MaterialEditor: React.FC<MaterialEditorProps> = ({ assetId, name, o
         if ((event.key === 'c' || event.key === 'C') && (event.ctrlKey || event.metaKey)) {
             copyNodes(selected);
         }
-    }, [nodes, setNodes, createComment, duplicateNodes, copyNodes, startRename, setDirty, handleSave]);
+    }, [nodes, setNodes, createComment, duplicateNodes, copyNodes, startRename, setDirty, handleSave, menu, nodeMenu, isDirty, handleFitView, handleLock, handleZoomIn, handleZoomOut]);
 
     const handleNodeDataChange = (id: string, key: string, value: any) => {
         setNodes((nds) => nds.map((node) => {
@@ -710,6 +938,17 @@ export const MaterialEditor: React.FC<MaterialEditorProps> = ({ assetId, name, o
                 ref={reactFlowWrapper}
                 style={{ flex: 1, height: '100%', display: 'flex', flexDirection: 'column', position: 'relative' }}
             >
+                {/* Edge Gradient Definition */}
+                <svg style={{ position: 'absolute', width: 0, height: 0, pointerEvents: 'none' }}>
+                    <defs>
+                        <linearGradient id="edge-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                            <stop offset="0%" stopColor={theme.colors.accent.secondary} />
+                            <stop offset="20%" stopColor={theme.colors.text.secondary} />
+                            <stop offset="80%" stopColor={theme.colors.text.secondary} />
+                            <stop offset="100%" stopColor={theme.colors.accent.secondary} />
+                        </linearGradient>
+                    </defs>
+                </svg>
                 <div className="flex-1" style={{ height: '100%' }}>
                     <ReactFlow
                         id={assetId}
@@ -720,6 +959,9 @@ export const MaterialEditor: React.FC<MaterialEditorProps> = ({ assetId, name, o
                         onNodesChange={onNodesChange}
                         onEdgesChange={onEdgesChange}
                         onConnect={onConnect}
+                        onEdgeUpdate={onEdgeUpdate}
+                        onEdgeUpdateStart={onEdgeUpdateStart}
+                        onEdgeUpdateEnd={onEdgeUpdateEnd}
                         onConnectStart={onConnectStart}
                         onConnectEnd={onConnectEnd}
                         onPaneClick={onPaneClick}
@@ -738,6 +980,7 @@ export const MaterialEditor: React.FC<MaterialEditorProps> = ({ assetId, name, o
                         multiSelectionKeyCode={['Control', 'Shift', 'Meta']}
                         selectionKeyCode={null}
                         deleteKeyCode="Delete"
+                        connectionLineStyle={{ strokeDasharray: '5 5' }}
                     >
                         <style>
                             {`

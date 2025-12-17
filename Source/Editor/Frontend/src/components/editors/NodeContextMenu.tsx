@@ -52,7 +52,7 @@ export const NodeContextMenu: React.FC<NodeContextMenuProps> = ({
             )}
 
             {!isCommentNode && (
-                <MenuItem label="Comment Selection (C)" onClick={() => onComment(selectedNodes.length > 0 ? selectedNodes : [node])} theme={theme} />
+                <MenuItem label="Comment Selection (Ctrl+/)" onClick={() => onComment(selectedNodes.length > 0 ? selectedNodes : [node])} theme={theme} />
             )}
 
             {!isResultNode && (
