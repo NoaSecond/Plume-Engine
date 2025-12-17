@@ -569,7 +569,11 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
     e.preventDefault();
     e.stopPropagation();
     if (!show) return;
-    setIsDragOver(true);
+
+    // Only show import overlay if we are dragging files from OS
+    if (e.dataTransfer.types.includes('Files')) {
+      setIsDragOver(true);
+    }
   };
 
   const handleDragLeave = (e: React.DragEvent) => {

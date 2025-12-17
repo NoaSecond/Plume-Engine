@@ -211,6 +211,16 @@ export const AssetTile = ({ id, name, type, selected = false, onClick, onDoubleC
 
   return (
     <div
+      draggable={!!id}
+      onDragStart={(e) => {
+        if (id) {
+          console.log('AssetTile: DragStart', { id, name, type });
+          const data = JSON.stringify({ id, name, type, meta });
+          e.dataTransfer.setData('application/plume-asset', data);
+          e.dataTransfer.setData('text/plain', data); // Fallback for wider compatibility
+          e.dataTransfer.effectAllowed = 'all';
+        }
+      }}
       className="flex flex-col items-center p-2 rounded cursor-pointer group transition-all duration-75"
       style={{
         width: `${size}px`,

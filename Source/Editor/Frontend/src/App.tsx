@@ -39,6 +39,24 @@ export default function App() {
   const [renderingAPI, setRenderingAPI] = useState<'DirectX12' | 'Vulkan' | 'OpenGL' | 'Metal'>('OpenGL');
   const [cameraTransform, setCameraTransform] = useState({ position: { x: 0, y: -50, z: -150 }, rotation: { x: 20, y: 0, z: 0 } });
 
+  // Global Drag State to manage overlays
+  const [isDraggingGlobal, setIsDraggingGlobal] = useState(false);
+
+  useEffect(() => {
+    const handleDragStart = () => setIsDraggingGlobal(true);
+    const handleDragEnd = () => setIsDraggingGlobal(false);
+
+    window.addEventListener('dragstart', handleDragStart);
+    window.addEventListener('dragend', handleDragEnd);
+    window.addEventListener('drop', handleDragEnd);
+
+    return () => {
+      window.removeEventListener('dragstart', handleDragStart);
+      window.removeEventListener('dragend', handleDragEnd);
+      window.removeEventListener('drop', handleDragEnd);
+    };
+  }, []);
+
   // Tab System State
   const [tabs, setTabs] = useState<Tab[]>(() => {
     const saved = localStorage.getItem('plume_editor_tabs');
@@ -902,7 +920,7 @@ export default function App() {
       {/* Backdrop for Panels */}
       {(showContentBrowser || showConsole) && (
         <div
-          className="fixed inset-0 z-40 bg-transparent"
+          className={`fixed inset-0 z-40 bg-transparent ${isDraggingGlobal ? 'pointer-events-none' : ''}`}
           onClick={() => {
             setShowContentBrowser(false);
             setShowConsole(false);

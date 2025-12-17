@@ -26,7 +26,7 @@ import ResultNode from './MaterialNodes/ResultNode';
 import ColorNode from './MaterialNodes/ColorNode';
 import CommentNode from './MaterialNodes/CommentNode';
 import MathNode from './MaterialNodes/MathNode';
-import TextureNode from './MaterialNodes/TextureNode';
+import TextureSampleNode from './MaterialNodes/TextureSampleNode';
 import { NodeSearchMenu, NodeTypeItem } from './NodeSearchMenu';
 import { NodeContextMenu } from './NodeContextMenu';
 import { Maximize, Lock, Unlock, ZoomIn as ZoomInIcon, ZoomOut as ZoomOutIcon, Save } from 'lucide-react';
@@ -130,6 +130,10 @@ export const MaterialEditor: React.FC<MaterialEditorProps> = ({ assetId, name, o
     const [isLocking, setIsLocking] = useState(false);
     const [isZoomingIn, setIsZoomingIn] = useState(false);
     const [isZoomingOut, setIsZoomingOut] = useState(false);
+    const [availableTextures, setAvailableTextures] = useState<{ id: string, name: string, path: string }[]>([]);
+
+    // Copy/Paste State
+    const [clipboard, setClipboard] = useState<Node[]>([]);
 
     const setDirty = useCallback((dirty: boolean) => {
         setIsDirty(dirty);
@@ -215,8 +219,8 @@ export const MaterialEditor: React.FC<MaterialEditorProps> = ({ assetId, name, o
         comment: CommentNode,
         add: MathNode,
         multiply: MathNode,
-        texture: TextureNode
-    }), []);
+        texture: (props: any) => <TextureSampleNode {...props} data={{ ...props.data, availableTextures }} />
+    }), [availableTextures]);
 
     // Dynamic Edge Styling: Solid if path to Result, Dashed otherwise
     React.useEffect(() => {
@@ -275,6 +279,7 @@ export const MaterialEditor: React.FC<MaterialEditorProps> = ({ assetId, name, o
     const [nodeMenu, setNodeMenu] = useState<{ x: number, y: number, node: Node } | null>(null);
 
     const onConnect = useCallback((params: Connection) => {
+        if (params.source === params.target) return; // Prevent self-loops
         setDirty(true);
         setEdges((eds) => addEdge(params, eds));
     }, [setEdges, setDirty]);
@@ -545,8 +550,25 @@ export const MaterialEditor: React.FC<MaterialEditorProps> = ({ assetId, name, o
     }, [nodes, setNodes, setDirty]);
 
     const copyNodes = useCallback((nodes: Node[]) => {
-        // Copy logic to be implemented
+        const nodesToCopy = nodes.filter(n => n.type !== 'result');
+        if (nodesToCopy.length > 0) {
+            setClipboard(nodesToCopy);
+        }
     }, []);
+
+    const pasteNodes = useCallback(() => {
+        if (clipboard.length === 0) return;
+
+        const newNodes = clipboard.map(node => ({
+            ...node,
+            id: `${node.type}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            position: { x: node.position.x + 50, y: node.position.y + 50 },
+            selected: true
+        }));
+
+        setNodes(nds => nds.map(n => ({ ...n, selected: false })).concat(newNodes));
+        setDirty(true);
+    }, [clipboard, setNodes, setDirty]);
 
     const createComment = useCallback((targetNodes: Node[], pos?: { x: number, y: number }) => {
         const padding = 30;
@@ -669,7 +691,7 @@ export const MaterialEditor: React.FC<MaterialEditorProps> = ({ assetId, name, o
         }
 
         // Duplicate Ctrl+D
-        if ((event.key === 'd' || event.key === 'D') && (event.ctrlKey || event.metaKey)) {
+        if ((event.key === 'd' || event.key === 'D') && (event.ctrlKey || event.metaKey) && !event.repeat) {
             event.preventDefault();
             duplicateNodes(selected);
         }
@@ -678,7 +700,12 @@ export const MaterialEditor: React.FC<MaterialEditorProps> = ({ assetId, name, o
         if ((event.key === 'c' || event.key === 'C') && (event.ctrlKey || event.metaKey)) {
             copyNodes(selected);
         }
-    }, [nodes, setNodes, createComment, duplicateNodes, copyNodes, startRename, setDirty, handleSave, menu, nodeMenu, isDirty, handleFitView, handleLock, handleZoomIn, handleZoomOut]);
+
+        // Paste Ctrl+V
+        if ((event.key === 'v' || event.key === 'V') && (event.ctrlKey || event.metaKey) && !event.repeat) {
+            pasteNodes();
+        }
+    }, [nodes, setNodes, createComment, duplicateNodes, copyNodes, pasteNodes, startRename, setDirty, handleSave, menu, nodeMenu, isDirty, handleFitView, handleLock, handleZoomIn, handleZoomOut]);
 
     const handleNodeDataChange = (id: string, key: string, value: any) => {
         setNodes((nds) => nds.map((node) => {
@@ -699,6 +726,22 @@ export const MaterialEditor: React.FC<MaterialEditorProps> = ({ assetId, name, o
     React.useEffect(() => {
         const handleMessage = (e: any) => {
             const data = (e.data) ? e.data : (e.detail) ? e.detail : e;
+
+            if (data?.type === 'content-list' && Array.isArray(data.items)) {
+                const textureAssets: { id: string, name: string, path: string }[] = [];
+                const processNode = (node: any) => {
+                    const type = node.type || '';
+                    if (type.toLowerCase() === 'texture') {
+                        textureAssets.push({ id: node.id, name: node.name, path: node.path || node.name });
+                    }
+                    if (node.children) {
+                        node.children.forEach(processNode);
+                    }
+                };
+                data.items.forEach(processNode);
+                setAvailableTextures(textureAssets);
+            }
+
             if (data?.action === 'asset-data' && data.assetId === assetId) {
                 try {
                     let loaded = false;
@@ -744,6 +787,7 @@ export const MaterialEditor: React.FC<MaterialEditorProps> = ({ assetId, name, o
             (window as any).chrome.webview.addEventListener('message', handleMessage);
             if (!hasLoaded.current) {
                 (window as any).chrome.webview.postMessage({ action: 'load-asset', assetId });
+                (window as any).chrome.webview.postMessage({ action: 'list-content', path: 'Content', recursive: true });
                 hasLoaded.current = true;
             }
         } else {
@@ -902,6 +946,41 @@ export const MaterialEditor: React.FC<MaterialEditorProps> = ({ assetId, name, o
                                                     </div>
                                                 </div>
                                             )}
+
+                                            {/* Texture Node Data */}
+                                            {node.type === 'texture' && (
+                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                                                    <label style={{ color: theme.colors.text.secondary }}>Texture</label>
+                                                    <div style={{ position: 'relative', flex: 1 }}>
+                                                        <select
+                                                            value={node.data.textureAssetId || ''}
+                                                            onChange={(e) => handleNodeDataChange(node.id, 'textureAssetId', e.target.value)}
+                                                            style={{
+                                                                width: '100%',
+                                                                background: theme.colors.bg.tertiary,
+                                                                border: `1px solid ${theme.colors.border.subtle}`,
+                                                                color: theme.colors.text.primary,
+                                                                padding: '4px 8px',
+                                                                borderRadius: '4px',
+                                                                outline: 'none',
+                                                                fontSize: '12px',
+                                                                appearance: 'none',
+                                                                cursor: 'pointer'
+                                                            }}
+                                                        >
+                                                            <option value="">Select a texture...</option>
+                                                            {availableTextures.map(tex => (
+                                                                <option key={tex.id} value={tex.id}>{tex.name.replace('.plumeasset', '')}</option>
+                                                            ))}
+                                                        </select>
+                                                        <div style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}>
+                                                            <svg width="10" height="6" viewBox="0 0 10 6" fill="none" stroke="currentColor">
+                                                                <path d="M1 1L5 5L9 1" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                                                            </svg>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                 ))}
@@ -936,7 +1015,67 @@ export const MaterialEditor: React.FC<MaterialEditorProps> = ({ assetId, name, o
             {/* Editor Canvas */}
             <div
                 ref={reactFlowWrapper}
-                style={{ flex: 1, height: '100%', display: 'flex', flexDirection: 'column', position: 'relative' }}
+                style={{ flex: 1, height: '100%', display: 'flex', flexDirection: 'column', position: 'relative', zIndex: 10 }}
+                onDragEnter={(event) => {
+                    event.preventDefault();
+                    console.log('MaterialEditor: DragEnter');
+                }}
+                onDragOver={(event) => {
+                    event.preventDefault();
+                    event.dataTransfer.dropEffect = 'copy';
+                    // console.log('MaterialEditor: DragOver', event.target); // Reduce spam
+                }}
+                onDrop={(event) => {
+                    console.log('MaterialEditor: onDrop Triggered');
+                    event.preventDefault();
+
+                    let data = event.dataTransfer.getData('application/plume-asset');
+                    if (!data) {
+                        data = event.dataTransfer.getData('text/plain');
+                    }
+                    console.log('Raw Drop Data:', data);
+
+                    if (data) {
+                        try {
+                            const asset = JSON.parse(data);
+                            console.log('MaterialEditor Parsed Asset:', asset);
+
+                            // Check for texture type or common image extensions
+                            const isTextureType = asset.type?.toLowerCase().includes('texture');
+                            const isImageType = asset.type?.toLowerCase() === 'image';
+                            const hasImageExt = asset.name && /\.(png|jpg|jpeg|tga|bmp|psd|svg)(\.plumeasset)?$/i.test(asset.name);
+
+                            if (isTextureType || isImageType || hasImageExt) {
+
+                                const reactFlowBounds = reactFlowWrapper.current?.getBoundingClientRect();
+                                if (reactFlowBounds && reactFlowInstance) {
+                                    const position = reactFlowInstance.project({
+                                        x: event.clientX - reactFlowBounds.left,
+                                        y: event.clientY - reactFlowBounds.top,
+                                    });
+
+                                    const uniqueId = `texture-${Date.now()}`;
+                                    const newNode: Node = {
+                                        id: uniqueId,
+                                        type: 'texture',
+                                        position,
+                                        data: {
+                                            label: asset.name.replace(/\.plumeasset$/, ''),
+                                            textureAssetId: asset.id
+                                        },
+                                    };
+                                    setNodes((nds) => nds.concat(newNode));
+                                }
+                            } else {
+                                console.warn('Dropped asset rejected:', asset);
+                            }
+                        } catch (e) {
+                            console.error('Failed to parse drop data', e);
+                        }
+                    } else {
+                        console.warn('No data found in drop event');
+                    }
+                }}
             >
                 {/* Edge Gradient Definition */}
                 <svg style={{ position: 'absolute', width: 0, height: 0, pointerEvents: 'none' }}>
@@ -1054,6 +1193,6 @@ export const MaterialEditor: React.FC<MaterialEditorProps> = ({ assetId, name, o
                     <span>Path: {assetId}</span>
                 </div>
             </div>
-        </div>
+        </div >
     );
 };
