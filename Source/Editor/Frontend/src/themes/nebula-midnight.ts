@@ -40,6 +40,10 @@ export const nebulaMidnight: Theme = {
       grid: '#1A1A38',
       selection: '#DA70D680',
     },
+    selection: {
+      background: '#DA70D630',
+      border: '#DA70D6',
+    },
   },
   shadows: {
     sm: '0 1px 2px 0 rgba(138, 70, 214, 0.2)',

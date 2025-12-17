@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { useTheme } from '../../ThemeContext';
 import { LogEntry } from '../../types';
 import { COMMANDS } from '../../data/commands';
+import { AppWindow } from 'lucide-react';
 
 interface ConsolePanelProps {
   logs: LogEntry[];
@@ -9,9 +10,11 @@ interface ConsolePanelProps {
   onExecuteCommand: (command: string) => void;
   isOpen: boolean;
   setIsOpen: (open: boolean) => void;
+  isDocked?: boolean;
+  onDock?: () => void;
 }
 
-export function ConsolePanel({ logs, onClear, onExecuteCommand, isOpen, setIsOpen }: ConsolePanelProps) {
+export function ConsolePanel({ logs, onClear, onExecuteCommand, isOpen, setIsOpen, isDocked, onDock }: ConsolePanelProps) {
   const { theme } = useTheme();
   const [command, setCommand] = useState('');
   const [showInfo, setShowInfo] = useState(true);
@@ -92,15 +95,17 @@ export function ConsolePanel({ logs, onClear, onExecuteCommand, isOpen, setIsOpe
 
   return (
     <div
-      className="fixed left-0 right-0 h-48 shadow-2xl transition-transform duration-300 ease-out flex flex-col"
+      className={`flex flex-col ${isDocked ? 'w-full h-full' : 'fixed left-0 right-0 shadow-2xl transition-transform duration-300 ease-out'}`}
       style={{
         backgroundColor: theme.colors.bg.primary,
-        borderTop: `1px solid ${theme.colors.accent.primary}`,
-        zIndex: 40,
-        bottom: '24px',
-        transform: isOpen ? 'translateY(0)' : 'translateY(calc(100% + 24px))',
+        borderTop: isDocked ? 'none' : `1px solid ${theme.colors.accent.primary}`,
+        zIndex: isDocked ? 'auto' : 40,
+        height: isDocked ? '100%' : '12rem', // h-48 is 12rem
+        bottom: isDocked ? undefined : '24px',
+        transform: isDocked ? 'none' : (isOpen ? 'translateY(0)' : 'translateY(calc(100% + 24px))'),
         pointerEvents: isOpen ? 'auto' : 'none',
-        willChange: 'transform'
+        willChange: isDocked ? undefined : 'transform',
+        position: isDocked ? 'static' : 'fixed'
       }}
     >
       {/* Header */}
@@ -141,6 +146,21 @@ export function ConsolePanel({ logs, onClear, onExecuteCommand, isOpen, setIsOpe
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {!isDocked && onDock && (
+            <button
+              className="px-2 py-0.5 rounded text-xs flex items-center gap-1"
+              style={{
+                backgroundColor: theme.colors.bg.elevated,
+                color: theme.colors.text.secondary,
+                border: `1px solid ${theme.colors.border.default}`
+              }}
+              onClick={onDock}
+              title="Dock Console"
+            >
+              <AppWindow size={10} />
+              Docker
+            </button>
+          )}
           <button
             onClick={onClear}
             className="px-2 py-0.5 rounded text-xs"
@@ -272,7 +292,8 @@ export function ConsolePanel({ logs, onClear, onExecuteCommand, isOpen, setIsOpe
               {suggestions.map((s, idx) => (
                 <div
                   key={s}
-                  onMouseDown={(ev) => { ev.preventDefault(); /* prevent blur */
+                  onMouseDown={(ev) => {
+                    ev.preventDefault(); /* prevent blur */
                     const rest = command.trim().split(/\s+/).slice(1).join(' ');
                     setCommand(s + (rest ? ' ' + rest : ' '));
                     setTimeout(() => inputRef.current?.focus(), 0);

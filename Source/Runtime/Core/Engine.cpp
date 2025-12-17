@@ -6,6 +6,7 @@
 #include <chrono>
 #include <cmath>
 #include <fstream>
+#include <sstream>
 #if defined(_WIN32)
 #include <filesystem>
 #endif
@@ -17,11 +18,37 @@ namespace Plume {
 
     void Engine::Init() {
         m_Scene = std::make_unique<Scene>();
-        m_Scene->CreateEntity("Scene_Root", EntityType::Folder);
-        m_Scene->CreateEntity("Sun_Light", EntityType::Light, "Directional");
-        m_Scene->CreateEntity("Main_Camera", EntityType::Camera);
-        m_Scene->CreateEntity("Rotating_Cube_CPP", EntityType::Mesh, "Cube");
+        LoadMainLevel();
+        
+        m_ActiveScene = m_Scene.get();
         m_IsRunning = true;
+    }
+
+    void Engine::LoadMainLevel() {
+        // Ensure Content directory exists
+        namespace fs = std::filesystem;
+        std::string assetPath = "Content/L_Main.plumeasset";
+        
+        if (!fs::exists("Content")) {
+            fs::create_directory("Content");
+        }
+
+        if (fs::exists(assetPath)) {
+            // Load existing
+            std::ifstream file(assetPath);
+            std::stringstream buffer;
+            buffer << file.rdbuf();
+            m_Scene->DeserializeFromJson(buffer.str());
+        } else {
+            // Create default in-memory scene (EmptyLevel state)
+            m_Scene->CreateEntity("Scene_Root", EntityType::Folder);
+            m_Scene->CreateEntity("Sun_Light", EntityType::Light, "Directional");
+            m_Scene->CreateEntity("Main_Camera", EntityType::Camera);
+            m_Scene->CreateEntity("Rotating_Cube_CPP", EntityType::Mesh, "Cube");
+            
+            // DO NOT save to file automatically.
+            // This is now an transient "EmptyLevel".
+        }
     }
 
     void Engine::InitRenderer(void* windowHandle, uint32_t width, uint32_t height, RHI::GraphicsAPI api) {
@@ -78,7 +105,10 @@ namespace Plume {
             auto frameStart = std::chrono::high_resolution_clock::now();
             float deltaTime = std::chrono::duration<float>(frameStart - lastTime).count();
             lastTime = frameStart;
-            if (m_Scene) m_Scene->OnUpdate(deltaTime);
+            
+            // Update active scene
+            if (m_ActiveScene) m_ActiveScene->OnUpdate(deltaTime);
+            
             RenderFrame();
 
             // Frame limiting: if VSync is enabled, rely on Present to block; otherwise
@@ -132,8 +162,8 @@ namespace Plume {
             cmdBuffer->BeginRenderPass();
 
             // Delegate to the high-level Renderer which knows how to draw the scene
-            if (m_RendererObject) {
-                m_RendererObject->RenderScene(m_Scene.get());
+            if (m_RendererObject && m_ActiveScene) {
+                m_RendererObject->RenderScene(m_ActiveScene);
             }
 
             cmdBuffer->EndRenderPass();
@@ -155,15 +185,40 @@ namespace Plume {
     }
 
     void Engine::TranslateCamera(const Plume::Vec3& delta) {
-        if (m_Scene) m_Scene->TranslateCamera(delta);
+        if (m_ActiveScene) m_ActiveScene->TranslateCamera(delta);
     }
 
     void Engine::RotateCamera(const Plume::Vec3& delta) {
-        if (m_Scene) m_Scene->RotateCamera(delta);
+        if (m_ActiveScene) m_ActiveScene->RotateCamera(delta);
     }
 
     void Engine::TranslateCameraLocal(const Plume::Vec3& delta, bool followPitch) {
-        if (m_Scene) m_Scene->TranslateCameraLocal(delta, followPitch);
+        if (m_ActiveScene) m_ActiveScene->TranslateCameraLocal(delta, followPitch);
+    }
+
+    void Engine::LoadPreviewAsset(const std::string& path) {
+        // Init preview scene if needed (or reset it)
+        m_PreviewScene = std::make_unique<Scene>();
+        
+        // Setup basic environment
+        m_PreviewScene->CreateEntity("Preview_Light", EntityType::Light, "Directional");
+        m_PreviewScene->CreateEntity("Preview_Camera", EntityType::Camera);
+        
+        // Setup Mesh
+        // TODO: Pass actual path to importer once available
+        // For now, subType "Cube" triggers the placeholder cube in Renderer
+        auto mesh = m_PreviewScene->CreateEntity("Preview_Mesh", EntityType::Mesh, "Cube");
+        
+        // Center camera? 
+        // Default camera is at -1.5, 2.0, -1.5 looking at origin slightly.
+        
+        m_ActiveScene = m_PreviewScene.get();
+    }
+
+    void Engine::StopPreview() {
+        m_ActiveScene = m_Scene.get();
+        // Optionally clear preview scene to save memory
+        m_PreviewScene.reset();
     }
 
     float Engine::GetFrameTimeMs() const {

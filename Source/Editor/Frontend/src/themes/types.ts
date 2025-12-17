@@ -45,6 +45,11 @@ export interface Theme {
       grid: string;
       selection: string;
     };
+    // Item Selection colors
+    selection: {
+      background: string;
+      border: string;
+    };
   };
   shadows: {
     sm: string;

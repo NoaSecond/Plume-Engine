@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
 import { useTheme } from '../../ThemeContext';
-import { X, Box, Globe, Image as ImageIcon, Music, File, Layers, Bone, Film, Settings, Package, Plug } from 'lucide-react';
+import { X, Box, Globe, Image as ImageIcon, Music, File, Layers, Bone, Film, Settings, Package, Plug, Folder, Terminal, FileCode } from 'lucide-react';
 
 export interface Tab {
     id: string;
     title: string;
-    type: 'scene' | 'static-mesh' | 'texture' | 'sound' | 'material' | 'level' | 'skeletal-mesh' | 'animation-sequence' | 'editor-preferences' | 'project-settings' | 'plugin-manager';
+    type: 'scene' | 'static-mesh' | 'texture' | 'sound' | 'material' | 'material-editor' | 'level' | 'skeletal-mesh' | 'animation-sequence' | 'editor-preferences' | 'project-settings' | 'plugin-manager' | 'content-browser' | 'console';
     data?: any; // e.g. entityId or filename
     closable: boolean;
+    isDirty?: boolean;
 }
 
 interface TabSystemProps {
@@ -31,12 +32,15 @@ export const TabSystem: React.FC<TabSystemProps> = ({ tabs, activeTabId, onTabCl
             case 'texture': return <ImageIcon size={14} className="mr-2" />;
             case 'sound': return <Music size={14} className="mr-2" />;
             case 'material': return <Layers size={14} className="mr-2" />;
+            case 'material-editor': return <Layers size={14} className="mr-2" />;
             case 'level': return <Globe size={14} className="mr-2" />;
             case 'skeletal-mesh': return <Bone size={14} className="mr-2" />;
             case 'animation-sequence': return <Film size={14} className="mr-2" />;
             case 'editor-preferences': return <Settings size={14} className="mr-2" />;
             case 'project-settings': return <Package size={14} className="mr-2" />;
             case 'plugin-manager': return <Plug size={14} className="mr-2" />;
+            case 'content-browser': return <Folder size={14} className="mr-2" />;
+            case 'console': return <Terminal size={14} className="mr-2" />;
             default: return <File size={14} className="mr-2" />;
         }
     };
@@ -111,7 +115,7 @@ export const TabSystem: React.FC<TabSystemProps> = ({ tabs, activeTabId, onTabCl
                     <div key={tab.id} className="relative flex h-full">
                         {/* Visual Drop Indicator Left */}
                         {dropIndicator === index && (
-                            <div className="absolute left-0 top-0 bottom-0 w-0.5 z-50 bg-blue-500 animate-pulse pointer-events-none" />
+                            <div className="absolute left-0 top-0 bottom-0 w-0.5 z-50 animate-pulse pointer-events-none" style={{ backgroundColor: theme.colors.accent.primary }} />
                         )}
 
                         <div
@@ -131,6 +135,12 @@ export const TabSystem: React.FC<TabSystemProps> = ({ tabs, activeTabId, onTabCl
                         >
                             {getIcon(tab.type)}
                             <span className="truncate flex-1 mr-2">{tab.title}</span>
+
+                            {/* Dirty Indicator */}
+                            {tab.isDirty && (
+                                <div className="min-w-[6px] min-h-[6px] w-[6px] h-[6px] rounded-full mr-2" style={{ backgroundColor: theme.colors.accent.primary }} />
+                            )}
+
                             {tab.closable && (
                                 <button
                                     onClick={(e) => {
@@ -147,7 +157,7 @@ export const TabSystem: React.FC<TabSystemProps> = ({ tabs, activeTabId, onTabCl
 
                         {/* Visual Drop Indicator Right (for last item only mostly, or we render indicators uniformly) */}
                         {showIndicatorRight && (
-                            <div className="absolute right-0 top-0 bottom-0 w-0.5 z-50 bg-blue-500 animate-pulse pointer-events-none" />
+                            <div className="absolute right-0 top-0 bottom-0 w-0.5 z-50 animate-pulse pointer-events-none" style={{ backgroundColor: theme.colors.accent.primary }} />
                         )}
                     </div>
                 );

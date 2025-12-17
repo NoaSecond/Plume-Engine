@@ -40,6 +40,10 @@ export const featherLight: Theme = {
       grid: '#E0E0E0',
       selection: '#64B5F680',
     },
+    selection: {
+      background: '#64B5F630',
+      border: '#64B5F6',
+    },
   },
   shadows: {
     sm: '0 1px 2px 0 rgba(0, 0, 0, 0.08)',

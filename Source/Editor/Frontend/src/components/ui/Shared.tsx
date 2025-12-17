@@ -138,8 +138,10 @@ export const MenuBarItem: React.FC<MenuBarItemProps> = ({ label, items, onAction
   );
 };
 
-export const AssetTile = ({ id, name, type, selected = false, onClick, onDoubleClick, onContextMenu, meta }: { id?: string, name: string, type: string, selected?: boolean, onClick?: (e: React.MouseEvent) => void, onDoubleClick?: (e: React.MouseEvent) => void, onContextMenu?: (e: React.MouseEvent, info: { name: string, type: string }) => void, meta?: any }) => {
+export const AssetTile = ({ id, name, type, selected = false, onClick, onDoubleClick, onContextMenu, meta, scale = 1 }: { id?: string, name: string, type: string, selected?: boolean, onClick?: (e: React.MouseEvent) => void, onDoubleClick?: (e: React.MouseEvent) => void, onContextMenu?: (e: React.MouseEvent, info: { name: string, type: string }) => void, meta?: any, scale?: number }) => {
   const { theme } = useTheme();
+  const [isHovered, setIsHovered] = useState(false);
+
   let Icon = File;
   let color = "#9ca3af"; // gray-400
 
@@ -204,42 +206,48 @@ export const AssetTile = ({ id, name, type, selected = false, onClick, onDoubleC
 
   const displayName = name.replace(/\.(plumeasset|plume_mesh|fbx|obj|gltf|glb|png|jpg|jpeg|tga|bmp|wav|mp3|ogg|plumematerial|plumemap|plumeskel|plumeanim)$/i, '');
 
+  const baseSize = 96; // w-24 equivalent roughly
+  const size = Math.round(baseSize * scale);
+
   return (
     <div
-      className="flex flex-col items-center p-2 rounded cursor-pointer group w-24 transition-colors"
+      draggable={!!id}
+      onDragStart={(e) => {
+        if (id) {
+          console.log('AssetTile: DragStart', { id, name, type });
+          const data = JSON.stringify({ id, name, type, meta });
+          e.dataTransfer.setData('application/plume-asset', data);
+          e.dataTransfer.setData('text/plain', data); // Fallback for wider compatibility
+          e.dataTransfer.effectAllowed = 'all';
+        }
+      }}
+      className="flex flex-col items-center p-2 rounded cursor-pointer group transition-all duration-75"
+      style={{
+        width: `${size}px`,
+        backgroundColor: selected ? theme.colors.selection.background : (isHovered ? theme.colors.bg.elevated : 'transparent'),
+        transform: isHovered ? 'translateY(-1px)' : 'none'
+      }}
       onClick={(e) => onClick?.(e)}
       onDoubleClick={(e) => onDoubleClick?.(e)}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.backgroundColor = theme.colors.bg.elevated;
-      }}
-      onMouseLeave={(e) => {
-        if (!selected) e.currentTarget.style.backgroundColor = 'transparent';
-      }}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
       onContextMenu={(e) => {
         e.preventDefault();
-        e.stopPropagation();
-        onContextMenu?.(e, { name, type });
-      }}
-      style={{
-        backgroundColor: selected ? theme.colors.bg.elevated : undefined,
-        border: selected ? `1px solid ${theme.colors.accent.primary}` : undefined
+        if (onContextMenu) onContextMenu(e, { name, type });
       }}
     >
       <div
-        className="w-16 h-16 rounded mb-2 flex items-center justify-center border shadow-sm relative overflow-hidden transition-colors"
+        className="rounded mb-2 flex items-center justify-center border shadow-sm relative overflow-hidden transition-colors"
         style={{
           backgroundColor: theme.colors.bg.secondary,
-          borderColor: theme.colors.border.default
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.borderColor = theme.colors.accent.primary;
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.borderColor = theme.colors.border.default;
+          borderColor: (selected || isHovered) ? theme.colors.accent.primary : theme.colors.border.default,
+          borderWidth: (selected || isHovered) ? '1px' : '1px',
+          width: `${Math.round(size * 0.66)}px`, // Icon container relative size
+          height: `${Math.round(size * 0.66)}px`
         }}
       >
         <Icon
-          size={32}
+          size={Math.round(32 * scale)}
           color={finalColor}
           fill={type === 'folder' ? 'none' : (name === '.plume_meta' || name.endsWith('.plume_meta') ? finalColor : "none")}
           stroke={type === 'folder' ? finalColor : (name === '.plume_meta' || name.endsWith('.plume_meta') ? finalColor : finalColor)}
@@ -247,15 +255,24 @@ export const AssetTile = ({ id, name, type, selected = false, onClick, onDoubleC
         />
       </div>
       <span
-        className="text-[10px] text-center break-words w-full truncate px-1 rounded"
+        className="text-[10px] text-center w-full px-1 rounded break-words whitespace-normal"
         style={{
-          color: selected ? theme.colors.text.primary : theme.colors.text.secondary,
-          backgroundColor: 'transparent'
+          color: selected ? '#FFFFFF' : theme.colors.text.secondary,
+          backgroundColor: selected ? (theme.name === 'feather-light' ? theme.colors.accent.primary : 'transparent') : 'transparent', // Ensure contrast if light theme
+          textShadow: selected ? '0px 1px 2px rgba(0,0,0,0.8)' : 'none', // Strong shadow for white text visibility
+          fontWeight: 'normal',
+          display: '-webkit-box',
+          WebkitLineClamp: 2,
+          WebkitBoxOrient: 'vertical',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          lineHeight: '1.2em',
+          height: '2.4em'
         }}
         title={displayName}
       >
         {displayName}
       </span>
-    </div>
+    </div >
   );
 };

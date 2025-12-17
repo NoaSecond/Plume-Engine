@@ -3,6 +3,9 @@ import { Header } from './components/layout/Header';
 import { TabSystem, Tab } from './components/layout/TabSystem';
 import { SceneEditor } from './components/editors/SceneEditor';
 import { StaticMeshEditor } from './components/editors/StaticMeshEditor';
+import { TextureViewer } from './components/editors/TextureViewer';
+import { MaterialEditor } from './components/editors/MaterialEditor';
+import { SoundViewer } from './components/editors/SoundViewer';
 import { ContentBrowserPanel } from './components/panels/ContentBrowserPanel';
 import { ConsolePanel } from './components/panels/ConsolePanel';
 import { EditorPreferences } from './components/panels/EditorPreferences';
@@ -36,6 +39,24 @@ export default function App() {
   const [renderingAPI, setRenderingAPI] = useState<'DirectX12' | 'Vulkan' | 'OpenGL' | 'Metal'>('OpenGL');
   const [cameraTransform, setCameraTransform] = useState({ position: { x: 0, y: -50, z: -150 }, rotation: { x: 20, y: 0, z: 0 } });
 
+  // Global Drag State to manage overlays
+  const [isDraggingGlobal, setIsDraggingGlobal] = useState(false);
+
+  useEffect(() => {
+    const handleDragStart = () => setIsDraggingGlobal(true);
+    const handleDragEnd = () => setIsDraggingGlobal(false);
+
+    window.addEventListener('dragstart', handleDragStart);
+    window.addEventListener('dragend', handleDragEnd);
+    window.addEventListener('drop', handleDragEnd);
+
+    return () => {
+      window.removeEventListener('dragstart', handleDragStart);
+      window.removeEventListener('dragend', handleDragEnd);
+      window.removeEventListener('drop', handleDragEnd);
+    };
+  }, []);
+
   // Tab System State
   const [tabs, setTabs] = useState<Tab[]>(() => {
     const saved = localStorage.getItem('plume_editor_tabs');
@@ -44,36 +65,154 @@ export default function App() {
         const parsed = JSON.parse(saved);
         // Ensure scene is always there? Or trust storage. 
         // Let's ensure at least Basic Scene is present if array is empty, though logic below handles that.
-        return parsed.length > 0 ? parsed : [{ id: 'scene', title: 'Main Scene', type: 'scene', closable: false }];
+        return parsed.length > 0 ? parsed : [{ id: 'scene', title: 'EmptyLevel', type: 'scene', closable: false }];
       } catch (e) {
         console.error("Failed to load tabs", e);
       }
     }
-    return [{ id: 'scene', title: 'Main Scene', type: 'scene', closable: false }];
+    return [{ id: 'scene', title: 'EmptyLevel', type: 'scene', closable: false }];
   });
 
   const [activeTabId, setActiveTabId] = useState<string>(() => {
     return localStorage.getItem('plume_editor_active_tab') || 'scene';
   });
 
+
   // Save tabs effect
   useEffect(() => {
     localStorage.setItem('plume_editor_tabs', JSON.stringify(tabs));
   }, [tabs]);
 
-  // Save active tab effect
+  // Disable Global Zoom (Ctrl + Wheel / Keydown)
   useEffect(() => {
-    localStorage.setItem('plume_editor_active_tab', activeTabId);
-  }, [activeTabId]);
+    // 1. Prevent Ctrl + Wheel zoom
+    const handleWheel = (e: WheelEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        // Allow propagation so custom zoom handlers work
+      }
+    };
 
-  const handleOpenTab = (type: Tab['type'], title: string) => {
-    const existingTab = tabs.find(t => t.type === type);
+    // 2. Prevent Ctrl + (+/-) zoom
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        // Check codes for layout independence
+        if (
+          e.code === 'NumpadAdd' ||
+          e.code === 'NumpadSubtract' ||
+          e.code === 'Equal' ||
+          e.code === 'Minus' ||
+          e.key === '+' ||
+          e.key === '-' ||
+          e.key === '='
+        ) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+      }
+    };
+
+    // 3. Block pinch gestures (Trackpad/Touch)
+    // Note: 'gesturestart' is non-standard but works in Safari/some Webkit views. 
+    // For standard Chrome/Edge events, they often come as specific wheel/touch events.
+    const preventDefault = (e: Event) => {
+      e.preventDefault();
+      e.stopPropagation();
+    };
+
+    // Use non-passive listener to be able to preventDefault effectively
+    window.addEventListener('wheel', handleWheel, { passive: false });
+    window.addEventListener('keydown', handleKeyDown, { capture: true }); // Capture to stop it early
+    window.addEventListener('gesturestart', preventDefault);
+    window.addEventListener('gesturechange', preventDefault);
+    window.addEventListener('gestureend', preventDefault);
+
+    // Also try to block touchmove if it involves multiple touches (pinch)
+    const handleTouchMove = (e: TouchEvent) => {
+      if (e.touches.length > 1) {
+        e.preventDefault();
+      }
+    }
+    window.addEventListener('touchmove', handleTouchMove, { passive: false });
+
+    return () => {
+      window.removeEventListener('wheel', handleWheel);
+      window.removeEventListener('keydown', handleKeyDown, { capture: true } as any);
+      window.removeEventListener('gesturestart', preventDefault);
+      window.removeEventListener('gesturechange', preventDefault);
+      window.removeEventListener('gestureend', preventDefault);
+      window.removeEventListener('touchmove', handleTouchMove);
+    };
+  }, []);
+
+
+
+  const handleOpenTab = (type: Tab['type'], title: string, data?: any) => {
+    // For editors that support multiple instances (like texture viewer), check based on ID/data if possible, 
+    // or just allow multiple tabs if handled.
+    // However, basic implementation often checks type.
+    // If it's a texture, we probably want a specific tab per texture.
+    /* SINGLETON TABS */
+    const singletonTypes = ['editor-preferences', 'project-settings', 'plugin-manager', 'content-browser', 'console'];
+
+    // Default unique ID generation
+    let uniqueId: string = type;
+
+    // For multi-instance types, append title/identifier
+    if (!singletonTypes.includes(type)) {
+      uniqueId = `${type}-${title}`;
+    }
+
+    const existingTab = tabs.find(t => t.id === uniqueId);
     if (existingTab) {
       setActiveTabId(existingTab.id);
     } else {
-      const newTabId = `${type}-${Date.now()}`;
-      setTabs(prev => [...prev, { id: newTabId, title, type, closable: true }]);
-      setActiveTabId(newTabId);
+      setTabs(prev => [...prev, { id: uniqueId, title, type, data, closable: true }]);
+      setActiveTabId(uniqueId);
+    }
+  };
+
+  // Centralized asset opening logic
+  const handleOpenAsset = (asset: any) => {
+    // Identify Asset Types based on Type property primarily
+    const type = asset.type ? asset.type : '';
+
+    let tabType: 'static-mesh' | 'texture' | 'sound' | 'material-editor' | null = null;
+
+    // Prioritize explicit types
+    if (type === 'StaticMesh') tabType = 'static-mesh';
+    else if (type === 'Texture') tabType = 'texture';
+    else if (type === 'SoundWave') tabType = 'sound';
+    else if (type === 'Material') tabType = 'material-editor';
+
+    // Fallback to extensions only if type is generic/missing, but only for .plumeasset if strictly needed
+    // The user requested to remove legacy extensions like .fbx, .obj, .plumematerial
+
+    if (tabType) {
+      const tabId = `${tabType}-${asset.id}`;
+      setTabs(prev => {
+        if (prev.find(t => t.id === tabId)) return prev;
+        // Clean up name if it has an extension (just in case backend sends it)
+        const title = asset.name.replace(/\.plumeasset$/i, '');
+        return [...prev, {
+          id: tabId,
+          title: title,
+          type: tabType as any,
+          // Pass full path if available or ID
+          data: typeof asset.path === 'string' ? asset.path : (asset.path || asset.id),
+          closable: true
+        }];
+      });
+      setActiveTabId(tabId);
+      addLog(`Opened asset: ${asset.name}`, 'INFO');
+      // If it's the main browser, close it (optional, logic might differ but acceptable default)
+      if (showContentBrowser) setShowContentBrowser(false);
+    } else if (asset.type === 'texture' || asset.type === 'image') {
+      // Fallback for generic textures if type matching failed above
+      handleOpenTab('texture', asset.name, asset.path || asset.id);
+      if (showContentBrowser) setShowContentBrowser(false);
+    } else {
+      addLog(`Cannot open asset type: ${asset.type}`, 'WARN');
     }
   };
 
@@ -102,6 +241,32 @@ export default function App() {
     const time = new Date().toLocaleTimeString('en-US', { hour12: false });
     setLogs(prev => [...prev.slice(-99), { id: Date.now(), time, level, msg }]);
   }, []);
+
+  // Save active tab effect & Sync Backend State
+  useEffect(() => {
+    localStorage.setItem('plume_editor_active_tab', activeTabId);
+
+    // Sync Backend State with Active Tab
+    const activeTab = tabs.find(t => t.id === activeTabId);
+    if (activeTab) {
+      if (activeTab.type === 'static-mesh') {
+        const assetPath = activeTab.data?.entityId || 'Unknown';
+        // We pass the ID or Name as path for now. 
+        // In real asset system, we'd pass the full path or UUID.
+
+        if ((window as any).chrome?.webview) {
+          (window as any).chrome.webview.postMessage({ action: 'preview-asset', path: assetPath });
+          addLog(`Previewing asset: ${assetPath}`, 'INFO');
+        }
+      } else {
+        // For scene or any other tab, we assume we want the main scene
+        // If we had multiple types of 3D editors, we'd need more logic.
+        if ((window as any).chrome?.webview) {
+          (window as any).chrome.webview.postMessage({ action: 'restore-main-scene' });
+        }
+      }
+    }
+  }, [activeTabId, tabs, addLog]);
 
   const refreshPlugin = (id: string) => {
     if (refreshingPluginId) return;
@@ -689,6 +854,19 @@ export default function App() {
                   onClose={() => handleTabClose(tab.id)}
                 />
               )}
+              {tab.type === 'texture' && (
+                <TextureViewer assetId={typeof tab.data === 'string' ? tab.data : (tab.data?.entityId || tab.data?.assetId || '')} name={tab.title} />
+              )}
+              {tab.type === 'material-editor' && (
+                <MaterialEditor
+                  assetId={typeof tab.data === 'string' ? tab.data : (tab.data?.entityId || tab.data?.assetId || '')}
+                  name={tab.title}
+                  onDirtyChange={(dirty) => setTabs(prev => prev.map(t => t.id === tab.id ? { ...t, isDirty: dirty } : t))}
+                />
+              )}
+              {tab.type === 'sound' && (
+                <SoundViewer assetId={typeof tab.data === 'string' ? tab.data : (tab.data?.entityId || tab.data?.assetId || '')} name={tab.title} />
+              )}
               {tab.type === 'editor-preferences' && (
                 <EditorPreferences
                   isOpen={true} // Ignored by component
@@ -715,6 +893,25 @@ export default function App() {
                   }}
                 />
               )}
+              {tab.type === 'content-browser' && (
+                <ContentBrowserPanel
+                  show={true}
+                  isDocked={true}
+                  onClose={() => handleTabClose(tab.id)}
+                  onLog={addLog}
+                  onOpenAsset={handleOpenAsset}
+                />
+              )}
+              {tab.type === 'console' && (
+                <ConsolePanel
+                  logs={logs}
+                  onClear={() => setLogs([])}
+                  onExecuteCommand={handleExecuteCommand}
+                  isOpen={true}
+                  setIsOpen={() => handleTabClose(tab.id)}
+                  isDocked={true}
+                />
+              )}
             </div>
           );
         })}
@@ -723,7 +920,7 @@ export default function App() {
       {/* Backdrop for Panels */}
       {(showContentBrowser || showConsole) && (
         <div
-          className="fixed inset-0 z-40 bg-transparent"
+          className={`fixed inset-0 z-40 bg-transparent ${isDraggingGlobal ? 'pointer-events-none' : ''}`}
           onClick={() => {
             setShowContentBrowser(false);
             setShowConsole(false);
@@ -734,40 +931,16 @@ export default function App() {
       <ContentBrowserPanel
         show={showContentBrowser}
         onClose={() => setShowContentBrowser(false)}
+        onDock={() => {
+          const newTabId = `content-browser-${Date.now()}`;
+          setTabs(prev => [...prev, { id: newTabId, title: 'Content Browser', type: 'content-browser', closable: true }]);
+          setActiveTabId(newTabId);
+          setShowContentBrowser(false);
+        }}
         onLog={addLog}
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
-        onOpenAsset={(asset) => {
-          // Identify Asset Types
-          const nameLower = asset.name.toLowerCase();
-          const type = asset.type ? asset.type : '';
-
-          let tabType: 'static-mesh' | 'texture' | 'sound' | null = null;
-
-          if (type === 'StaticMesh' || nameLower.endsWith('.fbx') || nameLower.endsWith('.obj') || nameLower.endsWith('.ply')) tabType = 'static-mesh';
-          else if (type === 'Texture' || nameLower.endsWith('.png') || nameLower.endsWith('.jpg') || nameLower.endsWith('.tga')) tabType = 'texture';
-          else if (type === 'SoundWave' || nameLower.endsWith('.wav') || nameLower.endsWith('.mp3')) tabType = 'sound';
-
-          if (tabType) {
-            const tabId = `${tabType}-${asset.id}`;
-            setTabs(prev => {
-              if (prev.find(t => t.id === tabId)) return prev;
-              const title = asset.name.replace(/\.(plumeasset|plume_mesh|fbx|obj|gltf|glb|png|jpg|jpeg|tga|bmp|wav|mp3|ogg)$/i, '');
-              return [...prev, {
-                id: tabId,
-                title: title,
-                type: tabType as any,
-                data: { entityId: asset.name, assetId: asset.id },
-                closable: true
-              }];
-            });
-            setActiveTabId(tabId);
-            addLog(`Opened asset: ${asset.name}`, 'INFO');
-            setShowContentBrowser(false);
-          } else {
-            addLog(`Cannot open asset type: ${asset.type}`, 'WARN');
-          }
-        }}
+        onOpenAsset={handleOpenAsset}
       />
       <ConsolePanel
         logs={logs}
@@ -775,6 +948,17 @@ export default function App() {
         onExecuteCommand={(cmd) => handleExecuteCommand(cmd)}
         isOpen={showConsole}
         setIsOpen={setShowConsole}
+        onDock={() => {
+          const existing = tabs.find(t => t.type === 'console');
+          if (existing) {
+            setActiveTabId(existing.id);
+          } else {
+            const newTabId = `console-${Date.now()}`;
+            setTabs(prev => [...prev, { id: newTabId, title: 'Console', type: 'console', closable: true }]);
+            setActiveTabId(newTabId);
+          }
+          setShowConsole(false);
+        }}
       />
 
       {/* Footer / Status Bar - Persistent */}
