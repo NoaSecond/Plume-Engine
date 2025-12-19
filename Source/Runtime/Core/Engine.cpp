@@ -192,6 +192,10 @@ namespace Plume {
         if (m_ActiveScene) m_ActiveScene->RotateCamera(delta);
     }
 
+    void Engine::SetCameraMode(int mode) {
+        if (m_ActiveScene) m_ActiveScene->SetCameraMode(static_cast<Scene::CameraMode>(mode));
+    }
+
     void Engine::TranslateCameraLocal(const Plume::Vec3& delta, bool followPitch) {
         if (m_ActiveScene) m_ActiveScene->TranslateCameraLocal(delta, followPitch);
     }

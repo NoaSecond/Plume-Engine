@@ -222,7 +222,7 @@ export function useContentBrowser(show: boolean, onLog: (msg: string, type: 'WAR
         const defaultName = 'New Folder';
         const id = `${defaultName.toLowerCase().replace(/[^a-z0-9]+/g, '_')}_${Date.now()}`;
         const folderPath = `${currentPath}/${defaultName}`.replace(/\/{2,}/g, '/');
-        const placeholder = { id, name: defaultName, type: 'folder', path: folderPath };
+        const placeholder = { id, name: defaultName, type: 'folder', path: folderPath, meta: { isNew: true } };
         setAssets(prev => [placeholder, ...prev]);
         setEditingId(id);
         setEditingValue(defaultName);
@@ -266,10 +266,10 @@ export function useContentBrowser(show: boolean, onLog: (msg: string, type: 'WAR
 
         setEditingId(null);
         const __webview = (window as any).chrome?.webview;
-        if (!asset.path) {
+        if (!asset.path || asset.meta?.isNew) {
             if (__webview) __webview.postMessage({ action: 'create-folder', name: newName, path: currentPath });
         } else {
-            if (__webview) __webview.postMessage({ action: 'rename', path: asset.path, name: newName });
+            if (__webview) __webview.postMessage({ action: 'rename', path: asset.path, newName: newName });
         }
         if (__webview) __webview.postMessage({ action: 'list-content', path: currentPath });
     };
@@ -377,41 +377,11 @@ export function useContentBrowser(show: boolean, onLog: (msg: string, type: 'WAR
         });
     };
 
-    // Keyboard Shortcuts
+    // Keyboard Shortcuts handled in ContentBrowserPanel
+    // to avoid hook dependencies and ensure panel visibility/focus is respected.
     useEffect(() => {
-        const onKey = (e: KeyboardEvent) => {
-            if (e.repeat) return;
-            const { ctrlKey, key } = e;
-            const keyLower = key.toLowerCase();
-
-            // Note: Search focus removed from here, handled in component to access ref
-
-            if (selectedIds.size === 0) return;
-            const firstSelectedId = Array.from(selectedIds)[0];
-            const selectedAsset = assets.find(a => a.id === firstSelectedId);
-            if (!selectedAsset) return;
-
-            if (ctrlKey && keyLower === 'c') {
-                e.preventDefault();
-                if (selectedIds.size === 1) copyItem(selectedAsset);
-            } else if (ctrlKey && keyLower === 'd') {
-                e.preventDefault();
-                if (selectedIds.size === 1) duplicateItem(selectedAsset);
-            } else if (keyLower === 'delete') {
-                e.preventDefault();
-                // Trigger delete logic
-                deleteItem(selectedAsset); // Logic handles multi or single
-            } else if (keyLower === 'f2') {
-                e.preventDefault();
-                if (selectedIds.size === 1) renameItem(selectedAsset);
-            } else if (ctrlKey && keyLower === 'v') {
-                e.preventDefault();
-                pasteClipboard();
-            }
-        };
-        window.addEventListener('keydown', onKey);
-        return () => window.removeEventListener('keydown', onKey);
-    }, [assets, selectedIds, clipboard, currentPath, show, deleteItem]);
+        // No-op or removed
+    }, []);
 
     return {
         searchQuery, setSearchQuery,

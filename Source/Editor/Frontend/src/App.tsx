@@ -359,13 +359,17 @@ export default function App() {
       }
 
       if (needsCameraUpdate) {
-        setCameraTransform(prev => ({
-          ...prev,
-          position: {
-            ...prev.position,
-            z: prev.position.z + (cameraUpdates.z || 0)
-          }
-        }));
+        // Prevent camera movement if not in scene tab
+        const currentActiveTab = tabs.find(t => t.id === activeTabId);
+        if (currentActiveTab && currentActiveTab.type === 'scene') {
+          setCameraTransform(prev => ({
+            ...prev,
+            position: {
+              ...prev.position,
+              z: prev.position.z + (cameraUpdates.z || 0)
+            }
+          }));
+        }
       }
 
       // Optimize entity rotation updates
@@ -389,9 +393,24 @@ export default function App() {
     }
     previousTimeRef.current = time;
     requestRef.current = requestAnimationFrame(animate);
-  }, [isPlaying]);
+  }, [isPlaying, activeTabId, tabs]);
 
   useEffect(() => { requestRef.current = requestAnimationFrame(animate); return () => { if (requestRef.current) cancelAnimationFrame(requestRef.current); }; }, [animate]);
+
+  // Manage Global Rendering State based on active tab
+  useEffect(() => {
+    const activeTab = tabs.find(t => t.id === activeTabId);
+    const shouldRender = activeTab ? (activeTab.type === 'scene' || activeTab.type === 'static-mesh') : false;
+
+    // @ts-ignore
+    if (window.chrome?.webview) {
+      // @ts-ignore
+      window.chrome.webview.postMessage({
+        action: 'set-rendering-enabled',
+        enabled: shouldRender
+      });
+    }
+  }, [activeTabId, tabs]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -475,9 +494,12 @@ export default function App() {
           // We can either mount/unmount or hide/show. For 3D contexts, preserving the DOM (hide/show) is often better to avoid re-initializing WebGL contexts if they are attached to the DOM.
           // However, our SceneEditor passes state down. If we unmount, state in App is preserved, but SceneEditor internal state (if any) resets.
           // Let's use display: none for now to support quick switching.
-          const isActive = tab.id === activeTabId;
+          const isTabActive = tab.id === activeTabId;
+          // Inputs should only be active if the tab is selected AND no overlays (ContentBrowser/Console) are covering it
+          const isActive = isTabActive && !showContentBrowser && !showConsole;
+
           return (
-            <div key={tab.id} className="w-full h-full absolute inset-0" style={{ display: isActive ? 'block' : 'none' }}>
+            <div key={tab.id} className="w-full h-full absolute inset-0" style={{ display: isTabActive ? 'block' : 'none' }}>
               {tab.type === 'scene' && (
                 <SceneEditor
                   activeTool={activeTool}
@@ -510,13 +532,14 @@ export default function App() {
                     setEntities(entities.filter(e => e.id !== id));
                     if (selectedId === id) setSelectedId(null);
                   }}
-                  controlsEnabled={!showContentBrowser && !showConsole}
+                  controlsEnabled={!showContentBrowser && !showConsole && isActive}
                 />
               )}
               {tab.type === 'static-mesh' && (
                 <StaticMeshEditor
                   entityId={tab.data?.entityId || 'Unknown'}
                   onClose={() => handleTabClose(tab.id)}
+                  isActive={isActive}
                 />
               )}
               {tab.type === 'texture' && (
@@ -530,7 +553,11 @@ export default function App() {
                 />
               )}
               {tab.type === 'sound' && (
-                <SoundViewer assetId={typeof tab.data === 'string' ? tab.data : (tab.data?.entityId || tab.data?.assetId || '')} name={tab.title} />
+                <SoundViewer
+                  assetId={typeof tab.data === 'string' ? tab.data : (tab.data?.entityId || tab.data?.assetId || '')}
+                  name={tab.title}
+                  isActive={isActive}
+                />
               )}
               {tab.type === 'editor-preferences' && (
                 <EditorPreferences
@@ -560,7 +587,7 @@ export default function App() {
               )}
               {tab.type === 'content-browser' && (
                 <ContentBrowserPanel
-                  show={true}
+                  show={isTabActive}
                   isDocked={true}
                   onClose={() => handleTabClose(tab.id)}
                   onLog={addLog}

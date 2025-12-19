@@ -176,6 +176,7 @@ export const AssetGrid: React.FC<AssetGridProps> = ({
                             selected={selectedIds.has(a.id)}
                             meta={a.meta}
                             scale={zoomLevel}
+                            searchQuery={searchQuery}
                             onClick={(e) => handleAssetClick(a, e)}
                             onDoubleClick={(e) => handleAssetDoubleClick(a, e)}
                             onContextMenu={(e, info) => handleAssetContextMenu(e, a, info)}

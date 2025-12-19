@@ -45,6 +45,8 @@ export const TabSystem: React.FC<TabSystemProps> = ({ tabs, activeTabId, onTabCl
         }
     };
 
+    const hoverTimeout = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
     const handleDragStart = (e: React.DragEvent, index: number) => {
         setDraggedIndex(index);
         e.dataTransfer.effectAllowed = "move";
@@ -54,31 +56,66 @@ export const TabSystem: React.FC<TabSystemProps> = ({ tabs, activeTabId, onTabCl
     const handleDragEnd = () => {
         setDraggedIndex(null);
         setDropIndicator(null);
+        if (hoverTimeout.current) {
+            clearTimeout(hoverTimeout.current);
+            hoverTimeout.current = null;
+        }
     };
 
-    const handleDragOver = (e: React.DragEvent, index: number) => {
+    const handleDragOver = (e: React.DragEvent, index: number, tabId: string) => {
         e.preventDefault();
         e.dataTransfer.dropEffect = "move";
 
-        if (draggedIndex === null || draggedIndex === index) return;
+        // Internal Reorder Logic
+        if (draggedIndex !== null) {
+            if (draggedIndex === index) return;
+            // Calculate if we represent dropping before or after this tab
+            const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+            const midPoint = rect.left + rect.width / 2;
 
-        // Calculate if we represent dropping before or after this tab
-        const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-        const midPoint = rect.left + rect.width / 2;
+            if (e.clientX < midPoint) {
+                setDropIndicator(index);
+            } else {
+                setDropIndicator(index + 1);
+            }
+            return;
+        }
 
-        if (e.clientX < midPoint) {
-            setDropIndicator(index);
-        } else {
-            setDropIndicator(index + 1);
+        // External Drag Logic (Drag-Hover to Switch)
+        if (draggedIndex === null && activeTabId !== tabId) {
+            // If we are already timing this tab, do nothing
+            // We need to know which tab we are timing. 
+            // Simplification: Reset timer on every dragOver? No, that would prevent firing.
+            // We generally get many dragOver events.
+            // We should check if we have a timer running. 
+
+            // Issue: 'hoverTimeout' doesn't know WHICH tab it was started for if we store just the timer.
+            // BUT, if we mouse out to another tab, 'handleDragLeave' (on the previous tab) should clear it.
+            // Or 'handleDragOver' on the NEW tab should clear the old one.
+
+            if (!hoverTimeout.current) {
+                hoverTimeout.current = setTimeout(() => {
+                    onTabClick(tabId);
+                    hoverTimeout.current = null;
+                }, 500);
+            }
         }
     };
 
     const handleDragLeave = () => {
-        // Optional: debounce this or verify we actually left the container
+        setDropIndicator(null);
+        if (hoverTimeout.current) {
+            clearTimeout(hoverTimeout.current);
+            hoverTimeout.current = null;
+        }
     };
 
     const handleDrop = (e: React.DragEvent) => {
         e.preventDefault();
+        if (hoverTimeout.current) {
+            clearTimeout(hoverTimeout.current);
+            hoverTimeout.current = null;
+        }
 
         if (draggedIndex === null || dropIndicator === null) {
             // Cleanup handled by dragEnd, but checking here doesn't hurt
@@ -122,7 +159,8 @@ export const TabSystem: React.FC<TabSystemProps> = ({ tabs, activeTabId, onTabCl
                             draggable
                             onDragStart={(e) => handleDragStart(e, index)}
                             onDragEnd={handleDragEnd}
-                            onDragOver={(e) => handleDragOver(e, index)}
+                            onDragOver={(e) => handleDragOver(e, index, tab.id)}
+                            onDragLeave={handleDragLeave}
                             onDrop={handleDrop}
                             onClick={() => onTabClick(tab.id)}
                             className={`relative h-full flex items-center px-3 min-w-[100px] max-w-[180px] cursor-pointer group text-[10px] border-r transition-colors ${draggedIndex === index ? 'opacity-50' : ''}`}

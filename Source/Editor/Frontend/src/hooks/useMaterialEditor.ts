@@ -97,11 +97,20 @@ export function useMaterialEditor(assetId: string, name: string, onDirtyChange?:
     }, [isDirty, nodes, edges, name, assetId, setDirty]);
 
     // Viewport Controls
+    const safeFitView = useCallback(() => {
+        if (reactFlowInstance && reactFlowWrapper.current) {
+            const bounds = reactFlowWrapper.current.getBoundingClientRect();
+            if (bounds.width > 0 && bounds.height > 0) {
+                reactFlowInstance.fitView({ padding: 0.2, duration: 200 });
+            }
+        }
+    }, [reactFlowInstance]);
+
     const handleFitView = useCallback(() => {
         setIsFitting(true);
         setTimeout(() => setIsFitting(false), 200);
-        reactFlowInstance?.fitView({ padding: 0.2, duration: 200 });
-    }, [reactFlowInstance]);
+        safeFitView();
+    }, [safeFitView]);
 
     const handleLock = useCallback(() => {
         setIsLocking(true);
@@ -112,13 +121,17 @@ export function useMaterialEditor(assetId: string, name: string, onDirtyChange?:
     const handleZoomIn = useCallback(() => {
         setIsZoomingIn(true);
         setTimeout(() => setIsZoomingIn(false), 200);
-        reactFlowInstance?.zoomIn();
+        if (reactFlowInstance && reactFlowWrapper.current && reactFlowWrapper.current.offsetHeight > 0) {
+            reactFlowInstance.zoomIn();
+        }
     }, [reactFlowInstance]);
 
     const handleZoomOut = useCallback(() => {
         setIsZoomingOut(true);
         setTimeout(() => setIsZoomingOut(false), 200);
-        reactFlowInstance?.zoomOut();
+        if (reactFlowInstance && reactFlowWrapper.current && reactFlowWrapper.current.offsetHeight > 0) {
+            reactFlowInstance.zoomOut();
+        }
     }, [reactFlowInstance]);
 
     const onConnect = useCallback((params: Connection) => {
@@ -211,7 +224,7 @@ export function useMaterialEditor(assetId: string, name: string, onDirtyChange?:
                     }
                     setDirty(false);
                     setTimeout(() => {
-                        if (reactFlowInstance) reactFlowInstance.fitView({ padding: 0.2, duration: 200 });
+                        safeFitView();
                     }, 100);
                 } catch (err) { console.error("Failed to parse material data", err); }
             }
@@ -231,7 +244,7 @@ export function useMaterialEditor(assetId: string, name: string, onDirtyChange?:
             if ((window as any).chrome?.webview) (window as any).chrome.webview.removeEventListener('message', handleMessage);
             else window.removeEventListener('message', handleMessage);
         };
-    }, [assetId, setNodes, setEdges, setDirty, name, reactFlowInstance]);
+    }, [assetId, setNodes, setEdges, setDirty, name, reactFlowInstance, safeFitView]);
 
     // Node Operations that need access to setNodes
     const duplicateNodes = useCallback((targetNodes: Node[]) => {

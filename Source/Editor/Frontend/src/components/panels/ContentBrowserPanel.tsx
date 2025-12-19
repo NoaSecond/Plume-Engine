@@ -74,21 +74,87 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.repeat) return;
+
+      // Search
       if (show && e.ctrlKey && e.key.toLowerCase() === 'k') {
         e.preventDefault();
         searchInputRef.current?.focus();
         searchInputRef.current?.select();
       }
+      // Select All
       if (show && e.ctrlKey && e.key.toLowerCase() === 'a') {
+        const active = document.activeElement as HTMLElement;
+        const isInput = active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable);
+        if (isInput) return;
+
         e.preventDefault();
         const allIds = browser.assets.map(a => a.id);
         browser.setSelectedIds(new Set(allIds));
         if (allIds.length > 0) browser.setLastSelectedId(allIds[allIds.length - 1]);
       }
+
+      // Operations
+      if (show && !modalOpen && !colorPicker) {
+        if (e.ctrlKey && e.key.toLowerCase() === 'c') {
+          e.preventDefault();
+          const selected = browser.assets.filter(a => browser.selectedIds.has(a.id));
+          if (selected.length > 0) {
+            // Handle multi-select copy if needed, but hook might only take one.
+            // Hook copyItem handles list if multiple selected?
+            // Checking hook: const itemsToCopy = selectedIds.has(item.id) && selectedIds.size > 1 ...
+            // It requires an 'item' argument but uses selectedIds if that item is selected.
+            // We can pass the first selected item.
+            browser.copyItem(selected[0]);
+          }
+        }
+        if (e.ctrlKey && e.key.toLowerCase() === 'v') {
+          e.preventDefault();
+          browser.pasteClipboard();
+        }
+        if (e.ctrlKey && e.key.toLowerCase() === 'd') {
+          e.preventDefault();
+          const selected = browser.assets.filter(a => browser.selectedIds.has(a.id));
+          if (selected.length > 0) browser.duplicateItem(selected[0]);
+        }
+        if (e.ctrlKey && e.key.toLowerCase() === 'n') {
+          e.preventDefault();
+          browser.createFolder();
+        }
+        if (e.key === 'Delete') {
+          e.preventDefault();
+          const selected = browser.assets.filter(a => browser.selectedIds.has(a.id));
+          if (selected.length > 0) browser.deleteItem(selected[0]);
+        }
+        if (e.key === 'F2') {
+          e.preventDefault();
+          const selected = browser.assets.filter(a => browser.selectedIds.has(a.id));
+          if (selected.length === 1) browser.renameItem(selected[0]);
+        }
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [show, browser.assets]);
+  }, [show, browser.assets, browser.selectedIds, browser.clipboard, modalOpen, colorPicker]);
+
+  // Delete Confirmation Enter Key
+  useEffect(() => {
+    if (!browser.deletePending) return;
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        e.stopPropagation();
+        browser.confirmDeleteNow();
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        browser.setDeletePending(null);
+      }
+    };
+    window.addEventListener('keydown', onKey, true); // Capture phase
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [browser.deletePending, browser.confirmDeleteNow, browser.setDeletePending]);
 
   // Sidebar Resizing
   useEffect(() => {
@@ -480,24 +546,24 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
               y={ctxY}
               direction="up"
               items={(ctxType === 'empty' ? [
-                { id: 'create_folder', label: t('browser.context.create_folder') },
+                { id: 'create_folder', label: t('browser.context.create_folder'), shortcut: 'Ctrl+N' },
                 { id: 'open_in_explorer', label: t('browser.context.open_explorer') },
-                { id: 'paste', label: t('browser.context.paste'), disabled: browser.clipboard == null },
+                { id: 'paste', label: t('browser.context.paste'), disabled: browser.clipboard == null, shortcut: 'Ctrl+V' },
                 { id: 'import', label: t('browser.context.import') },
                 { id: 'sep1', type: 'separator' },
                 { id: 'create_material', label: t('browser.context.create_material') },
                 { id: 'create_level', label: t('browser.context.create_level') }
               ] : ctxType === 'folder' ? [
                 { id: 'change_color', label: t('browser.context.change_color') },
-                { id: 'rename', label: t('browser.context.rename') },
-                { id: 'delete', label: t('browser.context.delete') },
-                { id: 'duplicate', label: t('browser.context.duplicate') },
-                { id: 'copy', label: t('browser.context.copy') }
+                { id: 'rename', label: t('browser.context.rename'), shortcut: 'F2' },
+                { id: 'delete', label: t('browser.context.delete'), shortcut: 'Del' },
+                { id: 'duplicate', label: t('browser.context.duplicate'), shortcut: 'Ctrl+D' },
+                { id: 'copy', label: t('browser.context.copy'), shortcut: 'Ctrl+C' }
               ] : [
-                { id: 'delete', label: t('browser.context.delete') },
-                { id: 'rename', label: t('browser.context.rename') },
-                { id: 'duplicate', label: t('browser.context.duplicate') },
-                { id: 'copy', label: t('browser.context.copy') }
+                { id: 'delete', label: t('browser.context.delete'), shortcut: 'Del' },
+                { id: 'rename', label: t('browser.context.rename'), shortcut: 'F2' },
+                { id: 'duplicate', label: t('browser.context.duplicate'), shortcut: 'Ctrl+D' },
+                { id: 'copy', label: t('browser.context.copy'), shortcut: 'Ctrl+C' }
               ]) as ContextMenuItem[]}
               onSelect={(id) => {
                 if (id === 'create_folder') browser.createFolder();
@@ -527,8 +593,20 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
           <div style={{ position: 'absolute', right: 16, bottom: 16, zIndex: 60 }}>
             <div className="flex items-center space-x-2 p-3 rounded shadow" style={{ backgroundColor: theme.colors.bg.secondary, border: `1px solid ${theme.colors.border.default}` }}>
               <div className="text-sm" style={{ color: theme.colors.text.primary }}>{t('browser.delete_confirm').replace('{name}', browser.deletePending.name)}</div>
-              <button className="px-3 py-1 rounded text-sm" style={{ backgroundColor: '#ef4444', color: '#fff' }} onClick={browser.confirmDeleteNow}>{t('browser.delete')}</button>
-              <button className="px-3 py-1 rounded text-sm" style={{ backgroundColor: theme.colors.bg.elevated, color: theme.colors.text.primary }} onClick={() => browser.setDeletePending(null)}>{t('browser.cancel')}</button>
+              <button
+                className="px-3 py-1 rounded text-sm"
+                style={{ backgroundColor: '#ef4444', color: '#fff' }}
+                onClick={browser.confirmDeleteNow}
+              >
+                {t('browser.delete')} <span className="opacity-75 text-xs ml-1">(Enter)</span>
+              </button>
+              <button
+                className="px-3 py-1 rounded text-sm"
+                style={{ backgroundColor: theme.colors.bg.elevated, color: theme.colors.text.primary }}
+                onClick={() => browser.setDeletePending(null)}
+              >
+                {t('browser.cancel')} <span className="opacity-75 text-xs ml-1">(Esc)</span>
+              </button>
             </div>
           </div>
         )}

@@ -38,6 +38,11 @@ namespace Plume {
 
         // Allow Renderer to iterate entities
         friend class Renderer;
+        
+        enum class CameraMode { SixDOF, ThreeDOF };
+        void SetCameraMode(CameraMode mode) { m_CameraMode = mode; }
+        CameraMode GetCameraMode() const { return m_CameraMode; }
+
     private:
         struct EntityData {
             TagComponent Tag;
@@ -46,6 +51,7 @@ namespace Plume {
             bool Visible = true;
         };
         std::vector<EntityData> m_Registry;
+        CameraMode m_CameraMode = CameraMode::ThreeDOF;
     };
     class Entity {
     public:

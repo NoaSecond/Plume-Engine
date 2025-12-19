@@ -5,6 +5,7 @@ import { useTheme } from '../../ThemeContext';
 export type ContextMenuItem = {
   id: string;
   label?: string;
+  shortcut?: string;
   disabled?: boolean;
   type?: 'item' | 'separator';
 };
@@ -130,6 +131,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, items, onSelect,
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ fontSize: 13, fontWeight: 500 }}>{it.label}</span>
+                {it.shortcut && <span style={{ fontSize: 11, opacity: 0.6, marginLeft: 16 }}>{it.shortcut}</span>}
               </div>
             </div>
           )

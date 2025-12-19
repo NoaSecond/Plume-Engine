@@ -152,7 +152,7 @@ const TreeNode: React.FC<{ node: any; depth: number } & Omit<FolderTreeProps, 'n
                     props.setCtxVisible(true);
                 }}
             >
-                <div onClick={(e) => { e.stopPropagation(); props.toggleExpand(node.id); }} style={{ width: 16 }}>
+                <div onClick={(e) => { e.stopPropagation(); props.toggleExpand(node.id); }} style={{ width: 16, flexShrink: 0, display: 'flex', alignItems: 'center' }}>
                     {visibleChildren && visibleChildren.length > 0 ? (
                         isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />
                     ) : (
@@ -164,7 +164,15 @@ const TreeNode: React.FC<{ node: any; depth: number } & Omit<FolderTreeProps, 'n
                     {getIcon()}
                 </div>
 
-                <span style={{ fontWeight: props.currentPath === (node.path || node.name) ? 600 : 400 }}>
+                <span style={{
+                    fontWeight: props.currentPath === (node.path || node.name) ? 600 : 400,
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    minWidth: 0
+                }}
+                    title={node.name}
+                >
                     {node.name.includes('.') ? node.name.substring(0, node.name.lastIndexOf('.')) : node.name}
                 </span>
             </div>

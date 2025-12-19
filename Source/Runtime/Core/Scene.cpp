@@ -240,7 +240,25 @@ namespace Plume {
     void Scene::RotateCamera(const Vec3& delta) {
         for (auto& e : m_Registry) {
             if (e.Type.Type == EntityType::Camera) {
-                // Unlimited Pitch (Looping) + Stabilized Roll
+                
+                if (m_CameraMode == CameraMode::ThreeDOF) {
+                    // 3DOF / FPS Style
+                    // Yaw (y) around Global Y (which is just Y in Euler YXZ if applied first)
+                    // Pitch (x) clamped
+                    // Roll (z) forced to 0
+                    
+                    e.Transform.Rotation.y += delta.y;
+                    e.Transform.Rotation.x += delta.x;
+                    
+                    // Clamp pitch to avoid gimbal lock flip or weirdness
+                    if (e.Transform.Rotation.x > 89.0f) e.Transform.Rotation.x = 89.0f;
+                    if (e.Transform.Rotation.x < -89.0f) e.Transform.Rotation.x = -89.0f;
+                    
+                    e.Transform.Rotation.z = 0.0f;
+                    return;
+                }
+
+                // Default: 6DOF / Free Style (Unlimited Pitch (Looping) + Stabilized Roll)
                 
                 // 1. Calculate Target Roll (Manual Only)
                 float targetRoll = e.Transform.Rotation.z + delta.z;

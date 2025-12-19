@@ -7,6 +7,7 @@ import { Play, Pause, Square, Repeat, Volume2, VolumeX, AlertTriangle, SkipBack 
 interface SoundViewerProps {
     assetId: string; // Is actually the path or ID
     name: string;
+    isActive?: boolean;
 }
 
 interface AudioControlsProps {
@@ -127,7 +128,7 @@ const AudioControls: React.FC<AudioControlsProps> = ({
     );
 };
 
-export const SoundViewer: React.FC<SoundViewerProps> = ({ assetId, name }) => {
+export const SoundViewer: React.FC<SoundViewerProps> = ({ assetId, name, isActive = true }) => {
     const { theme } = useTheme();
     const { t } = useLanguage();
     const containerRef = useRef<HTMLDivElement>(null);
@@ -147,6 +148,14 @@ export const SoundViewer: React.FC<SoundViewerProps> = ({ assetId, name }) => {
     useEffect(() => {
         loopRef.current = loop;
     }, [loop]);
+
+    // Auto-pause when inactive
+    useEffect(() => {
+        if (!isActive && isPlaying && wavesurferRef.current) {
+            wavesurferRef.current.pause();
+            setIsPlaying(false);
+        }
+    }, [isActive, isPlaying]);
 
     useEffect(() => {
         if (!containerRef.current) return;
@@ -265,6 +274,8 @@ export const SoundViewer: React.FC<SoundViewerProps> = ({ assetId, name }) => {
     // Keyboard Shortcuts
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
+            if (!isActive) return;
+
             // Only trigger if we are focused within the editor or globally if desired? 
             // For now, global within the webview seems appropriate for a focused tool.
             // Check if input is focused to avoid typing conflict
@@ -292,7 +303,7 @@ export const SoundViewer: React.FC<SoundViewerProps> = ({ assetId, name }) => {
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [isPlaying, loop, isMuted, volume]); // Dependencies needed for toggle functions to see correct state? 
+    }, [isPlaying, loop, isMuted, volume, isActive]); // Dependencies needed for toggle functions to see correct state? 
     // Wait, toggle functions use refs or state setters?
     // togglePlay uses waveSurferRef and setIsPlaying(!isPlaying). Needs isPlaying dependency.
 

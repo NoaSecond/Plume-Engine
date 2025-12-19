@@ -44,6 +44,7 @@ namespace RHI {
         // Camera control helpers
         void TranslateCamera(const Plume::Vec3& delta);
         void RotateCamera(const Plume::Vec3& delta);
+        void SetCameraMode(int mode); // 0 = Free, 1 = Orbital
         // Translate in camera-local space (x = right, y = up, z = forward)
         void TranslateCameraLocal(const Plume::Vec3& delta, bool followPitch = true);
         // Performance stats

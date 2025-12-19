@@ -148,9 +148,10 @@ export interface AssetTileProps {
   onContextMenu?: (e: React.MouseEvent, info: { name: string, type: string }) => void;
   meta?: any;
   scale?: number;
+  searchQuery?: string;
 }
 
-export const AssetTile = ({ id, name, type, selected = false, onClick, onDoubleClick, onContextMenu, meta, scale = 1 }: AssetTileProps) => {
+export const AssetTile = ({ id, name, type, selected = false, onClick, onDoubleClick, onContextMenu, meta, scale = 1, searchQuery = '' }: AssetTileProps) => {
   const { theme } = useTheme();
   const [isHovered, setIsHovered] = useState(false);
 
@@ -297,7 +298,21 @@ export const AssetTile = ({ id, name, type, selected = false, onClick, onDoubleC
         }}
         title={displayName}
       >
-        {displayName}
+        {(() => {
+          if (!searchQuery) return displayName;
+          const index = displayName.toLowerCase().indexOf(searchQuery.toLowerCase());
+          if (index === -1) return displayName;
+          const before = displayName.substring(0, index);
+          const match = displayName.substring(index, index + searchQuery.length);
+          const after = displayName.substring(index + searchQuery.length);
+          return (
+            <>
+              {before}
+              <span style={{ backgroundColor: theme.colors.accent.secondary, color: '#fff', borderRadius: '2px', padding: '0 2px' }}>{match}</span>
+              {after}
+            </>
+          );
+        })()}
       </span>
     </div >
   );

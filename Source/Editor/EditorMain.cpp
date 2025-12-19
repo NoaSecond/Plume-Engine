@@ -1,3 +1,10 @@
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <Windows.h>
+#include <shobjidl.h> 
+#include <wrl.h>
+#include <shellapi.h>
+
 #include <Core/Engine.h>
 #include <Core/PluginManager.h>
 #include <Rendering/RHI/RHIDevice.h>
@@ -8,28 +15,15 @@
 #include <unordered_map>
 #include <thread>
 #include <chrono>
-#include <atomic>
-#include <memory>
-#include <functional>
-#include <ctime>
-#include <mutex>
-#include <unordered_set>
-// Vendored single-header JSON (nlohmann)
-#include "ThirdParty/nlohmann_json.hpp"
 
-#ifdef _WIN32
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-#include <windowsx.h>
-#include <shellapi.h>
-#include <dwmapi.h>
-#include <commdlg.h>
-#include <shlwapi.h> // For SHCreateMemStream
-#include <wrl.h>
-#include "WebView2.h"
 #include "SplashScreen.h"
 #include "resource.h"
 #include "Version.h"
+
+#include "Native/EditorContext.h"
+#include "Native/EditorWindow.h"
+#include "Native/WebViewManager.h"
+
 using namespace Microsoft::WRL;
 #pragma comment(lib, "dwmapi.lib")
 #pragma comment(lib, "comdlg32.lib")
@@ -38,57 +32,9 @@ using namespace Microsoft::WRL;
 
 namespace fs = std::filesystem;
 
-struct AppState {
-    HWND hwnd = nullptr;
-    HWND viewport = nullptr;
-    ComPtr<ICoreWebView2Controller> controller;
-    ComPtr<ICoreWebView2> webview;
-    ComPtr<ICoreWebView2Environment> env;
-    Plume::Engine* engine = nullptr;
-    std::string uiFolder;
-    std::atomic<bool> shouldClose{false};
-    bool isFullscreen = false;
-    std::string clipboardPath;
-    
-    // Viewport bounds from web UI (for 3D rendering region)
-    struct {
-        int x = 0;
-        int y = 0;
-        int width = 800;
-        int height = 600;
-    } viewportBounds;
-    // Input state for viewport camera control
-    POINT lastMouse = {0,0};
-    bool isLeftDown = false;
-    // Pressed keys reported from the web UI (thread-safe)
-    std::mutex keysMutex;
-    std::unordered_set<std::string> pressedKeys;
-    // WebView visibility toggle state
-    bool webviewVisible = true;
-    bool lastCtrlT = false;
-    // Editor configuration loaded from EditorConfig.ini
-    bool showFPS = false;
-    bool vsync = true;
-    int maxFPS = 144;
-};
-
 static AppState g_app;
 
-static void ToggleWebViewVisibility() {
-    if (!g_app.controller) return;
-
-    BOOL isVisible = FALSE;
-    HRESULT hr = g_app.controller->get_IsVisible(&isVisible);
-    if (SUCCEEDED(hr)) {
-        BOOL newVis = isVisible ? FALSE : TRUE;
-        g_app.controller->put_IsVisible(newVis);
-    }
-
-    if (g_app.hwnd) {
-        InvalidateRect(g_app.hwnd, NULL, TRUE);
-        UpdateWindow(g_app.hwnd);
-    }
-}
+// --- Export Functions (kept here for now or move to EditorDataExporter later) ---
 
 void ExportSceneData() {
     if (!g_app.engine) return;
@@ -110,20 +56,17 @@ void ExportSceneData() {
 }
 
 void ExportThemeData() {
-    // Create a default theme file for the splash screen ONLY if it doesn't exist
-    // This allows the user's preference (saved via save-theme) to persist
     std::string dataPath = g_app.uiFolder + "/theme_data.js";
     if (fs::exists(dataPath)) return;
 
     std::string tempPath = dataPath + ".tmp";
-    
     std::ofstream file(tempPath);
     if (file.is_open()) {
         file << "window.PLUME_THEME_DATA = {";
-        file << "\"name\": \"nebula-midnight\","; // Default theme
+        file << "\"name\": \"nebula-midnight\",";
         file << "\"colors\": {";
         file << "\"accent\": {";
-        file << "\"primary\": \"#9C27B0\""; // Nebula Midnight accent color
+        file << "\"primary\": \"#9C27B0\"";
         file << "}";
         file << "}";
         file << "}};";
@@ -135,16 +78,10 @@ void ExportThemeData() {
     }
 }
 
-// Load editor and UI configurations from INI files located at the repository root.
-// This runs during the splash screen so the UI can reflect persistent settings
-// (e.g. showFPS) before the WebView is displayed.
 void LoadConfigurations() {
     try {
-        // Search common candidate locations for EditorConfig.ini so we can load
-        // config early without depending on g_app.uiFolder being initialized.
         std::vector<fs::path> candidates;
         fs::path cwd = fs::current_path();
-        // Also try executable directory and its parents
     #ifdef _WIN32
         char exeBuf[MAX_PATH]; exeBuf[0] = '\0';
         if (GetModuleFileNameA(NULL, exeBuf, MAX_PATH) > 0) {
@@ -155,9 +92,8 @@ void LoadConfigurations() {
             candidates.push_back(exeDir.parent_path().parent_path() / "EditorConfig.ini");
         }
     #endif
-        // Fallbacks relative to current working directory
-        candidates.push_back(cwd / "EditorConfig.ini");                // repo root when running from repo
-        candidates.push_back(cwd / ".." / "EditorConfig.ini");       // bin folder scenario
+        candidates.push_back(cwd / "EditorConfig.ini");
+        candidates.push_back(cwd / ".." / "EditorConfig.ini");
         candidates.push_back(cwd / ".." / ".." / "EditorConfig.ini");
         if (!g_app.uiFolder.empty()) {
             fs::path uiFolderPath(g_app.uiFolder);
@@ -167,12 +103,9 @@ void LoadConfigurations() {
 
         auto trim = [](std::string s){ size_t a=0; while(a<s.size() && isspace((unsigned char)s[a])) a++; size_t b=s.size(); while(b>a && isspace((unsigned char)s[b-1])) b--; return s.substr(a,b-a); };
 
-        std::vector<std::string> diag;
         for (const auto& cfg : candidates) {
-            diag.push_back(std::string("Checking: ") + cfg.string());
             try {
                 if (!fs::exists(cfg)) continue;
-                diag.push_back(std::string("Found: ") + cfg.string());
                 std::ifstream ifs(cfg.string());
                 if (!ifs.is_open()) continue;
                 std::string line;
@@ -199,21 +132,15 @@ void LoadConfigurations() {
                     }
                 }
                 ifs.close();
-                diag.push_back(std::string("Loaded config: ") + cfg.string());
-                // stop after first successful load
-                // diagnostics suppressed (removed per cleanup request)
                 break;
             } catch(...) { }
         }
-        // if nothing loaded, dump diagnostics of checked candidates
-        // diagnostics suppressed (removed per cleanup request)
     } catch(...) {}
 }
 
 void ExportRenderingData() {
     if (!g_app.engine) return;
     
-    // Convert GraphicsAPI enum to string
     std::string apiName;
     auto api = g_app.engine->GetCurrentGraphicsAPI();
     switch(api) {
@@ -224,7 +151,6 @@ void ExportRenderingData() {
         default: apiName = "Unknown"; break;
     }
     
-    // Get camera transform from scene
     Plume::Vec3 camPos{0,0,0};
     Plume::Vec3 camRot{0,0,0};
     if (g_app.engine->GetActiveScene()) {
@@ -246,7 +172,6 @@ void ExportRenderingData() {
         file << "\"graphicsAPI\": \"" << apiName << "\",";
         file << "\"fps\": " << fps << ",";
         file << "\"frameTimeMs\": " << ms << ",";
-        // Export UI config flags (from EditorConfig.ini)
         file << "\"uiConfig\": {";
         file << "\"showFPS\": " << (g_app.showFPS ? 1 : 0) << ",";
         file << "\"vsync\": " << (g_app.vsync ? 1 : 0) << ",";
@@ -264,13 +189,11 @@ void ExportRenderingData() {
 }
 
 std::string GetCurrentThemeAccentColor() {
-    // Read theme_data.js file to get current theme accent color
     std::string themePath = g_app.uiFolder + "/theme_data.js";
     if (fs::exists(themePath)) {
         std::ifstream themeFile(themePath);
         if (themeFile.is_open()) {
             std::string content((std::istreambuf_iterator<char>(themeFile)), std::istreambuf_iterator<char>());
-            // Chercher la couleur d'accent primaire
             size_t primaryPos = content.find("\"primary\":");
             if (primaryPos != std::string::npos) {
                 size_t start = content.find("#", primaryPos);
@@ -283,7 +206,6 @@ std::string GetCurrentThemeAccentColor() {
             }
         }
     }
-    // Default Nebula Midnight color
     return "9C27B0";
 }
 
@@ -318,1569 +240,24 @@ void ExportPluginData() {
     }
 }
 
-#ifdef _WIN32
-LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
-    switch (msg) {
-        case WM_HOTKEY: {
-            if (wParam == 1) {
-                ToggleWebViewVisibility();
-                return 0;
-            }
-            break;
-        }
-        case WM_SIZE:
-            if (g_app.controller) {
-                // Resize WebView2 to fill the entire client area
-                RECT bounds;
-                GetClientRect(hwnd, &bounds);
-                g_app.controller->put_Bounds(bounds);
-                
-                // Note: Renderer swapchain resize will be handled when we detect
-                // viewport dimension changes from the web UI
-            }
-            return 0;
-        case WM_GETMINMAXINFO: {
-            // Adjust maximum size to prevent window overflow
-            MINMAXINFO* mmi = (MINMAXINFO*)lParam;
-            MONITORINFO mi = { sizeof(mi) };
-            GetMonitorInfo(MonitorFromWindow(hwnd, MONITOR_DEFAULTTOPRIMARY), &mi);
-            
-            // Use work area (with taskbar)
-            mmi->ptMaxSize.x = mi.rcWork.right - mi.rcWork.left;
-            mmi->ptMaxSize.y = mi.rcWork.bottom - mi.rcWork.top;
-            mmi->ptMaxPosition.x = mi.rcWork.left;
-            mmi->ptMaxPosition.y = mi.rcWork.top;
-            return 0;
-        }
-        case WM_NCHITTEST: {
-            // Allow window dragging by clicking on header (32px height)
-            LRESULT hit = DefWindowProc(hwnd, msg, wParam, lParam);
-            if (hit == HTCLIENT) {
-                POINT pt = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
-                ScreenToClient(hwnd, &pt);
-                // If clicking in the first 32 pixels (header), allow drag
-                if (pt.y >= 0 && pt.y <= 32) {
-                    return HTCAPTION;
-                }
-            }
-            return hit;
-        }
-        case WM_NCCALCSIZE: {
-            if (wParam == TRUE) {
-                NCCALCSIZE_PARAMS* params = (NCCALCSIZE_PARAMS*)lParam;
-                
-                if (IsZoomed(hwnd)) {
-                    // Window is maximized - adjust to prevent overflow
-                    MONITORINFO mi = { sizeof(mi) };
-                    GetMonitorInfo(MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST), &mi);
-                    // Adjust client area to match work area exactly
-                    params->rgrc[0] = mi.rcWork;
-                } else {
-                    // In windowed mode, only remove title bar but keep borders
-                    // Only reduce top to remove title bar
-                    params->rgrc[0].top += 0;  // No offset - completely removes title bar
-                    params->rgrc[0].left += 0;
-                    params->rgrc[0].right -= 0;
-                    params->rgrc[0].bottom -= 0;
-                }
-                return 0;
-            }
-            break;
-        }
-        case WM_SYSCOMMAND: {
-            // Handle system commands for snap
-            if ((wParam & 0xFFF0) == SC_MAXIMIZE || 
-                (wParam & 0xFFF0) == SC_RESTORE) {
-                // Let Windows handle maximize/restore
-                break;
-            }
-            return DefWindowProc(hwnd, msg, wParam, lParam);
-        }
-        case WM_CLOSE:
-            g_app.shouldClose = true;
-            DestroyWindow(hwnd);
-            return 0;
-        case WM_DESTROY:
-            // Unregister the global hotkey if it was registered
-            UnregisterHotKey(hwnd, 1);
-            PostQuitMessage(0);
-            return 0;
-    }
-    return DefWindowProc(hwnd, msg, wParam, lParam);
-}
-
-bool CreateAppWindow() {
-    HINSTANCE hInstance = GetModuleHandle(NULL);
-    
-    WNDCLASSEXW wc = {};
-    wc.cbSize = sizeof(WNDCLASSEXW);
-    wc.style = CS_HREDRAW | CS_VREDRAW;
-    wc.lpfnWndProc = WindowProc;
-    wc.hInstance = hInstance;
-    wc.hCursor = LoadCursor(NULL, IDC_ARROW);
-    wc.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
-    wc.lpszClassName = L"PlumeEngineWindow";
-    wc.hIcon = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_ICON1));
-    wc.hIconSm = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_ICON1));
-    
-    if (!RegisterClassExW(&wc)) return false;
-    
-    g_app.hwnd = CreateWindowExW(
-        0, L"PlumeEngineWindow", PLUME_WINDOW_TITLE,
-        WS_OVERLAPPEDWINDOW | WS_THICKFRAME,
-        CW_USEDEFAULT, CW_USEDEFAULT, 1600, 900,
-        NULL, NULL, hInstance, NULL
-    );
-    
-    if (!g_app.hwnd) return false;
-    
-    // Appliquer les coins arrondis (Windows 11)
-    DWM_WINDOW_CORNER_PREFERENCE corner = DWMWCP_ROUND;
-    DwmSetWindowAttribute(g_app.hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, &corner, sizeof(corner));
-    
-    // Don't show window immediately - wait for splash screen to finish
-    // but create it in invisible minimized mode to allow WebView2 to load
-    ShowWindow(g_app.hwnd, SW_SHOWMINNOACTIVE);
-    UpdateWindow(g_app.hwnd);
-
-    // Register a global hotkey (Ctrl+T) for toggling the WebView overlay
-    RegisterHotKey(g_app.hwnd, 1, MOD_CONTROL, 'T');
-    
-    g_app.viewport = nullptr;
-    
-    return true;
-}
-
-// Helper for Base64 decoding
-static std::string base64_decode(const std::string &in) {
-    std::string out;
-    std::vector<int> T(256, -1);
-    for (int i = 0; i < 64; i++) T["ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"[i]] = i;
-
-    int val = 0, valb = -8;
-    for (unsigned char c : in) {
-        if (T[c] == -1) break;
-        val = (val << 6) + T[c];
-        valb += 6;
-        if (valb >= 0) {
-            out.push_back(char((val >> valb) & 0xFF));
-            valb -= 8;
-        }
-    }
-    return out;
-}
-
-void InitWebView(const std::string& htmlPath) {
-    CreateCoreWebView2Environment(
-        Callback<ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler>(
-            [htmlPath](HRESULT result, ICoreWebView2Environment* env) -> HRESULT {
-                g_app.env = env;
-                env->CreateCoreWebView2Controller(g_app.hwnd,
-                    Callback<ICoreWebView2CreateCoreWebView2ControllerCompletedHandler>(
-                        [htmlPath](HRESULT result, ICoreWebView2Controller* controller) -> HRESULT {
-                            g_app.controller = controller;
-                            controller->get_CoreWebView2(&g_app.webview);
-                            
-                            RECT client;
-                            GetClientRect(g_app.hwnd, &client);
-                            controller->put_Bounds(client);
-                            
-                            // Configurer WebView2 pour permettre le drag
-                            ComPtr<ICoreWebView2Settings> settings;
-                            g_app.webview->get_Settings(&settings);
-                            if (settings) {
-                                // Disable default WebView2 context menu
-                                // afin que le frontend (React) puisse gérer `onContextMenu`
-                                settings->put_AreDefaultContextMenusEnabled(FALSE);
-                                settings->put_IsStatusBarEnabled(FALSE);
-                            }
-                            
-                            // Configure WebView2 for high DPI displays
-                            ComPtr<ICoreWebView2Controller3> controller3;
-                            controller->QueryInterface(IID_PPV_ARGS(&controller3));
-                            if (controller3) {
-                                controller3->put_ShouldDetectMonitorScaleChanges(TRUE);
-                            }
-
-                            // Try to set default background color transparent if controller2 is available
-                            ComPtr<ICoreWebView2Controller2> controller2;
-                            controller->QueryInterface(IID_PPV_ARGS(&controller2));
-                            if (controller2) {
-                                COREWEBVIEW2_COLOR transparentColor = {0, 0, 0, 0};
-                                controller2->put_DefaultBackgroundColor(transparentColor);
-                            }
-
-                            // Make controller visible
-                            controller->put_IsVisible(TRUE);
-
-                            // Register asset:// protocol handler
-                            g_app.webview->AddWebResourceRequestedFilter(L"asset://*", COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL);
-                            g_app.webview->AddWebResourceRequestedFilter(L"https://plume-assets/*", COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL);
-                            g_app.webview->AddWebResourceRequestedFilter(L"http://plume-assets/*", COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL);
-                            EventRegistrationToken token;
-                            g_app.webview->add_WebResourceRequested(
-                                Callback<ICoreWebView2WebResourceRequestedEventHandler>(
-                                    [](ICoreWebView2* sender, ICoreWebView2WebResourceRequestedEventArgs* args) -> HRESULT {
-                                        // Request object getters requires casting to ICoreWebView2WebResourceRequest
-                                        ComPtr<ICoreWebView2WebResourceRequest> request;
-                                        args->get_Request(&request);
-                                        LPWSTR uri;
-                                        request->get_Uri(&uri);
-                                        std::wstring wuri(uri);
-                                        CoTaskMemFree(uri);
-
-                                        // Parse URI: asset://Content/File.plumeasset OR https://plume-assets/Content/File OR http://
-                                        // path part starts after asset:// or https://plume-assets/
-                                        size_t schemePos = wuri.find(L"asset://");
-                                        std::wstring relPathW;
-                                        if (schemePos != std::wstring::npos) {
-                                            relPathW = wuri.substr(schemePos + 8);
-                                        } else {
-                                            schemePos = wuri.find(L"http://plume-assets/");
-                                            if (schemePos != std::wstring::npos) {
-                                                relPathW = wuri.substr(schemePos + 20); // http://plume-assets/ is 20 chars
-                                            } else {
-                                                schemePos = wuri.find(L"https://plume-assets/");
-                                                if (schemePos != std::wstring::npos) {
-                                                    relPathW = wuri.substr(schemePos + 21);
-                                                } else {
-                                                    return S_OK;
-                                                }
-                                            }
-                                        }
-                                        // Convert to narrow string for filesystem
-                                        int size = WideCharToMultiByte(CP_UTF8, 0, relPathW.c_str(), (int)relPathW.size(), NULL, 0, NULL, NULL);
-                                        std::string relPath(size, 0);
-                                        WideCharToMultiByte(CP_UTF8, 0, relPathW.c_str(), (int)relPathW.size(), relPath.data(), size, NULL, NULL);
-
-                                        // Map relative path (e.g., Content/File) to absolute path
-                                        // g_app.uiFolder is .../Bin/UI
-                                        // We assume .../Bin/Content is the root for asset://
-                                        // Logic: up one level from UI
-                                        fs::path uiPath(g_app.uiFolder);
-                                        fs::path binPath = uiPath.parent_path();
-                                        fs::path filePath = binPath / relPath; // constructs Bin/Content/File...
-
-                                        if (!fs::exists(filePath)) {
-                                            // Fallback: try removing Content/ prefix if it was doubled
-                                            // or try adding it if missing?
-                                            // For now, strict mapping.
-                                            return S_OK; // Let WebView fail naturally (404)
-                                        }
-
-                                        // Open file
-                                        std::ifstream file(filePath, std::ios::binary);
-                                        if (!file.is_open()) return S_OK;
-
-                                        // Read into memory
-                                        std::vector<char> buffer((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
-                                        file.close();
-
-                                        if (buffer.empty()) return S_OK;
-
-                                        // Content sniffing strategy:
-                                        // 1. Scan first 2KB for known signatures (RIFF, PNG, ID3, etc).
-                                        // 2. If found, serve from there.
-                                        // 3. Else fallback to PLAS JSON parsing logic.
-
-                                        const std::string headerPrefix = "PLAS;";
-                                        std::string mimeType = "application/octet-stream";
-                                        const char* dataStart = buffer.data();
-                                        size_t dataSize = buffer.size();
-                                        
-                                        // Limit scan to 2KB to be safe
-                                        size_t scanLimit = (buffer.size() < 2048) ? buffer.size() : 2048;
-                                        if (scanLimit > 4) {
-                                            bool foundMagic = false;
-                                            
-                                            for(size_t i=0; i < scanLimit - 4; i++) {
-                                                const unsigned char* p = (const unsigned char*)buffer.data() + i;
-                                                
-                                                // PNG: 89 50 4E 47
-                                                if (p[0] == 0x89 && p[1] == 0x50 && p[2] == 0x4E && p[3] == 0x47) {
-                                                    mimeType = "image/png";
-                                                    dataStart = (const char*)p;
-                                                    dataSize = buffer.size() - i;
-                                                    foundMagic = true;
-                                                    break;
-                                                }
-                                                // WAV: RIFF (52 49 46 46)
-                                                if (p[0] == 'R' && p[1] == 'I' && p[2] == 'F' && p[3] == 'F') {
-                                                    mimeType = "audio/wav";
-                                                    dataStart = (const char*)p;
-                                                    dataSize = buffer.size() - i;
-                                                    foundMagic = true;
-                                                    break;
-                                                }
-                                                // MP3: ID3 (49 44 33)
-                                                if (p[0] == 'I' && p[1] == 'D' && p[2] == '3') {
-                                                    mimeType = "audio/mpeg";
-                                                    dataStart = (const char*)p;
-                                                    dataSize = buffer.size() - i;
-                                                    foundMagic = true;
-                                                    break;
-                                                }
-                                                // MP3 w/o ID3: Sync Frame FFFB (approx) - Careful with false positives
-                                                if (p[0] == 0xFF && (p[1] & 0xE0) == 0xE0) {
-                                                    // High probability of MP3
-                                                    mimeType = "audio/mpeg";
-                                                    dataStart = (const char*)p;
-                                                    dataSize = buffer.size() - i;
-                                                    foundMagic = true;
-                                                    break;
-                                                }
-                                            }
-                                            
-                                            // If magic bytes failed, try to fallback to JSON type hint?
-                                            // But if we didn't find the binary, the file might be just metadata or corrupt.
-                                            // We will serve it effectively "as is" or whatever `dataStart` was (beginning).
-                                        }
-
-                                        // Create IStream
-                                        IStream* stream = SHCreateMemStream((const BYTE*)dataStart, (UINT)dataSize);
-                                        if (!stream) return S_OK;
-
-                                        // Create Response
-                                        std::wstring headers = L"Content-Type: ";
-                                        std::wstring wMime(mimeType.begin(), mimeType.end());
-                                        headers += wMime;
-                                        headers += L"\nAccess-Control-Allow-Origin: *";
-
-                                        ComPtr<ICoreWebView2WebResourceResponse> response;
-                                        if (g_app.env) {
-                                            g_app.env->CreateWebResourceResponse(
-                                                stream, 200, L"OK", (LPWSTR)headers.c_str(), &response
-                                            );
-                                            args->put_Response(response.Get());
-                                        }
-                                        
-                                        // Release stream since we attached it to ComPtr? 
-                                        // Actually stream was raw pointer from SHCreateMemStream.
-                                        // If we wrapped it in ComPtr<IStream> stream? 
-                                        // In Step 1592 we didn't use ComPtr<IStream> stream. We used raw IStream* stream = SHCreate...
-                                        // We should release it after passing to CreateWebResourceResponse? 
-                                        // WebView2 AddRefs it.
-                                        stream->Release();
-
-                                        return S_OK;
-                                    }
-                                ).Get(), &token);
-
-                                if (g_app.webview) {
-                                    // Inject a small diagnostic script: force transparent backgrounds and post a ready message
-                                    // The script posts a JSON message to the host so the native side can confirm DOM rendering.
-                                    LPWSTR script = L"(function(){\n"
-                                        L"  try{\n"
-                                        L"    document.documentElement.style.background='transparent';\n"
-                                        L"    document.body.style.background='transparent';\n"
-                                        L"    document.body.style.backgroundColor='transparent';\n"
-                                        L"    document.documentElement.style.backgroundColor='transparent';\n"
-                                        L"  }catch(e){}\n"
-                                        L"  try{\n"
-                                        L"    if (window.chrome && window.chrome.webview && window.chrome.webview.postMessage) {\n"
-                                        L"      window.chrome.webview.postMessage({ action: 'plume_dom_ready' });\n"
-                                        L"      document.addEventListener('DOMContentLoaded', function(){ window.chrome.webview.postMessage({ action: 'plume_dom_ready' }); });\n"
-                                        L"      setTimeout(function(){ window.chrome.webview.postMessage({ action: 'plume_dom_heartbeat' }); }, 750);\n"
-                                        L"      setTimeout(function(){ window.chrome.webview.postMessage({ action: 'get-plugins' }); }, 1000);\n"
-                                        L"    }\n"
-                                        L"  }catch(e){}\n"
-                                        L"})();";
-                                    g_app.webview->ExecuteScript(script, nullptr);
-                            }
-                            
-                            // Écouter les messages depuis le frontend
-                            g_app.webview->add_WebMessageReceived(
-                                Callback<ICoreWebView2WebMessageReceivedEventHandler>(
-                                    [](ICoreWebView2* sender, ICoreWebView2WebMessageReceivedEventArgs* args) -> HRESULT {
-                                        LPWSTR messageRaw = nullptr;
-                                        args->get_WebMessageAsJson(&messageRaw);
-                                        std::wstring messageW(messageRaw ? messageRaw : L"");
-                                        if (messageRaw) CoTaskMemFree(messageRaw);
-
-                                        // Convert wide JSON string to UTF-8
-                                        auto wstr_to_utf8 = [&](const std::wstring& w) -> std::string {
-                                            if (w.empty()) return {};
-                                            int size = WideCharToMultiByte(CP_UTF8, 0, w.c_str(), (int)w.size(), NULL, 0, NULL, NULL);
-                                            if (size <= 0) return {};
-                                            std::string out(size, '\0');
-                                            WideCharToMultiByte(CP_UTF8, 0, w.c_str(), (int)w.size(), out.data(), size, NULL, NULL);
-                                            return out;
-                                        };
-
-                                        auto utf8_to_wstr = [&](const std::string& s) -> std::wstring {
-                                            if (s.empty()) return {};
-                                            int size = MultiByteToWideChar(CP_UTF8, 0, s.c_str(), (int)s.size(), NULL, 0);
-                                            if (size <= 0) return {};
-                                            std::wstring out(size, L'\0');
-                                            MultiByteToWideChar(CP_UTF8, 0, s.c_str(), (int)s.size(), out.data(), size);
-                                            return out;
-                                        };
-
-                                        // Helper to send structured result back to the frontend (optionally with data)
-                                        auto sendResult = [&](bool success, const std::string& message, nlohmann::json data = {}) {
-                                            nlohmann::json res;
-                                            res["type"] = "result";
-                                            res["success"] = success;
-                                            res["message"] = message;
-                                            if (!data.is_null() && !data.empty()) res["data"] = data;
-                                            std::string out = res.dump();
-                                            std::wstring wides = utf8_to_wstr(out);
-                                            if (g_app.webview) g_app.webview->PostWebMessageAsJson(wides.c_str());
-                                        };
-
-                                        std::string msg = wstr_to_utf8(messageW);
-
-                                        // Parse JSON using nlohmann::json (vendored header)
-                                        nlohmann::json j;
-                                        bool parsed = false;
-                                        try {
-                                            j = nlohmann::json::parse(msg);
-                                            parsed = true;
-                                        } catch(...) { parsed = false; }
-                                        if (!parsed) {
-                                            std::string out = "{\"type\":\"result\",\"success\":false,\"message\":\"Invalid JSON\"}";
-                                            std::wstring wides = utf8_to_wstr(out);
-                                            if (g_app.webview) g_app.webview->PostWebMessageAsJson(wides.c_str());
-                                            return S_OK;
-                                        }
-                                        std::string action = j.value("action", std::string());
-                                            // Diagnostic messages from the page (transparency / DOM ready checks)
-                                            if (action == "plume_dom_ready" || action == "plume_dom_heartbeat") {
-                                                // Received DOM-ready / heartbeat from the UI. Send UI config.
-                                                try {
-                                                    nlohmann::json out;
-                                                    out["action"] = "ui_config";
-                                                    out["uiConfig"] = nlohmann::json::object();
-                                                    out["uiConfig"]["showFPS"] = g_app.showFPS ? 1 : 0;
-                                                    out["uiConfig"]["vsync"] = g_app.vsync ? 1 : 0;
-                                                    out["uiConfig"]["maxFPS"] = g_app.maxFPS;
-                                                    std::string s = out.dump();
-                                                    std::wstring wides = utf8_to_wstr(s);
-                                                    if (g_app.webview) g_app.webview->PostWebMessageAsJson(wides.c_str());
-                                                } catch(...) {}
-                                                return S_OK;
-                                            }
-
-                                        // Quick window commands
-                                        if (action == "start-drag") {
-                                            ReleaseCapture();
-                                            SendMessage(g_app.hwnd, WM_NCLBUTTONDOWN, HTCAPTION, 0);
-                                            return S_OK;
-                                        }
-                                        if (action == "minimize") { ShowWindow(g_app.hwnd, SW_MINIMIZE); return S_OK; }
-                                        if (action == "maximize") { if (IsZoomed(g_app.hwnd)) ShowWindow(g_app.hwnd, SW_RESTORE); else ShowWindow(g_app.hwnd, SW_MAXIMIZE); return S_OK; }
-                                        if (action == "close") { g_app.shouldClose = true; PostMessage(g_app.hwnd, WM_CLOSE, 0, 0); return S_OK; }
-
-                                        // Engine control from UI
-                                        if (action == "set-maxfps") {
-                                            int v = j.value("value", -1);
-                                            if (g_app.engine && v >= 0) {
-                                                g_app.engine->SetMaxFPS(v);
-                                                std::string out = "{\"type\":\"result\",\"action\":\"set-maxfps\",\"value\":" + std::to_string(v) + "}";
-                                                std::wstring wides = utf8_to_wstr(out);
-                                                if (g_app.webview) g_app.webview->PostWebMessageAsJson(wides.c_str());
-                                                return S_OK;
-                                            }
-                                            std::string out = "{\"type\":\"error\",\"action\":\"set-maxfps\"}";
-                                            std::wstring wides = utf8_to_wstr(out);
-                                            if (g_app.webview) g_app.webview->PostWebMessageAsJson(wides.c_str());
-                                            return S_OK;
-                                        }
-
-                                        // Preview Pipeline Messages
-                                        if (action == "preview-asset") {
-                                            std::string path = j.value("path", "");
-                                            if (g_app.engine) {
-                                                g_app.engine->LoadPreviewAsset(path);
-                                            }
-                                            return S_OK;
-                                        }
-
-                                        if (action == "restore-main-scene") {
-                                            if (g_app.engine) {
-                                                g_app.engine->StopPreview();
-                                            }
-                                            return S_OK;
-                                        }
-
-                                        if (action == "set-vsync") {
-                                            bool v = j.value("value", true);
-                                            if (g_app.engine) {
-                                                g_app.engine->SetVSync(v);
-                                                std::string out = "{\"type\":\"result\",\"action\":\"set-vsync\",\"value\":" + std::string(v ? "true" : "false") + "}";
-                                                std::wstring wides = utf8_to_wstr(out);
-                                                if (g_app.webview) g_app.webview->PostWebMessageAsJson(wides.c_str());
-                                                return S_OK;
-                                            }
-                                            std::string out = "{\"type\":\"error\",\"action\":\"set-vsync\"}";
-                                            std::wstring wides = utf8_to_wstr(out);
-                                            if (g_app.webview) g_app.webview->PostWebMessageAsJson(wides.c_str());
-                                            return S_OK;
-                                        }
-
-                                        if (action == "refresh-plugin") {
-                                            std::string id = j.value("id", "");
-                                            if (id.empty()) { sendResult(false, "No plugin ID provided"); return S_OK; }
-                                            
-                                            auto p = Plume::PluginManager::Get().GetPlugin(id);
-                                            // Handle case where plugin might not be loaded yet
-                                            if (!p) {
-                                                 // Try to find it in the directory but not loaded? 
-                                                 // For now, simple reload of existing.
-                                                 // IMPROVEMENT: If we had a list of *available* but *unloaded* plugins, we could load it here.
-                                                 sendResult(false, "Plugin not found");
-                                                 return S_OK;
-                                            }
-                                            
-                                            p->Shutdown();
-                                            bool success = p->Initialize();
-                                            sendResult(success, success ? "Plugin refreshed" : "Failed to refresh plugin");
-                                            return S_OK;
-                                        }
-
-                                        if (action == "toggle-plugin") {
-                                            std::string id = j.value("id", "");
-                                            if (id.empty()) { sendResult(false, "No plugin ID provided"); return S_OK; }
-                                            bool enabled = j.value("enabled", false);
-                                            
-                                            Plume::PluginManager::Get().EnablePlugin(id, enabled);
-                                            
-                                            // Confirm the state change back to UI (optional but good practice)
-                                            std::string out = "{\"type\":\"result\",\"action\":\"toggle-plugin\",\"id\":\"" + id + "\",\"enabled\":" + (enabled ? "true" : "false") + "}";
-                                            std::wstring wides = utf8_to_wstr(out);
-                                            if (g_app.webview) g_app.webview->PostWebMessageAsJson(wides.c_str());
-                                            return S_OK;
-                                        }
-
-                                        if (action == "get-plugins") {
-                                            auto& pm = Plume::PluginManager::Get();
-                                            auto plugins = pm.GetAllPlugins();
-                                            nlohmann::json list = nlohmann::json::array();
-                                            for (const auto& info : plugins) {
-                                                nlohmann::json item;
-                                                item["id"] = info.id;
-                                                item["name"] = info.name;
-                                                item["description"] = info.description;
-                                                item["version"] = info.version;
-                                                item["enabled"] = pm.IsPluginEnabled(info.id);
-                                                list.push_back(item);
-                                            }
-                                            nlohmann::json res;
-                                            res["action"] = "plugin-list";
-                                            res["plugins"] = list;
-                                            std::string out = res.dump();
-                                            std::wstring wides = utf8_to_wstr(out);
-                                            if (g_app.webview) g_app.webview->PostWebMessageAsJson(wides.c_str());
-                                            return S_OK;
-                                        }
-
-                                        // Viewport bounds update from Web UI
-                                        if (action == "viewport-bounds") {
-                                            g_app.viewportBounds.x = j.value("x", 0);
-                                            g_app.viewportBounds.y = j.value("y", 0);
-                                            g_app.viewportBounds.width = j.value("width", 800);
-                                            g_app.viewportBounds.height = j.value("height", 600);
-                                            
-                                            // Convert Y from top-origin (HTML/CSS) to bottom-origin (OpenGL)
-                                            // Also convert from CSS/logical pixels to device pixels using window DPI
-                                            RECT clientRect;
-                                            GetClientRect(g_app.hwnd, &clientRect);
-                                            int clientHeight = clientRect.bottom - clientRect.top;
-
-                                            // Get DPI for the window if available (fallback to screen DPI)
-                                            UINT dpi = 96;
-                                            HMODULE user32 = GetModuleHandleA("user32.dll");
-                                            if (user32) {
-                                                typedef UINT(WINAPI *PFN_GetDpiForWindow)(HWND);
-                                                PFN_GetDpiForWindow pGetDpiForWindow = (PFN_GetDpiForWindow)GetProcAddress(user32, "GetDpiForWindow");
-                                                if (pGetDpiForWindow) {
-                                                    dpi = pGetDpiForWindow(g_app.hwnd);
-                                                } else {
-                                                    HDC screenDC = GetDC(NULL);
-                                                    if (screenDC) {
-                                                        dpi = GetDeviceCaps(screenDC, LOGPIXELSX);
-                                                        ReleaseDC(NULL, screenDC);
-                                                    }
-                                                }
-                                            }
-
-                                            float scale = (float)dpi / 96.0f;
-
-                                            int vpX = static_cast<int>(roundf(g_app.viewportBounds.x * scale));
-                                            int vpY = static_cast<int>(roundf(g_app.viewportBounds.y * scale));
-                                            int vpW = static_cast<int>(roundf(g_app.viewportBounds.width * scale));
-                                            int vpH = static_cast<int>(roundf(g_app.viewportBounds.height * scale));
-
-                                            int clientWidth = clientRect.right - clientRect.left;
-                                            int windowWidthPx = clientWidth;
-                                            int windowHeightPx = clientHeight;
-                                            int glY = windowHeightPx - vpY - vpH;
-
-                                            // Viewport conversion diagnostics suppressed (INI-related logs only remain)
-
-                                                // Resize the renderer swapchain to the full window size (device pixels)
-                                                // This ensures we can render at the correct offset (vpX, glY) defined by the UI
-                                                if (g_app.engine && g_app.engine->GetRenderer()) {
-                                                    Plume::RHI::RHISwapChain* swap = g_app.engine->GetRenderer()->GetSwapChain();
-
-                                                    if (swap && (swap->GetWidth() != (uint32_t)windowWidthPx || 
-                                                                 swap->GetHeight() != (uint32_t)windowHeightPx)) {
-                                                        swap->Resize((uint32_t)windowWidthPx, (uint32_t)windowHeightPx);
-                                                    }
-
-                                                    if (g_app.engine->GetRendererObject()) {
-                                                        // Set the viewport region to matches the web UI element exactly
-                                                        // No hardcoded margins
-                                                        g_app.engine->GetRendererObject()->SetViewportRegion(
-                                                            vpX,
-                                                            glY,
-                                                            vpW,
-                                                            vpH
-                                                        );
-                                                    }
-                                                } else {
-                                                    // No renderer available yet - fall back to setting logical device coords
-                                                    if (g_app.engine && g_app.engine->GetRendererObject()) {
-                                                        g_app.engine->GetRendererObject()->SetViewportRegion(
-                                                            vpX,
-                                                            glY,
-                                                            vpW,
-                                                            vpH
-                                                        );
-                                                    }
-                                                }
-                                            return S_OK;
-                                        }
-
-                                        // Viewport pointer events forwarded from the Web UI
-                                        if (action == "viewport-pointer") {
-                                            std::string type = j.value("type", std::string());
-                                            if (g_app.engine) {
-                                                if (type == "move") {
-                                                    float dx = j.value("dx", 0.0f);
-                                                    float dy = j.value("dy", 0.0f);
-                                                    // Match native lookSpeed used earlier
-                                                    const float lookSpeed = 0.15f;
-                                                    Plume::Vec3 rotDelta;
-                                                    rotDelta.x = -dy * lookSpeed;
-                                                    rotDelta.y = -dx * lookSpeed;
-                                                    rotDelta.z = 0.0f;
-                                                    g_app.engine->RotateCamera(rotDelta);
-                                                } else if (type == "wheel") {
-                                                    float delta = j.value("delta", 0.0f);
-                                                    Plume::Vec3 mv{0,0,0};
-                                                    mv.z += (delta > 0.0f) ? 0.5f : -0.5f;
-                                                    // Zoom by moving along camera forward including pitch
-                                                    g_app.engine->TranslateCameraLocal(mv, true);
-                                                }
-                                            }
-                                            return S_OK;
-                                        }
-
-                                        // Viewport keyboard events forwarded from the Web UI
-                                        if (action == "viewport-key") {
-                                            std::string key = j.value("key", std::string());
-                                            std::string ktype = j.value("type", std::string());
-                                            if (g_app.engine && ktype == "down") {
-                                                Plume::Vec3 moveDelta{0,0,0};
-                                                if (key == "ArrowUp") moveDelta.z -= 0.2f;
-                                                else if (key == "ArrowDown") moveDelta.z += 0.2f;
-                                                else if (key == "ArrowLeft") moveDelta.x -= 0.2f;
-                                                else if (key == "ArrowRight") moveDelta.x += 0.2f;
-                                                else if (key == "q" || key == "Q") moveDelta.y -= 0.2f;
-                                                else if (key == "e" || key == "E") moveDelta.y += 0.2f;
-                                                if (moveDelta.x != 0 || moveDelta.y != 0 || moveDelta.z != 0) {
-                                                    // Fly camera: always follow pitch
-                                                    g_app.engine->TranslateCameraLocal(moveDelta, true);
-                                                }
-                                            }
-                                            return S_OK;
-                                        }
-
-                                        // Camera rotation from viewport (left mouse drag)
-                                        if (action == "camera-rotate") {
-                                            if (g_app.engine) {
-                                                float dx = j.value("deltaX", 0.0f);
-                                                float dy = j.value("deltaY", 0.0f);
-                                                Plume::Vec3 rotDelta;
-                                                rotDelta.x = dx; // pitch
-                                                rotDelta.y = dy; // yaw
-                                                rotDelta.z = 0.0f;
-                                                g_app.engine->RotateCamera(rotDelta);
-                                            }
-                                            return S_OK;
-                                        }
-
-                                        // Camera keyboard input (WASD, Q/E for movement)
-                                        if (action == "camera-input") {
-                                            if (g_app.engine) {
-                                                // Update the pressed-keys set so a dedicated input thread
-                                                // can apply continuous movement each engine frame.
-                                                auto keys = j.value("keys", std::vector<std::string>());
-                                                try {
-                                                    std::lock_guard<std::mutex> lk(g_app.keysMutex);
-                                                    g_app.pressedKeys.clear();
-                                                    for (const auto& k : keys) g_app.pressedKeys.insert(k);
-                                                } catch(...) {}
-                                                // Diagnostic: log receipt of camera-input messages
-                                                // Camera-input diagnostics suppressed
-                                            }
-                                            return S_OK;
-                                        }
-
-                                        // Set camera transform from UI (position and/or rotation)
-                                        if (action == "set-camera") {
-                                            if (g_app.engine) {
-                                                try {
-                                                    nlohmann::json pos = j.value("position", nlohmann::json::object());
-                                                    nlohmann::json rot = j.value("rotation", nlohmann::json::object());
-                                                    Plume::TransformComponent t;
-                                                    // Initialize t with current camera transform if available
-                                                    Plume::TransformComponent cur;
-                                                    if (g_app.engine->GetActiveScene() && g_app.engine->GetActiveScene()->GetCameraTransform(cur)) {
-                                                        t = cur;
-                                                    } else {
-                                                        t.Position = {0.0f, 0.0f, 0.0f};
-                                                        t.Rotation = {0.0f, 0.0f, 0.0f};
-                                                    }
-
-                                                    if (pos.is_object()) {
-                                                        t.Position.x = pos.value("x", t.Position.x);
-                                                        t.Position.y = pos.value("y", t.Position.y);
-                                                        t.Position.z = pos.value("z", t.Position.z);
-                                                    }
-                                                    if (rot.is_object()) {
-                                                        t.Rotation.x = rot.value("x", t.Rotation.x);
-                                                        t.Rotation.y = rot.value("y", t.Rotation.y);
-                                                        t.Rotation.z = rot.value("z", t.Rotation.z);
-                                                    }
-
-                                                    if (g_app.engine->GetActiveScene()) {
-                                                        g_app.engine->GetActiveScene()->SetCameraTransform(t);
-                                                    }
-                                                } catch(...) {}
-                                            }
-                                            return S_OK;
-                                        }
-
-                                            // Helper to send content list for a given path (string)
-                                        // If recursive==true, return a hierarchical tree of folders/files with children arrays
-                                        std::function<nlohmann::json(const fs::path&)> buildNode;
-                                        buildNode = [&](const fs::path& p) -> nlohmann::json {
-                                            nlohmann::json it;
-                                            std::string name = p.filename().string();
-                                            std::string id = name + "_" + std::to_string(std::hash<std::string>{}(p.string()));
-                                            
-                                            // Default type
-                                            std::string type = fs::is_directory(p) ? "folder" : "file";
-                                            std::string pathStr = p.string();
-                                            for (auto &c : pathStr) if (c == '\\') c = '/';
-                                            
-                                            it["id"] = id;
-                                            it["name"] = name;
-                                            it["path"] = pathStr;
-                                            
-                                            // Handle .plumeasset files specifically
-                                            if (!fs::is_directory(p) && p.extension() == ".plumeasset") {
-                                                try {
-                                                    std::ifstream ifs(p.string(), std::ios::binary);
-                                                    if (ifs.is_open()) {
-                                                        char magic[5] = {0};
-                                                        ifs.read(magic, 4);
-                                                        if (std::string(magic) == "PLAS") {
-                                                            // Packed Format
-                                                            uint32_t ver = 0;
-                                                            uint32_t len = 0;
-                                                            ifs.read(reinterpret_cast<char*>(&ver), 4);
-                                                            ifs.read(reinterpret_cast<char*>(&len), 4);
-                                                            if (len > 0) {
-                                                                std::string metaStr; 
-                                                                metaStr.resize(len);
-                                                                ifs.read(&metaStr[0], len);
-                                                                nlohmann::json assetJson = nlohmann::json::parse(metaStr);
-                                                                if (assetJson.contains("type")) {
-                                                                    type = assetJson["type"].get<std::string>();
-                                                                }
-                                                                it["meta"] = assetJson;
-                                                            }
-                                                        } else {
-                                                            // Legacy JSON Format
-                                                            ifs.seekg(0);
-                                                            nlohmann::json assetJson;
-                                                            ifs >> assetJson;
-                                                            if (assetJson.contains("type")) {
-                                                                type = assetJson["type"].get<std::string>();
-                                                            }
-                                                            it["meta"] = assetJson;
-                                                        }
-                                                    }
-                                                } catch(...) {}
-                                            } else if (fs::is_directory(p)) {
-                                                // Existing folder meta logic
-                                                it["type"] = "folder";
-                                                try {
-                                                    fs::path meta = p / ".plume_meta";
-                                                    if (fs::exists(meta)) {
-                                                        std::ifstream ifs(meta.string());
-                                                        if (ifs.is_open()) {
-                                                            nlohmann::json metaJson;
-                                                            ifs >> metaJson;
-                                                            it["meta"] = metaJson;
-                                                        }
-                                                    }
-                                                } catch(...) {}
-                                            }
-                                            
-                                            it["type"] = type;
-                                            return it;
-                                        };
-
-                                        auto sendContentListFor = [&](const std::string& pathValue, bool recursive = false) {
-                                            fs::path base = fs::path(g_app.uiFolder).parent_path();
-                                            std::string rel = pathValue.empty() ? std::string("Content") : pathValue;
-                                            fs::path target = rel.rfind("://") != std::string::npos ? fs::path(rel) : base / rel;
-                                            nlohmann::json list = nlohmann::json::object();
-                                            list["type"] = "content-list";
-                                            list["path"] = rel;
-                                            list["items"] = nlohmann::json::array();
-                                            list["recursive"] = recursive;
-                                            // Helper to recursively build tree
-                                            std::function<nlohmann::json(const fs::path&)> buildTree;
-                                            buildTree = [&](const fs::path& p) -> nlohmann::json {
-                                                nlohmann::json node = buildNode(p);
-                                                if (fs::is_directory(p)) {
-                                                    node["children"] = nlohmann::json::array();
-                                                    try {
-                                                        for (auto& c : fs::directory_iterator(p)) {
-                                                            node["children"].push_back(buildTree(c.path()));
-                                                        }
-                                                    } catch(...) {}
-                                                }
-                                                return node;
-                                            };
-
-                                            try {
-                                                if (fs::exists(target) && fs::is_directory(target)) {
-                                                    if (recursive) {
-                                                        // Fully recursive walk
-                                                        for (auto& entry : fs::directory_iterator(target)) {
-                                                            list["items"].push_back(buildTree(entry.path()));
-                                                        }
-                                                    } else {
-                                                        for (auto& entry : fs::directory_iterator(target)) {
-                                                            list["items"].push_back(buildNode(entry.path()));
-                                                        }
-                                                    }
-                                                }
-                                            } catch(...) {}
-                                            std::string out = list.dump();
-                                            std::wstring wides = utf8_to_wstr(out);
-                                            if (g_app.webview) g_app.webview->PostWebMessageAsJson(wides.c_str());
-                                        };
-
-
-                                        // File actions
-                                        if (action == "list-content") {
-                                            std::string path = j.value("path", std::string());
-                                            bool recursive = j.value("recursive", false);
-                                            sendContentListFor(path, recursive);
-                                            return S_OK;
-                                        }
-                                        if (action == "delete") {
-                                            std::string path = j.value("path", std::string());
-                                            bool ok = false;
-                                            if (!path.empty()) {
-                                                try { 
-                                                    fs::path base = fs::path(g_app.uiFolder).parent_path();
-                                                    fs::path fullPath = base / path;
-                                                    fs::remove_all(fullPath); 
-                                                    ok = true; 
-                                                } catch(...) { ok = false; }
-                                            }
-                                            sendResult(ok, ok ? "Deleted" : "Delete failed");
-                                            // Refresh parent folder listing
-                                            if (!path.empty()) sendContentListFor(fs::path(path).parent_path().string()); else sendContentListFor(std::string("Content"));
-                                            return S_OK;
-                                        }
-                                        if (action == "rename") {
-                                            std::string path = j.value("path", std::string());
-                                            std::string name = j.value("name", std::string());
-                                            bool ok = false;
-                                            if (!path.empty() && !name.empty()) {
-                                                try { 
-                                                    fs::path base = fs::path(g_app.uiFolder).parent_path();
-                                                    fs::path fullPath = base / path;
-                                                    fs::path dest = fullPath.parent_path() / name; 
-                                                    fs::rename(fullPath, dest); 
-                                                    ok = true; 
-                                                } catch(...) { ok = false; }
-                                            }
-                                            sendResult(ok, ok ? "Renamed" : "Rename failed");
-                                            if (!path.empty()) sendContentListFor(fs::path(path).parent_path().string()); else sendContentListFor(std::string("Content"));
-                                            return S_OK;
-                                        }
-                                        if (action == "duplicate") {
-                                            std::string path = j.value("path", std::string());
-                                            bool ok = false;
-                                            if (!path.empty()) {
-                                                try {
-                                                    fs::path base = fs::path(g_app.uiFolder).parent_path();
-                                                    fs::path p = base / path;
-                                                    
-                                                    // Preserve extension while adding _2, _3 suffix
-                                                    std::string stem = p.stem().string();
-                                                    std::string extension = p.extension().string();
-                                                    
-                                                    // Find unique name starting from _2
-                                                    fs::path dest;
-                                                    int counter = 2;
-                                                    dest = p.parent_path() / (stem + "_" + std::to_string(counter) + extension);
-                                                    
-                                                    while (fs::exists(dest)) {
-                                                        counter++;
-                                                        dest = p.parent_path() / (stem + "_" + std::to_string(counter) + extension);
-                                                    }
-                                                    
-                                                    if (fs::is_directory(p)) fs::copy(p, dest, fs::copy_options::recursive);
-                                                    else fs::copy_file(p, dest);
-                                                    ok = true;
-                                                } catch(...) { ok = false; }
-                                            }
-                                            sendResult(ok, ok ? "Duplicated" : "Duplicate failed");
-                                            if (!path.empty()) sendContentListFor(fs::path(path).parent_path().string()); else sendContentListFor(std::string("Content"));
-                                            return S_OK;
-                                        }
-                                        if (action == "create-folder") {
-                                            std::string name = j.value("name", std::string());
-                                            std::string pathParam = j.value("path", std::string());
-                                            bool ok = false;
-                                            if (!name.empty()) {
-                                                try {
-                                                    fs::path base = fs::path(g_app.uiFolder).parent_path();
-                                                    fs::path targetDir;
-                                                    if (!pathParam.empty()) {
-                                                        fs::path p(pathParam);
-                                                        if (p.is_absolute()) targetDir = p;
-                                                        else targetDir = base / pathParam;
-                                                    } else {
-                                                        targetDir = base / "Content";
-                                                    }
-                                                    fs::create_directories(targetDir / name);
-                                                    ok = true;
-                                                } catch(...) { ok = false; }
-                                            }
-                                            sendResult(ok, ok ? "Folder created" : "Create folder failed");
-                                            if (!pathParam.empty()) sendContentListFor(pathParam); else sendContentListFor(std::string("Content"));
-                                            return S_OK;
-                                        }
-                                        if (action == "open-in-explorer") { 
-                                            std::string path = j.value("path", std::string()); 
-                                            fs::path base = fs::path(g_app.uiFolder).parent_path();
-                                            fs::path fullPath = path.empty() ? (base / "Content") : (base / path);
-                                            
-                                            // If it's a directory, open it directly; if it's a file, open the parent and select it
-                                            if (fs::exists(fullPath) && fs::is_directory(fullPath)) {
-                                                std::wstring widePath = fullPath.wstring();
-                                                ShellExecuteW(NULL, L"open", widePath.c_str(), NULL, NULL, SW_SHOWNORMAL);
-                                            } else {
-                                                // For files or if path doesn't exist, use /select
-                                                std::wstring args = utf8_to_wstr(std::string("/select,\"") + fullPath.string() + std::string("\""));
-                                                ShellExecuteW(NULL, L"open", L"explorer.exe", args.c_str(), NULL, SW_SHOWNORMAL);
-                                            }
-                                            return S_OK; 
-                                        }
-                                        if (action == "copy") {
-                                            if (j.contains("path")) {
-                                                g_app.clipboardPath = j.value("path", std::string());
-                                                sendResult(true, "Copied to clipboard");
-                                            } else {
-                                                sendResult(false, "No path to copy");
-                                            }
-                                            return S_OK;
-                                        }
-                                        if (action == "paste") {
-                                            std::string source = j.value("sourcePath", g_app.clipboardPath);
-                                            std::string targetPath = j.value("path", std::string());
-                                            bool ok = false;
-                                            if (!source.empty()) {
-                                                try {
-                                                    fs::path base = fs::path(g_app.uiFolder).parent_path();
-                                                    fs::path src = base / source;
-                                                    fs::path destDir = targetPath.empty() ? (base / "Content") : (base / targetPath);
-                                                    
-                                                    // Find a unique name by incrementing number while preserving extension
-                                                    std::string stem = src.stem().string(); // filename without extension
-                                                    std::string extension = src.extension().string(); // .plume_mesh, .txt, etc.
-                                                    
-                                                    // Try name_2, name_3, etc.
-                                                    fs::path dest;
-                                                    int counter = 2;
-                                                    dest = destDir / (stem + "_" + std::to_string(counter) + extension);
-                                                    
-                                                    while (fs::exists(dest)) {
-                                                        counter++;
-                                                        dest = destDir / (stem + "_" + std::to_string(counter) + extension);
-                                                    }
-                                                    
-                                                    if (fs::is_directory(src)) fs::copy(src, dest, fs::copy_options::recursive);
-                                                    else fs::copy_file(src, dest);
-                                                    ok = true;
-                                                } catch(...) { ok = false; }
-                                            }
-                                            sendContentListFor(targetPath.empty() ? std::string("Content") : targetPath);
-                                            sendResult(ok, ok ? "Pasted successfully" : "Paste failed");
-                                            return S_OK;
-                                        }
-                                        if (action == "change-color") {
-                                            std::string path = j.value("path", std::string());
-                                            std::string color = j.value("color", std::string());
-                                            bool ok = false;
-                                            if (!path.empty() && !color.empty()) {
-                                                try {
-                                                    fs::path base = fs::path(g_app.uiFolder).parent_path();
-                                                    fs::path fullPath = base / path;
-                                                    fs::path meta = fullPath / ".plume_meta";
-                                                    std::ofstream ofs(meta.string());
-                                                    if (ofs.is_open()) {
-                                                        ofs << "{\"color\": \"" << color << "\"}";
-                                                        ofs.close();
-                                                        ok = true;
-                                                    }
-                                                } catch(...) { ok = false; }
-                                            }
-                                            sendResult(ok, ok ? "Color saved" : "Failed to save color");
-                                            if (!path.empty()) sendContentListFor(fs::path(path).parent_path().string());
-                                            return S_OK;
-                                        }
-
-                                        if (action == "save-asset") {
-                                            std::string assetId = j.value("assetId", std::string());
-                                            std::string content = j.value("content", std::string());
-                                            std::string type = j.value("type", "Material");
-
-                                            // Strip asset:// if present
-                                            if (assetId.find("asset://") == 0) assetId = assetId.substr(8);
-                                            
-                                            if (!assetId.empty()) {
-                                                fs::path base = fs::path(g_app.uiFolder).parent_path();
-                                                fs::path fullPath = base / assetId;
-                                                
-                                                try {
-                                                    if (fullPath.has_parent_path()) {
-                                                        fs::create_directories(fullPath.parent_path());
-                                                    }
-
-                                                    std::ofstream ofs(fullPath, std::ios::binary);
-                                                    if (ofs.is_open()) {
-                                                        ofs.write("PLAS", 4);
-                                                        uint32_t ver = 1;
-                                                        ofs.write(reinterpret_cast<char*>(&ver), 4);
-                                                        
-                                                        nlohmann::json meta;
-                                                        meta["type"] = type;
-                                                        std::string metaStr = meta.dump();
-                                                        uint32_t metaLen = (uint32_t)metaStr.size();
-                                                        ofs.write(reinterpret_cast<char*>(&metaLen), 4);
-                                                        ofs.write(metaStr.data(), metaLen);
-                                                        
-                                                        ofs.write(content.data(), content.size());
-                                                        ofs.close();
-                                                        sendResult(true, "Saved");
-                                                    } else {
-                                                        sendResult(false, "Failed to write file");
-                                                    }
-                                                } catch(...) {
-                                                    sendResult(false, "Exception during save");
-                                                }
-                                            }
-                                            return S_OK;
-                                        }
-
-                                        if (action == "save-theme") {
-                                            std::string name = j.value("name", "plume-dark");
-                                            std::string accent = j.value("accent", "#4FC3F7");
-                                            
-                                            std::string dataPath = g_app.uiFolder + "/theme_data.js";
-                                            std::string tempPath = dataPath + ".tmp";
-                                            
-                                            std::ofstream file(tempPath);
-                                            if (file.is_open()) {
-                                                file << "window.PLUME_THEME_DATA = {";
-                                                file << "\"name\": \"" << name << "\",";
-                                                file << "\"colors\": {";
-                                                file << "\"accent\": {";
-                                                file << "\"primary\": \"" << accent << "\"";
-                                                file << "}";
-                                                file << "}";
-                                                file << "}};";
-                                                file.close();
-                                                try {
-                                                    if (fs::exists(dataPath)) fs::remove(dataPath);
-                                                    fs::rename(tempPath, dataPath);
-                                                    sendResult(true, "Theme saved");
-                                                } catch(...) {
-                                                    sendResult(false, "Failed to save theme");
-                                                }
-                                            } else {
-                                                sendResult(false, "Failed to open theme file");
-                                            }
-                                            return S_OK;
-                                        }
-
-                                        if (action == "load-asset") {
-                                            std::string assetId = j.value("assetId", std::string());
-                                            // Strip asset:// if present
-                                            if (assetId.find("asset://") == 0) assetId = assetId.substr(8);
-
-                                            if (!assetId.empty()) {
-                                                fs::path base = fs::path(g_app.uiFolder).parent_path();
-                                                fs::path fullPath = base / assetId;
-                                                
-                                                std::string content = "";
-                                                if (fs::exists(fullPath)) {
-                                                    try {
-                                                        std::ifstream ifs(fullPath, std::ios::binary);
-                                                        if (ifs.is_open()) {
-                                                            char magic[5] = {0};
-                                                            ifs.read(magic, 4);
-                                                            if (std::string(magic) == "PLAS") {
-                                                                uint32_t ver; ifs.read(reinterpret_cast<char*>(&ver), 4);
-                                                                uint32_t metaLen; ifs.read(reinterpret_cast<char*>(&metaLen), 4);
-                                                                
-                                                                // Skip metadata
-                                                                ifs.seekg(metaLen, std::ios::cur);
-                                                                
-                                                                // Read remaining content
-                                                                std::vector<char> buffer((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
-                                                                content.assign(buffer.begin(), buffer.end());
-                                                            }
-                                                        }
-                                                    } catch(...) {}
-                                                }
-                                                
-                                                nlohmann::json out;
-                                                out["action"] = "asset-data";
-                                                out["assetId"] = assetId;
-                                                out["content"] = content;
-                                                
-                                                std::string s = out.dump();
-                                                std::wstring wides = utf8_to_wstr(s);
-                                                if (g_app.webview) g_app.webview->PostWebMessageAsJson(wides.c_str());
-                                            }
-                                            return S_OK;
-                                        }
-
-                                        // Import file (open file dialog)
-                                        if (action == "import-file") {
-                                            std::string path = j.value("path", std::string());
-                                            OPENFILENAMEA ofn = {};
-                                            char szFile[260] = {};
-                                            ofn.lStructSize = sizeof(ofn);
-                                            ofn.hwndOwner = g_app.hwnd;
-                                            ofn.lpstrFile = szFile;
-                                            ofn.nMaxFile = sizeof(szFile);
-                                            ofn.lpstrFilter = "3D Models (*.fbx;*.obj;*.glb;*.gltf)\0*.fbx;*.obj;*.glb;*.gltf\0All Files (*.*)\0*.*\0";
-                                            ofn.nFilterIndex = 1;
-                                            ofn.lpstrFileTitle = NULL;
-                                            ofn.nMaxFileTitle = 0;
-                                            ofn.lpstrInitialDir = NULL;
-                                            ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST | OFN_ALLOWMULTISELECT | OFN_EXPLORER;
-                                            
-                                            if (GetOpenFileNameA(&ofn)) {
-                                                // Process the selected files
-                                                std::vector<std::string> selectedFiles;
-                                                std::string fileName = szFile;
-                                                
-                                                // Check if it's a multi-select
-                                                if (ofn.nFileOffset > fileName.length()) {
-                                                    // Multi-select: directory\0file1\0file2\0\0
-                                                    std::string dir = fileName;
-                                                    char* p = szFile + ofn.nFileOffset;
-                                                    while (*p) {
-                                                        selectedFiles.push_back(dir + "\\" + p);
-                                                        p += strlen(p) + 1;
-                                                    }
-                                                } else {
-                                                    // Single file
-                                                    selectedFiles.push_back(fileName);
-                                                }
-                                                
-                                                // Process the files directly
-                                                nlohmann::json files = nlohmann::json::array();
-                                                for (const auto& file : selectedFiles) {
-                                                    nlohmann::json fileObj;
-                                                    fileObj["name"] = fs::path(file).filename().string();
-                                                    fileObj["path"] = file;
-                                                    files.push_back(fileObj);
-                                                }
-                                                
-                                                // Create the import request
-                                                nlohmann::json importReq;
-                                                importReq["action"] = "import-files";
-                                                importReq["files"] = files;
-                                                importReq["path"] = path;
-                                                
-                                                // Recursively call to process the import
-                                                // (simulating a new message with the selected files)
-                                                // For now, we'll process it here inline
-                                                if (!files.empty()) {
-                                                    fs::path base = fs::path(g_app.uiFolder).parent_path();
-                                                    fs::path contentDir = base / path;
-                                                    
-                                                    // Ensure the target directory exists
-                                                    try {
-                                                        if (!fs::exists(contentDir)) {
-                                                            fs::create_directories(contentDir);
-                                                        }
-                                                    } catch(...) {}
-                                                    
-                                                    int importedCount = 0;
-                                                    std::vector<std::string> createdAssets;
-                                                    
-                                                    // Process each file
-                                                    for (const auto& fileObj : files) {
-                                                        std::string filePath = fileObj.value("path", std::string());
-                                                        std::string fileName = fileObj.value("name", std::string());
-                                                        
-                                                        if (filePath.empty() || fileName.empty()) continue;
-                                                        
-                                                        try {
-                                                            fs::path src(filePath);
-                                                            if (!fs::exists(src)) continue;
-                                                            
-                                                            // Determine Asset Type
-                                                            std::string ext = src.extension().string();
-                                                            for (auto& c : ext) c = std::tolower(c);
-                                                            
-                                                            std::string assetType = "";
-                                                            
-                                                            // 3D Models
-                                                            if (ext == ".fbx" || ext == ".obj" || ext == ".glb" || ext == ".gltf") {
-                                                                assetType = "StaticMesh";
-                                                            } 
-                                                            // Textures
-                                                            else if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".tga" || ext == ".bmp") {
-                                                                assetType = "Texture";
-                                                            }
-                                                            // Audio
-                                                            else if (ext == ".wav" || ext == ".mp3" || ext == ".ogg") {
-                                                                assetType = "SoundWave";
-                                                            }
-                                                            
-                                                            if (!assetType.empty()) {
-                                                                // Create .plumeasset file with embedded data
-                                                                std::string assetName = fs::path(fileName).stem().string();
-                                                                
-                                                                nlohmann::json meta;
-                                                                meta["type"] = assetType;
-                                                                meta["source"] = fileName;
-                                                                
-                                                                fs::path assetFile = contentDir / (assetName + ".plumeasset");
-                                                                std::ofstream ofs(assetFile.string(), std::ios::binary);
-                                                                if (ofs.is_open()) {
-                                                                    // Read source file into buffer
-                                                                    std::ifstream srcIfs(src.string(), std::ios::binary | std::ios::ate);
-                                                                    std::streamsize size = srcIfs.tellg();
-                                                                    srcIfs.seekg(0, std::ios::beg);
-                                                                    std::vector<char> buffer(size);
-                                                                    if (srcIfs.read(buffer.data(), size)) {
-                                                                        // Header: PLAS
-                                                                        ofs.write("PLAS", 4);
-                                                                        // Version: 1 (uint32)
-                                                                        uint32_t ver = 1;
-                                                                        ofs.write(reinterpret_cast<char*>(&ver), 4);
-                                                                        // JSON Meta
-                                                                        std::string metaStr = meta.dump(2);
-                                                                        uint32_t metaLen = (uint32_t)metaStr.size();
-                                                                        ofs.write(reinterpret_cast<char*>(&metaLen), 4);
-                                                                        ofs.write(metaStr.data(), metaLen);
-                                                                        // Payload
-                                                                        ofs.write(buffer.data(), buffer.size());
-                                                                        
-                                                                        createdAssets.push_back(assetName + ".plumeasset");
-                                                                        importedCount++;
-                                                                    }
-                                                                }
-                                                            } else {
-                                                                // Generic file - copy as is
-                                                                fs::path destFile = contentDir / fileName;
-                                                                if (!fs::exists(destFile)) {
-                                                                    fs::copy_file(src, destFile, fs::copy_options::overwrite_existing);
-                                                                }
-                                                                createdAssets.push_back(fileName);
-                                                                importedCount++;
-                                                            }
-                                                        } catch(...) {}
-                                                    }
-                                                    
-                                                    // Send result back
-                                                    nlohmann::json resultData;
-                                                    resultData["importedCount"] = importedCount;
-                                                    resultData["assets"] = nlohmann::json::array();
-                                                    for (const auto& asset : createdAssets) {
-                                                        resultData["assets"].push_back(asset);
-                                                    }
-                                                    
-                                                    sendResult(importedCount > 0, importedCount > 0 ? 
-                                                        std::to_string(importedCount) + " file(s) imported" : 
-                                                        "Failed to import files", resultData);
-                                                    
-                                                    // Refresh the content listing
-                                                    sendContentListFor(path);
-                                                }
-                                            }
-                                            return S_OK;
-                                        }
-
-                                        // Import file from binary blob (Base64)
-                                        if (action == "import-file-blob") {
-                                            std::string targetPath = j.value("path", std::string());
-                                            std::string fileName = j.value("name", std::string());
-                                            std::string contentB64 = j.value("content", std::string());
-                                            
-                                            if (fileName.empty() || contentB64.empty()) {
-                                                sendResult(false, "Invalid file content");
-                                                return S_OK;
-                                            }
-
-                                            // Determine target directory
-                                            fs::path base = fs::path(g_app.uiFolder).parent_path();
-                                            fs::path contentDir = base / targetPath;
-                                            try { 
-                                                if (!fs::exists(contentDir)) fs::create_directories(contentDir); 
-                                            } catch(...) {}
-
-                                            // Decode and write source file
-                                            std::string decoded = base64_decode(contentB64);
-                                            // Write to temp file or direct to target? 
-                                            // Direct to target as if it was copied there.
-                                            fs::path filePath = contentDir / fileName;
-                                            std::ofstream ofsbin(filePath.string(), std::ios::binary);
-                                            ofsbin.write(decoded.data(), decoded.size());
-                                            ofsbin.close();
-                                            
-                                            // Now reuse the import logic as if it was a file on disk
-                                            std::string assetType = "";
-                                            std::string ext = filePath.extension().string();
-                                            for (auto& c : ext) c = std::tolower(c);
-                                            
-                                            if (ext == ".fbx" || ext == ".obj" || ext == ".glb" || ext == ".gltf") assetType = "StaticMesh";
-                                            else if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".tga" || ext == ".bmp") assetType = "Texture";
-                                            else if (ext == ".wav" || ext == ".mp3" || ext == ".ogg") assetType = "SoundWave";
-
-                                            if (!assetType.empty()) {
-                                                // Create .plumeasset with PLAS binary format
-                                                std::string assetName = filePath.stem().string();
-                                                nlohmann::json meta;
-                                                meta["type"] = assetType;
-                                                meta["source"] = fileName;
-
-                                                fs::path assetFile = contentDir / (assetName + ".plumeasset");
-                                                std::ofstream ofs(assetFile.string(), std::ios::binary);
-                                                if (ofs.is_open()) {
-                                                    // Header: PLAS
-                                                    ofs.write("PLAS", 4);
-                                                    uint32_t ver = 1;
-                                                    ofs.write(reinterpret_cast<char*>(&ver), 4);
-                                                    // JSON
-                                                    std::string metaStr = meta.dump(2);
-                                                    uint32_t metaLen = (uint32_t)metaStr.size();
-                                                    ofs.write(reinterpret_cast<char*>(&metaLen), 4);
-                                                    ofs.write(metaStr.data(), metaLen);
-                                                    // Payload (using the decoded buffer directly)
-                                                    ofs.write(decoded.data(), decoded.size());
-                                                    ofs.close();
-                                                }
-                                                // Remove source file since it is embedded
-                                                try { fs::remove(filePath); } catch(...) {}
-                                                
-                                                sendResult(true, "Imported " + fileName);
-                                                sendContentListFor(targetPath);
-                                            } else {
-                                                // Just keep the file as is? 
-                                                sendResult(true, "Saved " + fileName);
-                                                sendContentListFor(targetPath);
-                                            }
-                                            return S_OK;
-                                        }
-
-                                        // Import files (from drag & drop or file dialog)
-                                        if (action == "import-files") {
-                                            std::string targetPath = j.value("path", std::string());
-                                            nlohmann::json files = j.value("files", nlohmann::json::array());
-                                            
-                                            if (!files.is_array() || files.empty()) {
-                                                sendResult(false, "No files to import");
-                                                return S_OK;
-                                            }
-                                            
-                                            fs::path base = fs::path(g_app.uiFolder).parent_path();
-                                            fs::path contentDir = base / targetPath;
-                                            
-                                            // Ensure the target directory exists
-                                            try {
-                                                if (!fs::exists(contentDir)) {
-                                                    fs::create_directories(contentDir);
-                                                }
-                                            } catch(...) {}
-                                            
-                                            int importedCount = 0;
-                                            std::vector<std::string> createdAssets;
-                                            
-                                            // Process each file
-                                            for (const auto& fileObj : files) {
-                                                std::string filePath = fileObj.value("path", std::string());
-                                                std::string fileName = fileObj.value("name", std::string());
-                                                
-                                                if (filePath.empty() || fileName.empty()) continue;
-                                                
-                                                    try {
-                                                            fs::path src(filePath);
-                                                            if (!fs::exists(src)) continue;
-                                                            
-                                                            // Determine Asset Type
-                                                            std::string ext = src.extension().string();
-                                                            for (auto& c : ext) c = std::tolower(c);
-                                                            
-                                                            std::string assetType = "";
-                                                            
-                                                            // 3D Models
-                                                            if (ext == ".fbx" || ext == ".obj" || ext == ".glb" || ext == ".gltf") {
-                                                                assetType = "StaticMesh";
-                                                            } 
-                                                            // Textures
-                                                            else if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".tga" || ext == ".bmp") {
-                                                                assetType = "Texture";
-                                                            }
-                                                            // Audio
-                                                            else if (ext == ".wav" || ext == ".mp3" || ext == ".ogg") {
-                                                                assetType = "SoundWave";
-                                                            }
-                                                            
-                                                            if (!assetType.empty()) {
-                                                                // Create .plumeasset file with embedded data
-                                                                std::string assetName = fs::path(fileName).stem().string();
-                                                                
-                                                                nlohmann::json meta;
-                                                                meta["type"] = assetType;
-                                                                meta["source"] = fileName;
-                                                                
-                                                                fs::path assetFile = contentDir / (assetName + ".plumeasset");
-                                                                std::ofstream ofs(assetFile.string(), std::ios::binary);
-                                                                if (ofs.is_open()) {
-                                                                    // Read source file into buffer
-                                                                    std::ifstream srcIfs(src.string(), std::ios::binary | std::ios::ate);
-                                                                    std::streamsize size = srcIfs.tellg();
-                                                                    srcIfs.seekg(0, std::ios::beg);
-                                                                    std::vector<char> buffer(size);
-                                                                    if (srcIfs.read(buffer.data(), size)) {
-                                                                        // Header: PLAS
-                                                                        ofs.write("PLAS", 4);
-                                                                        // Version: 1 (uint32)
-                                                                        uint32_t ver = 1;
-                                                                        ofs.write(reinterpret_cast<char*>(&ver), 4);
-                                                                        // JSON Meta
-                                                                        std::string metaStr = meta.dump(2);
-                                                                        uint32_t metaLen = (uint32_t)metaStr.size();
-                                                                        ofs.write(reinterpret_cast<char*>(&metaLen), 4);
-                                                                        ofs.write(metaStr.data(), metaLen);
-                                                                        // Payload
-                                                                        ofs.write(buffer.data(), buffer.size());
-                                                                        
-                                                                        createdAssets.push_back(assetName + ".plumeasset");
-                                                                        importedCount++;
-                                                                    }
-                                                                }
-                                                            } else {
-                                                                // Generic file - copy as is
-                                                                fs::path destFile = contentDir / fileName;
-                                                                if (!fs::exists(destFile)) {
-                                                                    fs::copy_file(src, destFile, fs::copy_options::overwrite_existing);
-                                                                }
-                                                                createdAssets.push_back(fileName);
-                                                                importedCount++;
-                                                            }
-
-                                                        } catch(...) {}
-                                                    }
-                                            
-                                            // Send result back
-                                            nlohmann::json resultData;
-                                            resultData["importedCount"] = importedCount;
-                                            resultData["assets"] = nlohmann::json::array();
-                                            for (const auto& asset : createdAssets) {
-                                                resultData["assets"].push_back(asset);
-                                            }
-                                            
-                                            sendResult(importedCount > 0, importedCount > 0 ? 
-                                                std::to_string(importedCount) + " file(s) imported" : 
-                                                "Failed to import files", resultData);
-                                            
-                                            // Refresh the content listing
-                                            sendContentListFor(targetPath);
-                                            return S_OK;
-                                        }
-
-                                        return S_OK;
-                                    }).Get(),
-                                nullptr);
-                            
-                            // Ensure page background transparency after navigation completes
-                            if (g_app.webview) {
-                                g_app.webview->add_NavigationCompleted(
-                                    Callback<ICoreWebView2NavigationCompletedEventHandler>(
-                                        [](ICoreWebView2* sender, ICoreWebView2NavigationCompletedEventArgs* args) -> HRESULT {
-                                            // NavigationCompleted diagnostics suppressed
-                                            // Ensure the page DOM is transparent
-                                            if (g_app.webview) {
-                                                LPWSTR script = L"(function(){document.documentElement.style.background='transparent';document.body.style.background='transparent';document.body.style.backgroundColor='transparent';document.documentElement.style.backgroundColor='transparent';})();";
-                                                g_app.webview->ExecuteScript(script, nullptr);
-                                            }
-
-                                            // Also re-assert controller default background color now that navigation is complete
-                                            if (g_app.controller) {
-                                                ComPtr<ICoreWebView2Controller2> controller2;
-                                                if (SUCCEEDED(g_app.controller->QueryInterface(IID_PPV_ARGS(&controller2))) && controller2) {
-                                                    COREWEBVIEW2_COLOR transparentColor = {0, 0, 0, 0};
-                                                    controller2->put_DefaultBackgroundColor(transparentColor);
-                                                }
-                                            }
-
-                                            return S_OK;
-                                        }).Get(), nullptr);
-                            }
-                            std::wstring wurl = std::wstring(htmlPath.begin(), htmlPath.end());
-                            g_app.webview->Navigate(wurl.c_str());
-                            
-                            return S_OK;
-                        }).Get());
-                return S_OK;
-            }).Get());
-}
-#endif
+// --- Main ---
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
-    // Enable high DPI support
     SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
     
     fs::path exePath = fs::current_path();
-
-    // 1. Resolve UI Folder EARLY so we can load theme matching the user preference
-    // Localiser les fichiers UI
     fs::path uiEntryPath = exePath / ".." / "UI" / "index.html";
     if (!fs::exists(uiEntryPath)) {
         uiEntryPath = exePath / "UI" / "index.html";
     }
     
-    // Resolve the UI entry to a canonical absolute path
     std::string resolvedUiFolder;
     try {
         if (fs::exists(uiEntryPath)) {
              fs::path resolved = fs::canonical(uiEntryPath);
              resolvedUiFolder = resolved.parent_path().string();
         } else {
-             // Will fail later properly if not found, but we need something for splash if possible
-             resolvedUiFolder = (exePath / ".." / "UI").string(); // Fallback guess
+             resolvedUiFolder = (exePath / ".." / "UI").string();
         }
     } catch(...) {
         fs::path resolved = fs::absolute(uiEntryPath);
@@ -1888,46 +265,34 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     }
     g_app.uiFolder = resolvedUiFolder;
     
-    // Créer et afficher le splash screen
-    // Chercher l'image du splash screen
     fs::path splashImagePath = exePath / ".." / ".." / "Assets" / "Branding" / "splash_image.png";
-    if (!fs::exists(splashImagePath)) {
-        splashImagePath = exePath / ".." / "Assets" / "Branding" / "splash_image.png";
-    }
-    if (!fs::exists(splashImagePath)) {
-        splashImagePath = exePath / "Assets" / "Branding" / "splash_image.png";
-    }
+    if (!fs::exists(splashImagePath)) splashImagePath = exePath / ".." / "Assets" / "Branding" / "splash_image.png";
+    if (!fs::exists(splashImagePath)) splashImagePath = exePath / "Assets" / "Branding" / "splash_image.png";
     
     std::wstring wSplashPath(splashImagePath.wstring());
     
     SplashScreen splash;
     splash.Create(wSplashPath, 600, 400);
-    
-    // Configurer la couleur du thème pour le splash screen
-    std::string themeColor = GetCurrentThemeAccentColor();
-    splash.SetAccentColor(themeColor);
-    
+    splash.SetAccentColor(GetCurrentThemeAccentColor());
     splash.Show();
     splash.UpdateProgress(0.0f, "Initializing Plume Engine...");
-    // Load configurations early so the splash can display progress/status
+    
     splash.UpdateProgress(0.02f, "Loading configurations...");
     LoadConfigurations();
     splash.UpdateProgress(0.04f, "Configurations loaded");
 
-    // Initialiser le moteur
     Plume::Engine engine;
     engine.Init();
     g_app.engine = &engine;
-    // Apply configuration flags loaded earlier from EditorConfig.ini
+    
     try {
         g_app.engine->SetVSync(g_app.vsync);
         g_app.engine->SetMaxFPS(g_app.maxFPS);
     } catch(...) {}
-    // Start a background input thread that polls the pressed keys and applies
-    // continuous camera translation at ~60Hz while the app runs.
-            std::thread([](){
+
+    std::thread([](){
         const std::chrono::milliseconds tick(16);
-        while (!g_app.shouldClose.load()) {
+        while (!g_app.shouldClose) {
             Plume::Vec3 moveDelta{0,0,0};
             Plume::Vec3 rotDelta{0,0,0};
             bool hasMove = false;
@@ -1952,17 +317,14 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
             std::this_thread::sleep_for(tick);
         }
     }).detach();
+
     splash.UpdateProgress(0.33f, "Loading scene...");
     
-    // Initialiser le système de plugins
     splash.UpdateProgress(0.3f, "Loading plugins...");
     auto& pluginManager = Plume::PluginManager::Get();
-    
-    // Enregistrer les plugins disponibles (Dynamic Loading)
     splash.UpdateProgress(0.35f, "Registering plugins...");
     pluginManager.LoadPluginsFromDirectory(".");
     
-    // Initialiser tous les plugins activés
     splash.UpdateProgress(0.4f, "Initializing plugins...");
     auto plugins = pluginManager.GetAllPlugins();
     float pluginProgress = 0.4f;
@@ -1979,64 +341,53 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     pluginManager.InitializeAll();
     splash.UpdateProgress(0.5f, "Plugins loaded!");
     
-    // Verification du fichier UI (already resolved at start, checking existence now)
     if (!fs::exists(uiEntryPath)) {
         splash.Hide();
         MessageBoxA(NULL, "Cannot find UI/index.html", "Error", MB_OK | MB_ICONERROR);
         return 1;
     }
 
-    // Resolved UI folder logging suppressed
     splash.UpdateProgress(0.55f, "Exporting data...");
     ExportSceneData();
     ExportPluginData();
     ExportThemeData();
-    // Ensure rendering data exists before the UI loads to avoid initial 404s
     ExportRenderingData();
+
     splash.UpdateProgress(0.6f, "Creating window...");
     
-    // Créer la fenêtre principale (mais ne pas l'afficher encore)
-    if (!CreateAppWindow()) {
+    if (!EditorWindow::CreateAppWindow(g_app)) {
         splash.Hide();
         return 1;
     }
+
     splash.UpdateProgress(0.7f, "Initializing WebView2...");
     
-    // Initialiser WebView2
     std::string url = "file:///" + fs::absolute(uiEntryPath).string();
     for (auto& c : url) if (c == '\\') c = '/';
-    // Create the WebView overlay (Editor owns the WebView2 instance)
-    InitWebView(url);
     
-    // Attendre que WebView2 se charge complètement
+    WebViewManager::InitWebView(g_app, url);
+    
     std::this_thread::sleep_for(std::chrono::milliseconds(1000));
     splash.UpdateProgress(1.0f, "Ready!");
     std::this_thread::sleep_for(std::chrono::milliseconds(300));
     
-    // Masquer le splash screen
     splash.Hide();
     
-    // Afficher la fenêtre maximisée avec l'animation Windows
     ShowWindow(g_app.hwnd, SW_MAXIMIZE);
     SetForegroundWindow(g_app.hwnd);
 
-    // Initialize the renderer with the main window
-    // The renderer will draw into the main window, and the WebView2 will overlay
-    // the UI elements. The 3D viewport area will be determined by the web UI layout.
     RECT rc;
     GetClientRect(g_app.hwnd, &rc);
     uint32_t w = static_cast<uint32_t>(rc.right - rc.left);
     uint32_t h = static_cast<uint32_t>(rc.bottom - rc.top);
     
-    // Renderer init window size logging suppressed
-    
     engine.InitRenderer(reinterpret_cast<void*>(g_app.hwnd), w, h, engine.GetCurrentGraphicsAPI());
     
-    // Boucle principale
     MSG msg = {};
     auto lastExport = std::chrono::steady_clock::now();
     
     while (!g_app.shouldClose) {
+        // Dispatch messages (handled by EditorWindow::WindowProc)
         while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
             TranslateMessage(&msg);
             DispatchMessage(&msg);
@@ -2049,15 +400,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
             lastExport = now;
         }
 
-        // Broadcast FPS to frontend every 250ms
         static auto lastFPSBroadcast = std::chrono::steady_clock::now();
         if (std::chrono::duration_cast<std::chrono::milliseconds>(now - lastFPSBroadcast).count() >= 250) {
             if (g_app.engine && g_app.webview) {
                float fps = g_app.engine->GetFPS();
-               // Construct JSON: {"action": "fps-update", "fps": 123}
                std::string msg = "{\"action\": \"fps-update\", \"fps\": " + std::to_string((int)std::round(fps)) + "}";
-               
-               // Convert to wstring
                int size = MultiByteToWideChar(CP_UTF8, 0, msg.c_str(), (int)msg.size(), NULL, 0);
                if (size > 0) {
                    std::wstring wmsg(size, 0);
@@ -2068,28 +415,14 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
             lastFPSBroadcast = now;
         }
         
-        // Mettre à jour tous les plugins
         Plume::PluginManager::Get().UpdateAll();
 
-        // Drive the engine renderer per-frame so the editor shows the scene
-        if (g_app.engine) {
+        if (g_app.engine && g_app.isRenderingEnabled) {
             if (g_app.engine->GetRenderer()) {
                 g_app.engine->RenderFrame();
             }
         }
         
-        // Toggle WebView visibility with Ctrl+T (edge detect)
-        if (g_app.engine) {
-            SHORT ctrlState = GetAsyncKeyState(VK_CONTROL);
-            SHORT tState = GetAsyncKeyState('T');
-            bool ctrlTPressed = ((ctrlState & 0x8000) != 0) && ((tState & 0x8000) != 0);
-            if (ctrlTPressed && !g_app.lastCtrlT) {
-                g_app.webviewVisible = !g_app.webviewVisible;
-                if (g_app.controller) g_app.controller->put_IsVisible(g_app.webviewVisible ? TRUE : FALSE);
-            }
-            g_app.lastCtrlT = ctrlTPressed;
-        }
-
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
     

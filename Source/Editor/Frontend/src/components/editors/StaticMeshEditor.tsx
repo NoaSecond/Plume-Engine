@@ -9,9 +9,10 @@ interface StaticMeshEditorProps {
     // Only minimal props needed for this isolated view
     entityId: string; // The ID of the mesh we are editing
     onClose: () => void;
+    isActive?: boolean;
 }
 
-export const StaticMeshEditor: React.FC<StaticMeshEditorProps> = ({ entityId, onClose }) => {
+export const StaticMeshEditor: React.FC<StaticMeshEditorProps> = ({ entityId, onClose, isActive = true }) => {
     const { theme } = useTheme();
     const { t } = useLanguage();
 
@@ -57,6 +58,7 @@ export const StaticMeshEditor: React.FC<StaticMeshEditorProps> = ({ entityId, on
                     setViewMode={setViewMode}
                     onAddEntity={() => { }} // Disabled in mesh editor
                     showToolbar={false}
+                    controlsEnabled={isActive}
                 />
                 <div
                     className="w-80 flex flex-col shrink-0 border-l"
