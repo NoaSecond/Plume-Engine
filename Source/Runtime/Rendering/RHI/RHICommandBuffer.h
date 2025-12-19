@@ -22,7 +22,7 @@ namespace RHI {
         virtual void DrawIndexed(uint32_t indexCount, uint32_t instanceCount, uint32_t firstIndex, int32_t vertexOffset, uint32_t firstInstance) = 0;
 
         // --- High-level Refactored Methods (DIP/LSP fixes) ---
-        virtual void SetCamera(const Vec3& position, const Vec3& rotation, float fov, float aspect) = 0;
+        virtual void SetCamera(const Vec3& position, const Vec3& rotation, float fovOrSize, float aspect, bool orthographic = false) = 0;
         virtual void SetLight(int index, const Vec3& position, const Vec3& color) = 0;
         virtual void DrawGrid(int size, float spacing) = 0;
         virtual void DrawGizmo() = 0;

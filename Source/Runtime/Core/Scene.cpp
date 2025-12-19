@@ -190,6 +190,7 @@ namespace Plume {
 
 
     void Scene::RotateCamera(const Vec3& delta) {
+        if (m_IsRotationLocked) return;
         for (auto& e : m_Registry) {
             if (e.Type.Type == EntityType::Camera) {
                 

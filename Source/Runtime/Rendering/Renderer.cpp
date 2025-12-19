@@ -58,7 +58,9 @@ namespace Plume {
             camTransform.Rotation = {20.0f, 0.0f, 0.0f};
         }
         float aspect = (float)m_ViewportWidth / (float)m_ViewportHeight;
-        cmdBuffer->SetCamera(camTransform.Position, camTransform.Rotation, 60.0f, aspect);
+        bool isOrtho = scene->GetProjectionMode() == Scene::ProjectionMode::Orthographic;
+        float fovOrSize = isOrtho ? scene->GetOrthoSize() : 60.0f;
+        cmdBuffer->SetCamera(camTransform.Position, camTransform.Rotation, fovOrSize, aspect, isOrtho);
 
         // Render Grid
         RenderGrid(cmdBuffer);

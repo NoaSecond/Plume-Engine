@@ -42,6 +42,16 @@ namespace Plume {
         enum class CameraMode { SixDOF, ThreeDOF };
         void SetCameraMode(CameraMode mode) { m_CameraMode = mode; }
         CameraMode GetCameraMode() const { return m_CameraMode; }
+        
+        enum class ProjectionMode { Perspective, Orthographic };
+        void SetProjectionMode(ProjectionMode mode) { m_ProjectionMode = mode; }
+        ProjectionMode GetProjectionMode() const { return m_ProjectionMode; }
+        
+        void SetOrthoSize(float size) { m_OrthoSize = size; }
+        float GetOrthoSize() const { return m_OrthoSize; }
+        
+        void SetRotationLocked(bool locked) { m_IsRotationLocked = locked; }
+        bool IsRotationLocked() const { return m_IsRotationLocked; }
 
     private:
         struct EntityData {
@@ -52,6 +62,9 @@ namespace Plume {
         };
         std::vector<EntityData> m_Registry;
         CameraMode m_CameraMode = CameraMode::ThreeDOF;
+        ProjectionMode m_ProjectionMode = ProjectionMode::Perspective;
+        float m_OrthoSize = 10.0f;
+        bool m_IsRotationLocked = false;
     };
     class Entity {
     public:

@@ -61,18 +61,24 @@ namespace RHI {
         // glDrawElements(GL_TRIANGLES, indexCount, GL_UNSIGNED_INT, (void*)(firstIndex * sizeof(uint32_t)));
     }
 
-    void OpenGLCommandBuffer::SetCamera(const Vec3& position, const Vec3& rotation, float fov, float aspect) {
+    void OpenGLCommandBuffer::SetCamera(const Vec3& position, const Vec3& rotation, float fovOrSize, float aspect, bool orthographic) {
 #ifdef _WIN32
         glMatrixMode(GL_PROJECTION);
         glLoadIdentity();
         
-        const float PI = 3.14159265f;
-        float fovRad = fov * PI / 180.0f;
-        float nearPlane = 0.1f;
-        float farPlane = 1000.0f;
-        float top = tanf(fovRad * 0.5f) * nearPlane;
-        float right = top * aspect;
-        glFrustum(-right, right, -top, top, nearPlane, farPlane);
+        if (orthographic) {
+            float halfWidth = fovOrSize * aspect * 0.5f;
+            float halfHeight = fovOrSize * 0.5f;
+            glOrtho(-halfWidth, halfWidth, -halfHeight, halfHeight, -1000.0f, 1000.0f);
+        } else {
+            const float PI = 3.14159265f;
+            float fovRad = fovOrSize * PI / 180.0f;
+            float nearPlane = 0.1f;
+            float farPlane = 1000.0f;
+            float top = tanf(fovRad * 0.5f) * nearPlane;
+            float right = top * aspect;
+            glFrustum(-right, right, -top, top, nearPlane, farPlane);
+        }
         
         glMatrixMode(GL_MODELVIEW);
         glLoadIdentity();

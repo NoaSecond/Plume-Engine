@@ -209,6 +209,51 @@ class GetPluginsCommand : public EditorCommand {
     }
 };
 
+class CameraPanCommand : public EditorCommand {
+public:
+    void Execute(AppState& appState, const nlohmann::json& payload) override {
+        if (!appState.engine || !appState.engine->GetActiveScene()) return;
+        float dx = payload.value("dx", 0.0f);
+        float dy = payload.value("dy", 0.0f);
+        float panFactor = 0.02f; // Adjust pan sensitivity
+        appState.engine->TranslateCameraLocal({ -dx * panFactor, dy * panFactor, 0.0f });
+    }
+};
+
+class SetViewportViewCommand : public EditorCommand {
+public:
+    void Execute(AppState& appState, const nlohmann::json& payload) override {
+        if (!appState.engine || !appState.engine->GetActiveScene()) return;
+        std::string view = payload.value("view", "Perspective");
+        auto* scene = appState.engine->GetActiveScene();
+        
+        Plume::TransformComponent camTransform;
+        if (!scene->GetCameraTransform(camTransform)) return;
+        
+        scene->SetRotationLocked(false);
+
+        if (view == "Perspective") {
+            scene->SetProjectionMode(Plume::Scene::ProjectionMode::Perspective);
+        } else if (view == "Orthographic") {
+            scene->SetProjectionMode(Plume::Scene::ProjectionMode::Orthographic);
+            scene->SetOrthoSize(10.0f);
+        } else {
+            scene->SetProjectionMode(Plume::Scene::ProjectionMode::Orthographic);
+            scene->SetOrthoSize(10.0f);
+            scene->SetRotationLocked(true);
+            
+            if (view == "Top")         camTransform.Rotation = { -90.0f, 0.0f, 0.0f };
+            else if (view == "Bottom") camTransform.Rotation = { 90.0f, 0.0f, 0.0f };
+            else if (view == "Front")  camTransform.Rotation = { 0.0f, 0.0f, 0.0f };
+            else if (view == "Back")   camTransform.Rotation = { 0.0f, 180.0f, 0.0f };
+            else if (view == "Left")   camTransform.Rotation = { 0.0f, 90.0f, 0.0f };
+            else if (view == "Right")  camTransform.Rotation = { 0.0f, -90.0f, 0.0f };
+            
+            scene->SetCameraTransform(camTransform);
+        }
+    }
+};
+
 class SetThemeCommand : public EditorCommand {
     void Execute(AppState& appState, const nlohmann::json& payload) override {
         appState.theme = payload.value("theme", "plume-dark");
@@ -237,6 +282,7 @@ struct CommandInitializer {
         reg.RegisterCommand("set-camera-mode", std::make_unique<SetCameraModeCommand>());
         reg.RegisterCommand("viewport-pointer", std::make_unique<ViewportPointerCommand>());
         reg.RegisterCommand("camera-rotate", std::make_unique<CameraRotateCommand>());
+        reg.RegisterCommand("camera-pan", std::make_unique<CameraPanCommand>());
         reg.RegisterCommand("camera-input", std::make_unique<CameraInputCommand>());
         reg.RegisterCommand("preview-asset", std::make_unique<PreviewAssetCommand>());
         reg.RegisterCommand("restore-main-scene", std::make_unique<RestoreMainSceneCommand>());
@@ -250,6 +296,7 @@ struct CommandInitializer {
         reg.RegisterCommand("toggle-plugin", std::make_unique<TogglePluginCommand>());
         reg.RegisterCommand("get-plugins", std::make_unique<GetPluginsCommand>());
         reg.RegisterCommand("set-theme", std::make_unique<SetThemeCommand>());
+        reg.RegisterCommand("set-viewport-view", std::make_unique<SetViewportViewCommand>());
         // (Note: Other commands like duplicate, paste, import-file, etc. can be added here)
     }
 };
