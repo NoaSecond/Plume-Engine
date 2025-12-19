@@ -649,6 +649,37 @@ void EditorActionHandler::HandleMessage(AppState& appStateRef, const std::string
             }
             return;
         }
+
+        if (action == "import-file-blob") {
+            std::string path = j.value("path", std::string());
+            std::string name = j.value("name", std::string());
+            std::string contentB64 = j.value("content", std::string());
+            
+            if (!name.empty()) {
+                fs::path base = fs::path(appState->uiFolder).parent_path();
+                fs::path targetDir = path.empty() ? (base / "Content") : (fs::path(path).is_absolute() ? fs::path(path) : base / path);
+                
+                if (!fs::exists(targetDir)) fs::create_directories(targetDir);
+                
+                fs::path targetFile = targetDir / name;
+                std::string decoded = base64_decode(contentB64);
+                
+                try {
+                    std::ofstream ofs(targetFile, std::ios::binary);
+                    if (ofs.is_open()) {
+                        ofs.write(decoded.data(), decoded.size());
+                        sendResult(appState, true, "Created " + name);
+                    } else {
+                        sendResult(appState, false, "Failed to write file");
+                    }
+                } catch (...) {
+                    sendResult(appState, false, "Exception writing file");
+                }
+                
+                sendContentListFor(appState, path.empty() ? "Content" : path);
+            }
+            return;
+        }
         
     } catch (...) {}
 }

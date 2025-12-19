@@ -424,13 +424,15 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
           >
             <Upload size={14} />{t('browser.import')}
           </button>
-          <button
-            className="p-1 rounded ml-2 transition-colors"
-            style={{ color: theme.colors.text.secondary }}
-            onClick={onClose}
-          >
-            <X size={16} />
-          </button>
+          {!isDocked && (
+            <button
+              className="p-1 rounded ml-2 transition-colors"
+              style={{ color: theme.colors.text.secondary }}
+              onClick={onClose}
+            >
+              <X size={16} />
+            </button>
+          )}
         </div>
       </div>
 

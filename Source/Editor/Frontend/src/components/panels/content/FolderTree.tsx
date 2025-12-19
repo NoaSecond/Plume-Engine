@@ -1,5 +1,6 @@
 import React, { useRef, useEffect, useMemo } from 'react';
-import { ChevronRight, ChevronDown, Folder, Box, Image as ImageIcon, Music, Layers, Globe, Bone, Film, FileCode, File as FileIcon } from 'lucide-react';
+import { ChevronRight, ChevronDown } from 'lucide-react';
+import { getAssetDefinition } from '../../../utils/AssetUtils';
 import { useTheme } from '../../../ThemeContext';
 
 interface FolderTreeProps {
@@ -70,50 +71,12 @@ const TreeNode: React.FC<{ node: any; depth: number } & Omit<FolderTreeProps, 'n
         }
     }, [isExpanded, visibleChildren]);
 
-    // Icon logic
-    let iconColor = "#9ca3af";
-    if (theme?.colors?.text?.secondary) iconColor = theme.colors.text.secondary;
-    const type = node.type ? node.type.toLowerCase() : '';
-    const name = node.name ? node.name.toLowerCase() : '';
-
-    if (type === 'folder') {
-        const metaColor = node.meta?.color;
-        if (metaColor) {
-            iconColor = metaColor.startsWith('#') ? metaColor : '#' + metaColor;
-        } else {
-            iconColor = '#eab308';
-        }
-    } else if (type === 'staticmesh' || type === 'mesh' || name.endsWith('.plume_mesh') || name.endsWith('.fbx') || name.endsWith('.obj')) {
-        iconColor = "#5DE2E7";
-    } else if (type === 'texture' || type === 'image' || name.endsWith('.png') || name.endsWith('.jpg') || name.endsWith('.tga')) {
-        iconColor = "#D05C5E";
-    } else if (type === 'soundwave' || type === 'sound' || name.endsWith('.wav') || name.endsWith('.mp3')) {
-        iconColor = "#CC6CE7";
-    } else if (type === 'material' || name.endsWith('.plumematerial')) {
-        iconColor = "#7DDA58";
-    } else if (type === 'level' || type === 'map' || name.endsWith('.plumemap') || name.endsWith('.map')) {
-        iconColor = "#FE9900";
-    } else if (type === 'skeletalmesh' || name.endsWith('.plumeskel')) {
-        iconColor = "#FFECA1";
-    } else if (type === 'animationsequence' || type === 'anim' || name.endsWith('.plumeanim')) {
-        iconColor = "#BFD641";
-    } else if (type === 'script' || name.endsWith('.ts') || name.endsWith('.js')) {
-        iconColor = "#22c55e";
-    }
-
-    // Helper to determine icon component
     const getIcon = () => {
-        if (type === 'folder') return <Folder size={14} color={iconColor} stroke={iconColor} fill="none" strokeWidth={1.5} />;
-        if (type === 'staticmesh' || type === 'mesh' || name.endsWith('.plume_mesh') || name.endsWith('.fbx') || name.endsWith('.obj')) return <Box size={14} color={iconColor} stroke={iconColor} fill="none" strokeWidth={2} />;
-        if (type === 'texture' || type === 'image' || name.endsWith('.png') || name.endsWith('.jpg') || name.endsWith('.tga')) return <ImageIcon size={14} color={iconColor} stroke={iconColor} fill="none" strokeWidth={2} />;
-        if (type === 'soundwave' || type === 'sound' || name.endsWith('.wav') || name.endsWith('.mp3')) return <Music size={14} color={iconColor} stroke={iconColor} fill="none" strokeWidth={2} />;
-        if (type === 'material' || name.endsWith('.plumematerial')) return <Layers size={14} color={iconColor} stroke={iconColor} fill="none" strokeWidth={2} />;
-        if (type === 'level' || type === 'map' || name.endsWith('.plumemap') || name.endsWith('.map')) return <Globe size={14} color={iconColor} stroke={iconColor} fill="none" strokeWidth={2} />;
-        if (type === 'skeletalmesh' || name.endsWith('.plumeskel')) return <Bone size={14} color={iconColor} stroke={iconColor} fill="none" strokeWidth={2} />;
-        if (type === 'animationsequence' || type === 'anim' || name.endsWith('.plumeanim')) return <Film size={14} color={iconColor} stroke={iconColor} fill="none" strokeWidth={2} />;
-        if (type === 'script' || name.endsWith('.ts') || name.endsWith('.js')) return <FileCode size={14} color={iconColor} stroke={iconColor} fill="none" strokeWidth={2} />;
-        return <FileIcon size={14} color={iconColor} stroke={iconColor} fill="none" strokeWidth={2} />;
-    }
+        const type = node.type ? node.type.toLowerCase() : '';
+        const name = node.name ? node.name.toLowerCase() : '';
+        const { Icon, color } = getAssetDefinition(type, name, node.meta?.color, theme);
+        return <Icon size={14} color={color} stroke={color} fill="none" strokeWidth={type === 'folder' ? 1.5 : 2} />;
+    };
 
     return (
         <div>

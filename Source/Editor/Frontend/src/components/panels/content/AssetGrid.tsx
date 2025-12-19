@@ -1,7 +1,8 @@
 import React from 'react';
 import { useTheme } from '../../../ThemeContext';
 import { AssetTile } from '../../ui/Shared';
-import { File as FileIcon, Folder, Box, Image as ImageIcon, Music, Layers, Globe, Bone, Film, FileCode } from 'lucide-react';
+
+
 import { Asset } from '../../../hooks/useContentBrowser';
 
 interface AssetGridProps {
@@ -23,56 +24,16 @@ interface AssetGridProps {
     handleAssetContextMenu: (e: React.MouseEvent, asset: Asset, info: any) => void;
 }
 
-// Helper for icon and color
-const getAssetConfig = (type: string, name: string, metaColor?: string, theme?: any) => {
-    // Default fallback
-    const defaultColor = theme?.colors?.text?.secondary || '#9ca3af';
-    let Icon = FileIcon;
-    let color = defaultColor;
+import { getAssetDefinition } from '../../../utils/AssetUtils';
 
-    if (type === 'folder') {
-        Icon = Folder;
-        color = metaColor ? (metaColor.startsWith('#') ? metaColor : '#' + metaColor) : '#eab308';
-    }
-    else if (['staticmesh', 'mesh'].includes(type) || name.endsWith('.plume_mesh') || name.endsWith('.fbx') || name.endsWith('.obj')) {
-        Icon = Box;
-        color = "#5DE2E7";
-    }
-    else if (['texture', 'image'].includes(type) || name.endsWith('.png') || name.endsWith('.jpg') || name.endsWith('.tga')) {
-        Icon = ImageIcon;
-        color = "#D05C5E";
-    }
-    else if (['soundwave', 'sound'].includes(type) || name.endsWith('.wav') || name.endsWith('.mp3')) {
-        Icon = Music;
-        color = "#CC6CE7";
-    }
-    else if (type === 'material' || name.endsWith('.plumematerial')) {
-        Icon = Layers;
-        color = "#7DDA58";
-    }
-    else if (['level', 'map'].includes(type) || name.endsWith('.plumemap') || name.endsWith('.map')) {
-        Icon = Globe;
-        color = "#FE9900";
-    }
-    else if (type === 'skeletalmesh' || name.endsWith('.plumeskel')) {
-        Icon = Bone;
-        color = "#FFECA1";
-    }
-    else if (['animationsequence', 'anim'].includes(type) || name.endsWith('.plumeanim')) {
-        Icon = Film;
-        color = "#BFD641";
-    }
-    else if (type === 'script' || name.endsWith('.ts') || name.endsWith('.js')) {
-        Icon = FileCode;
-        color = "#22c55e";
-    }
-    return { Icon, color };
-};
+// Helper for icon and color -> Now integrated via AssetUtils
+// const getAssetConfig = (type: string, name: string, metaColor?: string, theme?: any) => ... replaced by getAssetDefinition
+
 
 const RenamingAsset = ({ asset, editingValue, setEditingValue, commitRename, setEditingId, setAssets, theme, zoomLevel }: any) => {
     const type = asset.type ? asset.type.toLowerCase() : '';
     const name = asset.name ? asset.name.toLowerCase() : '';
-    const { Icon, color } = getAssetConfig(type, name, asset.meta?.color, theme);
+    const { Icon, color } = getAssetDefinition(type, name, asset.meta?.color, theme);
     const baseSize = 96;
     const size = Math.round(baseSize * zoomLevel);
 

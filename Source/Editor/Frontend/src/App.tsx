@@ -188,8 +188,7 @@ export default function App() {
     else if (type === 'SoundWave') tabType = 'sound';
     else if (type === 'Material') tabType = 'material-editor';
 
-    // Fallback to extensions only if type is generic/missing, but only for .plumeasset if strictly needed
-    // The user requested to remove legacy extensions like .fbx, .obj, .plumematerial
+
 
     if (tabType) {
       const tabId = `${tabType}-${asset.id}`;

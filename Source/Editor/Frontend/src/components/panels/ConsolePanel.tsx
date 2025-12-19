@@ -194,16 +194,18 @@ export function ConsolePanel(props: ConsolePanelProps) {
           >
             {t('console.clear')}
           </button>
-          <button
-            onClick={() => setIsOpen(false)}
-            className="px-2 py-0.5 rounded text-xs"
-            style={{
-              backgroundColor: theme.colors.bg.elevated,
-              color: theme.colors.text.secondary,
-            }}
-          >
-            ✕
-          </button>
+          {!isDocked && (
+            <button
+              onClick={() => setIsOpen(false)}
+              className="px-2 py-0.5 rounded text-xs"
+              style={{
+                backgroundColor: theme.colors.bg.elevated,
+                color: theme.colors.text.secondary,
+              }}
+            >
+              ✕
+            </button>
+          )}
         </div>
       </div>
 
