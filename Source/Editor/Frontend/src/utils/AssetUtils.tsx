@@ -13,15 +13,15 @@ export const getAssetDefinition = (type: string, name: string = '', metaColor?: 
         Icon = Folder;
         color = metaColor ? (metaColor.startsWith('#') ? metaColor : '#' + metaColor) : '#eab308';
     }
-    else if (lowerType === 'staticmesh' || lowerType === 'mesh' || lowerName.endsWith('.plume_mesh') || lowerName.endsWith('.fbx') || lowerName.endsWith('.obj')) {
+    else if (lowerType === 'staticmesh' || lowerType === 'mesh') {
         Icon = Box;
         color = "#5DE2E7";
     }
-    else if (lowerType === 'texture' || lowerType === 'image' || lowerName.endsWith('.png') || lowerName.endsWith('.jpg') || lowerName.endsWith('.tga')) {
+    else if (lowerType === 'texture' || lowerType === 'image') {
         Icon = ImageIcon;
         color = "#D05C5E";
     }
-    else if (lowerType === 'soundwave' || lowerType === 'sound' || lowerName.endsWith('.wav') || lowerName.endsWith('.mp3')) {
+    else if (lowerType === 'soundwave' || lowerType === 'sound') {
         Icon = Music;
         color = "#CC6CE7";
     }
@@ -29,7 +29,7 @@ export const getAssetDefinition = (type: string, name: string = '', metaColor?: 
         Icon = Layers;
         color = "#7DDA58";
     }
-    else if (lowerType === 'level' || lowerType === 'map' || lowerName.endsWith('.map')) {
+    else if (lowerType === 'level' || lowerType === 'map') {
         Icon = Mountain;
         color = "#FE9900";
     }
@@ -41,7 +41,7 @@ export const getAssetDefinition = (type: string, name: string = '', metaColor?: 
         Icon = Film;
         color = "#BFD641";
     }
-    else if (lowerType === 'script' || lowerName.endsWith('.ts') || lowerName.endsWith('.js')) {
+    else if (lowerType === 'script') {
         Icon = FileCode;
         color = "#22c55e";
     }

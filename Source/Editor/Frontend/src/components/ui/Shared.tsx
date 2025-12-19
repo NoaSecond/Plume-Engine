@@ -165,7 +165,7 @@ export const AssetTile = ({ id, name, type, selected = false, onClick, onDoubleC
   // getAssetDefinition already handles meta.color logic if passed
   const finalColor = color;
 
-  const displayName = name.replace(/\.(plumeasset|plume_mesh|fbx|obj|gltf|glb|png|jpg|jpeg|tga|bmp|wav|mp3|ogg|plumeskel|plumeanim)$/i, '');
+  const displayName = name.replace(/\.(plumeasset|fbx|obj|gltf|glb|png|jpg|jpeg|tga|bmp|wav|mp3|ogg|plumeskel|plumeanim)$/i, '');
 
   const baseSize = 96; // w-24 equivalent roughly
   const size = Math.round(baseSize * scale);

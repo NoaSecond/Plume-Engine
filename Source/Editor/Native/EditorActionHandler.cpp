@@ -17,6 +17,105 @@
 using json = nlohmann::json;
 namespace fs = std::filesystem;
 
+// Helper to convert std::filesystem::path to UTF-8 std::string
+static std::string path_to_utf8(const fs::path& p) {
+    auto u8 = p.u8string();
+    return std::string(reinterpret_cast<const char*>(u8.c_str()));
+}
+
+// Helper to convert UTF-8 string to std::filesystem::path
+static fs::path utf8_to_path(const std::string& s) {
+    // Suppress potential deprecation warning for u8path in C++20
+#pragma warning(push)
+#pragma warning(disable: 4996) 
+    return fs::u8path(s);
+#pragma warning(pop)
+}
+
+// Helper to sanitize filename (remove special chars)
+static std::string sanitize_filename(const std::string& input) {
+    std::string out;
+    for (char c : input) {
+        if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '_') {
+            out += c;
+        }
+    }
+    if (out.empty()) out = "unnamed_asset";
+    return out;
+}
+
+static bool ProcessImportBuffer(const std::string& originalName, const char* data, size_t size, const fs::path& contentDir) {
+    fs::path srcPath(utf8_to_path(originalName));
+    std::string ext = path_to_utf8(srcPath.extension());
+    std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c){ return std::tolower(c); });
+    
+    std::string stem = path_to_utf8(srcPath.stem());
+    std::string safeStem = sanitize_filename(stem);
+
+    std::string type = "";
+    if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".tga" || ext == ".bmp" || ext == ".psd" || ext == ".hdr" || ext == ".pic") type = "Texture";
+    else if (ext == ".wav" || ext == ".mp3" || ext == ".ogg") type = "SoundWave";
+    else if (ext == ".fbx" || ext == ".obj" || ext == ".glb" || ext == ".gltf") type = "StaticMesh";
+
+    if (!type.empty()) {
+        std::string prefix = "";
+        if (type == "Texture") prefix = "T_";
+        else if (type == "SoundWave") prefix = "SW_";
+        else if (type == "StaticMesh") prefix = "SM_";
+        
+        if (!prefix.empty()) {
+            if (safeStem.size() < prefix.size() || safeStem.substr(0, prefix.size()) != prefix) {
+                safeStem = prefix + safeStem;
+            }
+        }
+
+        fs::path dest = contentDir / utf8_to_path(safeStem + ".plumeasset");
+        std::ofstream ofs(dest, std::ios::binary);
+        if (ofs.is_open()) {
+            ofs.write("PLAS", 4);
+            uint32_t v = 1; ofs.write((char*)&v, 4);
+            
+            json meta; 
+            meta["type"] = type;
+            meta["original_ext"] = ext;
+            
+            std::string ms = meta.dump();
+            uint32_t ml = (uint32_t)ms.size();
+            ofs.write((char*)&ml, 4);
+            ofs.write(ms.data(), ml);
+            ofs.write(data, size);
+            ofs.flush();
+            ofs.close();
+            return true;
+        }
+    } else {
+        fs::path dest = contentDir / utf8_to_path(safeStem + ext);
+        std::ofstream ofs(dest, std::ios::binary);
+        if (ofs.is_open()) {
+            ofs.write(data, size);
+            ofs.close();
+            return true;
+        }
+    }
+    return false;
+}
+
+static bool ProcessImportFile(const fs::path& src, const fs::path& contentDir) {
+    if(!fs::exists(src)) return false;
+    try {
+        std::ifstream ifs(src, std::ios::binary | std::ios::ate);
+        if (ifs.is_open()) {
+            std::streamsize size = ifs.tellg();
+            ifs.seekg(0, std::ios::beg);
+            std::vector<char> buffer(size);
+            if (ifs.read(buffer.data(), size)) {
+                return ProcessImportBuffer(path_to_utf8(src.filename()), buffer.data(), (size_t)size, contentDir);
+            }
+        }
+    } catch(...) {}
+    return false;
+}
+
 // Helper to convert UTF-8 to Wide String
 static std::wstring utf8_to_wstr(const std::string& str) {
     if (str.empty()) return std::wstring();
@@ -59,16 +158,16 @@ static void sendResult(AppState* appState, bool success, const std::string& mess
 
 static json buildNode(const fs::path& p) {
     json it;
-    std::string name = p.filename().string();
-    std::string id = name + "_" + std::to_string(std::hash<std::string>{}(p.string()));
+    std::string name = path_to_utf8(p.filename());
+    std::string id = name + "_" + std::to_string(std::hash<std::string>{}(path_to_utf8(p)));
     
     std::string type = fs::is_directory(p) ? "folder" : "file";
-    std::string pathStr = p.string();
+    std::string pathStr = path_to_utf8(p);
     for (auto &c : pathStr) if (c == '\\') c = '/';
     
     it["id"] = id;
     it["name"] = name;
-    it["path"] = pathStr;
+    it["path"] = pathStr; // This is now UTF-8
     
     if (!fs::is_directory(p) && p.extension() == ".plumeasset") {
         try {
@@ -81,7 +180,7 @@ static json buildNode(const fs::path& p) {
                     uint32_t len = 0;
                     ifs.read(reinterpret_cast<char*>(&ver), 4);
                     ifs.read(reinterpret_cast<char*>(&len), 4);
-                    if (len > 0) {
+                    if (len > 0 && len < 10485760) {
                         std::string metaStr; 
                         metaStr.resize(len);
                         ifs.read(&metaStr[0], len);
@@ -138,9 +237,9 @@ static void sendContentListFor(AppState* appState, const std::string& pathValue,
     fs::path target;
     
     if (rel.find("://") != std::string::npos) {
-         target = fs::path(rel);
+         target = utf8_to_path(rel);
     } else {
-         target = base / rel;
+         target = base / utf8_to_path(rel);
     }
 
     json list = json::object();
@@ -151,13 +250,26 @@ static void sendContentListFor(AppState* appState, const std::string& pathValue,
 
     try {
         if (fs::exists(target) && fs::is_directory(target)) {
+// In sendContentListFor, wrap loop body
             if (recursive) {
                 for (auto& entry : fs::directory_iterator(target)) {
-                    list["items"].push_back(buildTree(entry.path()));
+                    try {
+                        list["items"].push_back(buildTree(entry.path()));
+                    } catch(...) {}
                 }
             } else {
                 for (auto& entry : fs::directory_iterator(target)) {
-                    list["items"].push_back(buildNode(entry.path()));
+                    try {
+                        list["items"].push_back(buildNode(entry.path()));
+                    } catch(...) {
+                        // Fallback node for crashed files
+                        json fallback;
+                        fallback["id"] = "error_" + entry.path().filename().string();
+                        fallback["name"] = entry.path().filename().string();
+                        fallback["path"] = entry.path().string();
+                        fallback["type"] = "file";
+                        list["items"].push_back(fallback);
+                    }
                 }
             }
         }
@@ -625,7 +737,12 @@ void EditorActionHandler::HandleMessage(AppState& appStateRef, const std::string
             std::string path = j.value("path", std::string());
             OPENFILENAMEA ofn = {}; char szFile[2048]={0};
             ofn.lStructSize=sizeof(ofn); ofn.hwndOwner=appState->hwnd; ofn.lpstrFile=szFile; ofn.nMaxFile=sizeof(szFile);
-            ofn.lpstrFilter="3D Models (*.fbx;*.obj;*.glb;*.gltf)\0*.fbx;*.obj;*.glb;*.gltf\0All Files (*.*)\0*.*\0";
+            ofn.lpstrFilter="Supported Files (*.fbx;*.obj;*.glb;*.gltf;*.png;*.jpg;*.jpeg;*.tga;*.bmp;*.psd;*.hdr;*.pic;*.wav;*.mp3;*.ogg;*.plumeasset)\0*.fbx;*.obj;*.glb;*.gltf;*.png;*.jpg;*.jpeg;*.tga;*.bmp;*.psd;*.hdr;*.pic;*.wav;*.mp3;*.ogg;*.plumeasset\0"
+                            "3D Models (*.fbx;*.obj;*.glb;*.gltf)\0*.fbx;*.obj;*.glb;*.gltf\0"
+                            "Textures (*.png;*.jpg;*.jpeg;*.tga;*.bmp;*.psd;*.hdr;*.pic)\0*.png;*.jpg;*.jpeg;*.tga;*.bmp;*.psd;*.hdr;*.pic\0"
+                            "SoundWave (*.wav;*.mp3;*.ogg)\0*.wav;*.mp3;*.ogg\0"
+                            "PlumeAsset (*.plumeasset)\0*.plumeasset\0"
+                            "All Files (*.*)\0*.*\0";
             ofn.nFilterIndex=1; ofn.Flags=OFN_PATHMUSTEXIST|OFN_FILEMUSTEXIST|OFN_ALLOWMULTISELECT|OFN_EXPLORER;
             if(GetOpenFileNameA(&ofn)) {
                 std::vector<std::string> files; std::string fn=szFile;
@@ -634,19 +751,34 @@ void EditorActionHandler::HandleMessage(AppState& appStateRef, const std::string
                      while(*p){ files.push_back(dir+"\\"+p); p+=strlen(p)+1; }
                 } else files.push_back(fn);
                 
-                fs::path contentDir = fs::path(appState->uiFolder).parent_path() / path;
+                fs::path contentDir = fs::path(appState->uiFolder).parent_path() / utf8_to_path(path);
                 if(!fs::exists(contentDir)) fs::create_directories(contentDir);
                 int count=0;
                 for(const auto& f:files) {
-                     try {
-                         fs::path src(f); if(!fs::exists(src)) continue;
-                         fs::copy_file(src, contentDir/src.filename(), fs::copy_options::overwrite_existing);
-                         count++;
-                     } catch(...){}
+                    if(ProcessImportFile(fs::path(f), contentDir)) count++;
                 }
                 sendResult(appState,true,std::to_string(count)+" imported");
                 sendContentListFor(appState,path);
             }
+            return;
+        }
+
+        if (action == "import-files") {
+            std::string path = j.value("path", std::string());
+            auto files = j.value("files", json::array());
+            
+            fs::path contentDir = fs::path(appState->uiFolder).parent_path() / utf8_to_path(path);
+            if(!fs::exists(contentDir)) fs::create_directories(contentDir);
+            
+            int count = 0;
+            for (const auto& f : files) {
+                std::string p = f.value("path", "");
+                if (!p.empty()) {
+                    if (ProcessImportFile(utf8_to_path(p), contentDir)) count++;
+                }
+            }
+            sendResult(appState, true, std::to_string(count) + " imported");
+            sendContentListFor(appState, path);
             return;
         }
 
@@ -657,26 +789,16 @@ void EditorActionHandler::HandleMessage(AppState& appStateRef, const std::string
             
             if (!name.empty()) {
                 fs::path base = fs::path(appState->uiFolder).parent_path();
-                fs::path targetDir = path.empty() ? (base / "Content") : (fs::path(path).is_absolute() ? fs::path(path) : base / path);
+                fs::path contentDir = base / utf8_to_path(path);
+                if (!fs::exists(contentDir)) fs::create_directories(contentDir);
                 
-                if (!fs::exists(targetDir)) fs::create_directories(targetDir);
-                
-                fs::path targetFile = targetDir / name;
                 std::string decoded = base64_decode(contentB64);
-                
-                try {
-                    std::ofstream ofs(targetFile, std::ios::binary);
-                    if (ofs.is_open()) {
-                        ofs.write(decoded.data(), decoded.size());
-                        sendResult(appState, true, "Created " + name);
-                    } else {
-                        sendResult(appState, false, "Failed to write file");
-                    }
-                } catch (...) {
-                    sendResult(appState, false, "Exception writing file");
+                if (ProcessImportBuffer(name, decoded.data(), decoded.size(), contentDir)) {
+                    sendResult(appState, true, "Imported " + name);
+                } else {
+                    sendResult(appState, false, "Failed to import " + name);
                 }
-                
-                sendContentListFor(appState, path.empty() ? "Content" : path);
+                sendContentListFor(appState, path);
             }
             return;
         }
