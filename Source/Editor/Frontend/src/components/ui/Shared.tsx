@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { LucideIcon, FileCode, Folder, Image as ImageIcon, Box, Music, File, Globe, Layers, Bone, Film } from 'lucide-react';
+import { LucideIcon } from 'lucide-react';
 import { useTheme } from '../../ThemeContext';
 
 interface IconButtonProps {
@@ -138,76 +138,49 @@ export const MenuBarItem: React.FC<MenuBarItemProps> = ({ label, items, onAction
   );
 };
 
-export const AssetTile = ({ id, name, type, selected = false, onClick, onDoubleClick, onContextMenu, meta, scale = 1 }: { id?: string, name: string, type: string, selected?: boolean, onClick?: (e: React.MouseEvent) => void, onDoubleClick?: (e: React.MouseEvent) => void, onContextMenu?: (e: React.MouseEvent, info: { name: string, type: string }) => void, meta?: any, scale?: number }) => {
+export interface AssetTileProps {
+  id?: string;
+  name: string;
+  type: string;
+  selected?: boolean;
+  onClick?: (e: React.MouseEvent) => void;
+  onDoubleClick?: (e: React.MouseEvent) => void;
+  onContextMenu?: (e: React.MouseEvent, info: { name: string, type: string }) => void;
+  meta?: any;
+  scale?: number;
+  searchQuery?: string;
+}
+
+import { getAssetDefinition } from '../../utils/AssetUtils';
+
+// Helper import is at top of file, so we will handle imports separately if needed.
+// But first, let's replace the logic inside AssetTile.
+
+export const AssetTile = ({ id, name, type, selected = false, onClick, onDoubleClick, onContextMenu, meta, scale = 1, searchQuery = '' }: AssetTileProps) => {
   const { theme } = useTheme();
   const [isHovered, setIsHovered] = useState(false);
 
-  let Icon = File;
-  let color = "#9ca3af"; // gray-400
+  const { Icon, color } = getAssetDefinition(type, name, meta?.color, theme);
 
-  if (type === 'folder') {
-    Icon = Folder;
-    color = "#eab308"; // yellow-500
-  }
+  // getAssetDefinition already handles meta.color logic if passed
+  const finalColor = color;
 
-  const lowerType = type ? type.toLowerCase() : '';
-  const lowerName = name ? name.toLowerCase() : '';
-
-  // Specific Asset Types
-  if (lowerType === 'staticmesh' || lowerType === 'mesh' || lowerName.endsWith('.plume_mesh') || lowerName.endsWith('.fbx') || lowerName.endsWith('.obj')) {
-    Icon = Box;
-    color = "#5DE2E7"; // StaticMesh
-  }
-  else if (lowerType === 'texture' || lowerType === 'image' || lowerName.endsWith('.png') || lowerName.endsWith('.jpg') || lowerName.endsWith('.tga')) {
-    Icon = ImageIcon;
-    color = "#D05C5E"; // Texture
-  }
-  else if (lowerType === 'soundwave' || lowerType === 'sound' || lowerName.endsWith('.wav') || lowerName.endsWith('.mp3')) {
-    Icon = Music;
-    color = "#CC6CE7"; // Sound
-  }
-  else if (lowerType === 'material' || lowerName.endsWith('.plumematerial')) {
-    Icon = Layers;
-    color = "#7DDA58"; // Material
-  }
-  else if (lowerType === 'level' || lowerType === 'map' || lowerName.endsWith('.plumemap') || lowerName.endsWith('.map')) {
-    Icon = Globe;
-    color = "#FE9900"; // Level
-  }
-  else if (lowerType === 'skeletalmesh' || lowerName.endsWith('.plumeskel')) {
-    Icon = Bone;
-    color = "#FFECA1"; // SkeletalMesh
-  }
-  else if (lowerType === 'animationsequence' || lowerType === 'anim' || lowerName.endsWith('.plumeanim')) {
-    Icon = Film;
-    color = "#BFD641"; // AnimationSequence
-  }
-  else if (lowerType === 'script' || lowerName.endsWith('.ts') || lowerName.endsWith('.js')) {
-    Icon = FileCode;
-    color = "#22c55e"; // green-500 for scripts
-  }
-
-  // Plume meta files
-  if (name === '.plume_meta' || name.endsWith('.plume_meta')) {
-    Icon = FileCode;
-    color = theme.colors.accent.secondary;
-  }
-
-  // if meta.color provided, prefer it (strip leading '#')
-  let finalColor = color;
-  try {
-    // @ts-ignore
-    if (meta && meta.color) {
-      // ensure string and remove leading '#'
-      const mcol: string = typeof meta.color === 'string' ? (meta.color as string) : '';
-      if (mcol.length > 0) finalColor = mcol.startsWith('#') ? mcol : ('#' + mcol);
-    }
-  } catch (e) { }
-
-  const displayName = name.replace(/\.(plumeasset|plume_mesh|fbx|obj|gltf|glb|png|jpg|jpeg|tga|bmp|wav|mp3|ogg|plumematerial|plumemap|plumeskel|plumeanim)$/i, '');
+  const displayName = name.replace(/\.(plumeasset|fbx|obj|gltf|glb|png|jpg|jpeg|tga|bmp|wav|mp3|ogg|plumeskel|plumeanim)$/i, '');
 
   const baseSize = 96; // w-24 equivalent roughly
   const size = Math.round(baseSize * scale);
+
+  const isMetaFile = name === '.plume_meta' || name.endsWith('.plume_meta');
+  const isFolder = type === 'folder';
+
+  // Determine styles based on state
+  const fill = isFolder ? 'none' : (isMetaFile ? finalColor : "none");
+  const stroke = isFolder || isMetaFile ? finalColor : finalColor;
+  const strokeWidth = isFolder || isMetaFile ? 1.5 : 2;
+
+  const textBgColor = selected
+    ? (theme.name === 'feather-light' ? theme.colors.accent.primary : 'transparent')
+    : 'transparent';
 
   return (
     <div
@@ -249,16 +222,16 @@ export const AssetTile = ({ id, name, type, selected = false, onClick, onDoubleC
         <Icon
           size={Math.round(32 * scale)}
           color={finalColor}
-          fill={type === 'folder' ? 'none' : (name === '.plume_meta' || name.endsWith('.plume_meta') ? finalColor : "none")}
-          stroke={type === 'folder' ? finalColor : (name === '.plume_meta' || name.endsWith('.plume_meta') ? finalColor : finalColor)}
-          strokeWidth={type === 'folder' || name === '.plume_meta' || name.endsWith('.plume_meta') ? 1.5 : 2}
+          fill={fill}
+          stroke={stroke}
+          strokeWidth={strokeWidth}
         />
       </div>
       <span
         className="text-[10px] text-center w-full px-1 rounded break-words whitespace-normal"
         style={{
           color: selected ? '#FFFFFF' : theme.colors.text.secondary,
-          backgroundColor: selected ? (theme.name === 'feather-light' ? theme.colors.accent.primary : 'transparent') : 'transparent', // Ensure contrast if light theme
+          backgroundColor: textBgColor,
           textShadow: selected ? '0px 1px 2px rgba(0,0,0,0.8)' : 'none', // Strong shadow for white text visibility
           fontWeight: 'normal',
           display: '-webkit-box',
@@ -271,7 +244,21 @@ export const AssetTile = ({ id, name, type, selected = false, onClick, onDoubleC
         }}
         title={displayName}
       >
-        {displayName}
+        {(() => {
+          if (!searchQuery) return displayName;
+          const index = displayName.toLowerCase().indexOf(searchQuery.toLowerCase());
+          if (index === -1) return displayName;
+          const before = displayName.substring(0, index);
+          const match = displayName.substring(index, index + searchQuery.length);
+          const after = displayName.substring(index + searchQuery.length);
+          return (
+            <>
+              {before}
+              <span style={{ backgroundColor: theme.colors.accent.secondary, color: '#fff', borderRadius: '2px', padding: '0 2px' }}>{match}</span>
+              {after}
+            </>
+          );
+        })()}
       </span>
     </div >
   );

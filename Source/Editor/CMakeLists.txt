@@ -3,8 +3,20 @@
     SplashScreen.h
     SplashScreen.cpp
     resources.rc
+    Native/EditorContext.h
+    Native/EditorWindow.h
+    Native/EditorWindow.cpp
+    Native/WebViewManager.h
+    Native/WebViewManager.cpp
+    Native/EditorActionHandler.h
+    Native/EditorActionHandler.cpp
+    Native/EditorCommand.h
+    Native/EditorCommands.cpp
+    Native/EditorUtils.h
+    Native/EditorUtils.cpp
 )
 target_link_libraries(PlumeEditor PRIVATE PlumeRuntime)
+target_include_directories(PlumeEditor PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
 # Force Unicode
 target_compile_definitions(PlumeEditor PRIVATE UNICODE _UNICODE)

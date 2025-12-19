@@ -3,6 +3,8 @@
     "Core/Engine.h"
     "Core/Scene.cpp"
     "Core/Scene.h"
+    "Core/SceneSerializer.cpp"
+    "Core/SceneSerializer.h"
     "Core/Components.h"
     "Core/Plugin.h"
     "Core/PluginManager.cpp"

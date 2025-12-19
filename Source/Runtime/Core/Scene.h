@@ -18,6 +18,7 @@
 namespace Plume {
     class Entity;
     class Renderer; 
+    class SceneSerializer;
 
     class PLUME_API Scene {
     public:
@@ -25,8 +26,6 @@ namespace Plume {
         ~Scene();
         Entity CreateEntity(const std::string& name, EntityType type, const std::string& subType = "");
         void OnUpdate(float deltaTime);
-        std::string SerializeToJson();
-        void DeserializeFromJson(const std::string& json);
         void Clear();
         // Camera helpers: access / modify the first Camera entity's transform
         bool GetCameraTransform(TransformComponent& out);
@@ -38,6 +37,22 @@ namespace Plume {
 
         // Allow Renderer to iterate entities
         friend class Renderer;
+        friend class SceneSerializer;
+        
+        enum class CameraMode { SixDOF, ThreeDOF };
+        void SetCameraMode(CameraMode mode) { m_CameraMode = mode; }
+        CameraMode GetCameraMode() const { return m_CameraMode; }
+        
+        enum class ProjectionMode { Perspective, Orthographic };
+        void SetProjectionMode(ProjectionMode mode) { m_ProjectionMode = mode; }
+        ProjectionMode GetProjectionMode() const { return m_ProjectionMode; }
+        
+        void SetOrthoSize(float size) { m_OrthoSize = size; }
+        float GetOrthoSize() const { return m_OrthoSize; }
+        
+        void SetRotationLocked(bool locked) { m_IsRotationLocked = locked; }
+        bool IsRotationLocked() const { return m_IsRotationLocked; }
+
     private:
         struct EntityData {
             TagComponent Tag;
@@ -46,6 +61,10 @@ namespace Plume {
             bool Visible = true;
         };
         std::vector<EntityData> m_Registry;
+        CameraMode m_CameraMode = CameraMode::ThreeDOF;
+        ProjectionMode m_ProjectionMode = ProjectionMode::Perspective;
+        float m_OrthoSize = 10.0f;
+        bool m_IsRotationLocked = false;
     };
     class Entity {
     public:

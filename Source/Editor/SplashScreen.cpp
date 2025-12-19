@@ -253,15 +253,17 @@ void SplashScreen::Paint(HDC hdc) {
     int barX = 0;
     int barY = rect.bottom - barHeight; // flush to bottom
     
-    // Determine accent color early (used for bar and loading text)
     COLORREF accentColor = RGB(79, 195, 247); // Default color
     if (!m_accentColorHex.empty()) {
         std::string hex = m_accentColorHex;
+        if (hex.front() == '#') hex = hex.substr(1);
         if (hex.length() == 6) {
-            int r = std::stoi(hex.substr(0, 2), nullptr, 16);
-            int g = std::stoi(hex.substr(2, 2), nullptr, 16);
-            int b = std::stoi(hex.substr(4, 2), nullptr, 16);
-            accentColor = RGB(r, g, b);
+            try {
+                int r = std::stoi(hex.substr(0, 2), nullptr, 16);
+                int g = std::stoi(hex.substr(2, 2), nullptr, 16);
+                int b = std::stoi(hex.substr(4, 2), nullptr, 16);
+                accentColor = RGB(r, g, b);
+            } catch(...) {}
         }
     }
 

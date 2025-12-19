@@ -221,7 +221,7 @@ Prise en charge du vectoriel.
 Formats : .WAV (natif/haute qualité), .OGG (compressé), .MP3.
 Onglet de visualisation dédié (Play, Pause, Stop) visualisation de l’onde par canaux et du volume par canaux.
 3.7. Level
-Format de fichier : .plumeLevel (Format JSON ou Binaire propriétaire).
+Format de fichier : .plumeasset (Format JSON ou Binaire propriétaire).
 Contient : La liste des entités et leurs détails sérialisés.
 4. Moteur Physique et Scripting
 4.1. Physique

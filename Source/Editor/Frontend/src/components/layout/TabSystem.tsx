@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useTheme } from '../../ThemeContext';
-import { X, Box, Globe, Image as ImageIcon, Music, File, Layers, Bone, Film, Settings, Package, Plug, Folder, Terminal, FileCode } from 'lucide-react';
+import { X, Globe, Settings, Package, Plug, Folder, Terminal } from 'lucide-react';
+import { getAssetDefinition } from '../../utils/AssetUtils';
 
 export interface Tab {
     id: string;
@@ -26,24 +27,31 @@ export const TabSystem: React.FC<TabSystemProps> = ({ tabs, activeTabId, onTabCl
     const [dropIndicator, setDropIndicator] = useState<number | null>(null);
 
     const getIcon = (type: string) => {
-        switch (type) {
-            case 'scene': return <Globe size={14} className="mr-2" />;
-            case 'static-mesh': return <Box size={14} className="mr-2" />;
-            case 'texture': return <ImageIcon size={14} className="mr-2" />;
-            case 'sound': return <Music size={14} className="mr-2" />;
-            case 'material': return <Layers size={14} className="mr-2" />;
-            case 'material-editor': return <Layers size={14} className="mr-2" />;
-            case 'level': return <Globe size={14} className="mr-2" />;
-            case 'skeletal-mesh': return <Bone size={14} className="mr-2" />;
-            case 'animation-sequence': return <Film size={14} className="mr-2" />;
-            case 'editor-preferences': return <Settings size={14} className="mr-2" />;
-            case 'project-settings': return <Package size={14} className="mr-2" />;
-            case 'plugin-manager': return <Plug size={14} className="mr-2" />;
-            case 'content-browser': return <Folder size={14} className="mr-2" />;
-            case 'console': return <Terminal size={14} className="mr-2" />;
-            default: return <File size={14} className="mr-2" />;
-        }
+        // Map tab types to asset types where possible
+        // Tab types: 'scene', 'static-mesh', 'texture', 'sound', 'material', ...
+        // Asset types: 'staticmesh', 'texture', 'soundwave', 'material', ...
+
+        let assetType = type;
+        if (type === 'static-mesh') assetType = 'staticmesh';
+        if (type === 'skeletal-mesh') assetType = 'skeletalmesh';
+        if (type === 'animation-sequence') assetType = 'animationsequence';
+        if (type === 'material-editor') assetType = 'material';
+        if (type === 'scene') return <Globe size={14} className="mr-2" />; // Special case for Scene tab
+        if (type === 'editor-preferences') return <Settings size={14} className="mr-2" />;
+        if (type === 'project-settings') return <Package size={14} className="mr-2" />;
+        if (type === 'plugin-manager') return <Plug size={14} className="mr-2" />;
+        if (type === 'content-browser') return <Folder size={14} className="mr-2" />;
+        if (type === 'console') return <Terminal size={14} className="mr-2" />;
+
+        const { Icon, color } = getAssetDefinition(assetType, '', undefined, theme);
+        return <Icon size={14} className="mr-2" color={color} />; // Tab icons usually don't need fill/stroke, just color? Or maybe inherit color.
+        // Actually, tabs usually use current text color or accent color if active.
+        // AssetUtils returns specific asset colors. 
+        // Tabs often look better with the asset's color.
+        // Let's use the color.
     };
+
+    const hoverTimeout = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const handleDragStart = (e: React.DragEvent, index: number) => {
         setDraggedIndex(index);
@@ -54,31 +62,66 @@ export const TabSystem: React.FC<TabSystemProps> = ({ tabs, activeTabId, onTabCl
     const handleDragEnd = () => {
         setDraggedIndex(null);
         setDropIndicator(null);
+        if (hoverTimeout.current) {
+            clearTimeout(hoverTimeout.current);
+            hoverTimeout.current = null;
+        }
     };
 
-    const handleDragOver = (e: React.DragEvent, index: number) => {
+    const handleDragOver = (e: React.DragEvent, index: number, tabId: string) => {
         e.preventDefault();
         e.dataTransfer.dropEffect = "move";
 
-        if (draggedIndex === null || draggedIndex === index) return;
+        // Internal Reorder Logic
+        if (draggedIndex !== null) {
+            if (draggedIndex === index) return;
+            // Calculate if we represent dropping before or after this tab
+            const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+            const midPoint = rect.left + rect.width / 2;
 
-        // Calculate if we represent dropping before or after this tab
-        const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-        const midPoint = rect.left + rect.width / 2;
+            if (e.clientX < midPoint) {
+                setDropIndicator(index);
+            } else {
+                setDropIndicator(index + 1);
+            }
+            return;
+        }
 
-        if (e.clientX < midPoint) {
-            setDropIndicator(index);
-        } else {
-            setDropIndicator(index + 1);
+        // External Drag Logic (Drag-Hover to Switch)
+        if (draggedIndex === null && activeTabId !== tabId) {
+            // If we are already timing this tab, do nothing
+            // We need to know which tab we are timing. 
+            // Simplification: Reset timer on every dragOver? No, that would prevent firing.
+            // We generally get many dragOver events.
+            // We should check if we have a timer running. 
+
+            // Issue: 'hoverTimeout' doesn't know WHICH tab it was started for if we store just the timer.
+            // BUT, if we mouse out to another tab, 'handleDragLeave' (on the previous tab) should clear it.
+            // Or 'handleDragOver' on the NEW tab should clear the old one.
+
+            if (!hoverTimeout.current) {
+                hoverTimeout.current = setTimeout(() => {
+                    onTabClick(tabId);
+                    hoverTimeout.current = null;
+                }, 500);
+            }
         }
     };
 
     const handleDragLeave = () => {
-        // Optional: debounce this or verify we actually left the container
+        setDropIndicator(null);
+        if (hoverTimeout.current) {
+            clearTimeout(hoverTimeout.current);
+            hoverTimeout.current = null;
+        }
     };
 
     const handleDrop = (e: React.DragEvent) => {
         e.preventDefault();
+        if (hoverTimeout.current) {
+            clearTimeout(hoverTimeout.current);
+            hoverTimeout.current = null;
+        }
 
         if (draggedIndex === null || dropIndicator === null) {
             // Cleanup handled by dragEnd, but checking here doesn't hurt
@@ -122,7 +165,8 @@ export const TabSystem: React.FC<TabSystemProps> = ({ tabs, activeTabId, onTabCl
                             draggable
                             onDragStart={(e) => handleDragStart(e, index)}
                             onDragEnd={handleDragEnd}
-                            onDragOver={(e) => handleDragOver(e, index)}
+                            onDragOver={(e) => handleDragOver(e, index, tab.id)}
+                            onDragLeave={handleDragLeave}
                             onDrop={handleDrop}
                             onClick={() => onTabClick(tab.id)}
                             className={`relative h-full flex items-center px-3 min-w-[100px] max-w-[180px] cursor-pointer group text-[10px] border-r transition-colors ${draggedIndex === index ? 'opacity-50' : ''}`}

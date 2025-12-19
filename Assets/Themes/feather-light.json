@@ -1,0 +1,55 @@
+{
+    "name": "feather-light",
+    "displayName": "Feather Light",
+    "description": "Bright, minimalist and clean theme",
+    "colors": {
+        "bg": {
+            "primary": "#F5F5F5",
+            "secondary": "#EBEBEB",
+            "tertiary": "#E0E0E0",
+            "elevated": "#D5D5D5"
+        },
+        "text": {
+            "primary": "#1A1A1A",
+            "secondary": "#4A4A4A",
+            "muted": "#7A7A7A",
+            "disabled": "#AAAAAA"
+        },
+        "accent": {
+            "primary": "#64B5F6",
+            "secondary": "#42A5F5",
+            "hover": "#90CAF9",
+            "active": "#1E88E5"
+        },
+        "border": {
+            "default": "#D0D0D0",
+            "subtle": "#E0E0E0",
+            "focus": "#64B5F6"
+        },
+        "status": {
+            "success": "#66BB6A",
+            "warning": "#FFA726",
+            "error": "#EF5350",
+            "info": "#42A5F5"
+        },
+        "viewport": {
+            "background": "#FAFAFA",
+            "grid": "#E0E0E0",
+            "selection": "#64B5F680"
+        },
+        "selection": {
+            "background": "#64B5F630",
+            "border": "#64B5F6"
+        }
+    },
+    "shadows": {
+        "sm": "0 1px 2px 0 rgba(0, 0, 0, 0.08)",
+        "md": "0 4px 6px -1px rgba(0, 0, 0, 0.1)",
+        "lg": "0 10px 15px -3px rgba(0, 0, 0, 0.12)"
+    },
+    "borderRadius": {
+        "sm": "2px",
+        "md": "4px",
+        "lg": "6px"
+    }
+}

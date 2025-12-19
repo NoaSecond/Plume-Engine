@@ -7,9 +7,128 @@ import { Play, Pause, Square, Repeat, Volume2, VolumeX, AlertTriangle, SkipBack 
 interface SoundViewerProps {
     assetId: string; // Is actually the path or ID
     name: string;
+    isActive?: boolean;
 }
 
-export const SoundViewer: React.FC<SoundViewerProps> = ({ assetId, name }) => {
+interface AudioControlsProps {
+    isPlaying: boolean;
+    loop: boolean;
+    isMuted: boolean;
+    volume: number;
+    currentTime: number;
+    duration: number;
+    hasError: boolean;
+    theme: any;
+    t: (key: string) => string;
+    onRewind: () => void;
+    onTogglePlay: () => void;
+    onStop: () => void;
+    onToggleLoop: () => void;
+    onToggleMute: () => void;
+    onVolumeChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+}
+
+const AudioControls: React.FC<AudioControlsProps> = ({
+    isPlaying,
+    loop,
+    isMuted,
+    volume,
+    currentTime,
+    duration,
+    hasError,
+    theme,
+    t,
+    onRewind,
+    onTogglePlay,
+    onStop,
+    onToggleLoop,
+    onToggleMute,
+    onVolumeChange
+}) => {
+    const formatTime = (seconds: number) => {
+        if (!seconds || isNaN(seconds)) return "0:00";
+        const minutes = Math.floor(seconds / 60);
+        const secs = Math.floor(seconds % 60);
+        return `${minutes}:${secs < 10 ? '0' : ''}${secs}`;
+    };
+
+    return (
+        <div
+            className="w-full max-w-3xl flex items-center gap-4 p-4 rounded-lg"
+            style={{ backgroundColor: theme.colors.bg.secondary, border: `1px solid ${theme.colors.border.default}` }}
+        >
+            {/* Playback Controls */}
+            <div className="flex items-center gap-2">
+                <button
+                    onClick={onRewind}
+                    className="p-2 rounded hover:bg-white/10 transition-colors"
+                    title={t('sound.rewind')}
+                    disabled={hasError}
+                >
+                    <SkipBack fill="currentColor" size={20} />
+                </button>
+
+                <button
+                    onClick={onTogglePlay}
+                    className="p-2 rounded hover:bg-white/10 transition-colors"
+                    title={isPlaying ? t('sound.pause') : t('sound.play')}
+                    disabled={hasError}
+                >
+                    {isPlaying ? <Pause fill="currentColor" size={20} /> : <Play fill="currentColor" size={20} />}
+                </button>
+                <button
+                    onClick={onStop}
+                    className="p-2 rounded hover:bg-white/10 transition-colors"
+                    title={t('sound.stop')}
+                    disabled={hasError}
+                >
+                    <Square fill="currentColor" size={16} />
+                </button>
+
+                <div className="w-px h-6 bg-gray-700 mx-2" />
+
+                <button
+                    onClick={onToggleLoop}
+                    className={`p-2 rounded hover:bg-white/10 transition-colors ${loop ? 'text-blue-400' : ''}`}
+                    title={t('sound.loop')}
+                    style={{ color: loop ? theme.colors.accent.primary : 'inherit' }}
+                >
+                    <Repeat size={16} />
+                </button>
+            </div>
+
+            {/* Time */}
+            <div className="text-xs font-mono min-w-[100px] text-center">
+                {formatTime(currentTime)} / {formatTime(duration)}
+            </div>
+
+            {/* Spacer */}
+            <div className="flex-1" />
+
+            {/* Volume */}
+            <div className="flex items-center gap-2">
+                <button
+                    onClick={onToggleMute}
+                    className="p-1 hover:text-white transition-colors"
+                    title={t('sound.mute')}
+                >
+                    {isMuted || volume === 0 ? <VolumeX size={16} /> : <Volume2 size={16} />}
+                </button>
+                <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.05"
+                    value={isMuted ? 0 : volume}
+                    onChange={onVolumeChange}
+                    className="w-24 accent-blue-500 h-1"
+                />
+            </div>
+        </div>
+    );
+};
+
+export const SoundViewer: React.FC<SoundViewerProps> = ({ assetId, name, isActive = true }) => {
     const { theme } = useTheme();
     const { t } = useLanguage();
     const containerRef = useRef<HTMLDivElement>(null);
@@ -30,6 +149,14 @@ export const SoundViewer: React.FC<SoundViewerProps> = ({ assetId, name }) => {
         loopRef.current = loop;
     }, [loop]);
 
+    // Auto-pause when inactive
+    useEffect(() => {
+        if (!isActive && isPlaying && wavesurferRef.current) {
+            wavesurferRef.current.pause();
+            setIsPlaying(false);
+        }
+    }, [isActive, isPlaying]);
+
     useEffect(() => {
         if (!containerRef.current) return;
 
@@ -41,18 +168,18 @@ export const SoundViewer: React.FC<SoundViewerProps> = ({ assetId, name }) => {
         const audio = new Audio();
         audioRef.current = audio;
 
-        // Construct URL using https://plume-assets/ protocol for Fetch support
+        // Construct URL using http://plume-assets/ protocol for Fetch support (http avoids SSL issues locally)
         // We do NOT replace extension because the backend likely expects the .plumeasset ID
         let url = assetId;
 
         // Ensure protocol prefix
         if (url.startsWith('asset://')) {
-            // Replace asset:// with https://plume-assets/
-            url = url.replace('asset://', 'https://plume-assets/');
-        } else if (!url.startsWith('https://plume-assets/')) {
-            // If assetId is just "Content/File.plumeasset", prepend https://plume-assets/
+            // Replace asset:// with http://plume-assets/
+            url = url.replace('asset://', 'http://plume-assets/');
+        } else if (!url.startsWith('http://plume-assets/') && !url.startsWith('https://plume-assets/')) {
+            // If assetId is just "Content/File.plumeasset", prepend http://plume-assets/
             const cleanPath = url.startsWith('/') ? url.substring(1) : url;
-            url = `https://plume-assets/${cleanPath}`;
+            url = `http://plume-assets/${cleanPath}`;
         }
 
         console.log(`SoundViewer setup for: ${url} (Original: ${assetId})`);
@@ -147,6 +274,8 @@ export const SoundViewer: React.FC<SoundViewerProps> = ({ assetId, name }) => {
     // Keyboard Shortcuts
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
+            if (!isActive) return;
+
             // Only trigger if we are focused within the editor or globally if desired? 
             // For now, global within the webview seems appropriate for a focused tool.
             // Check if input is focused to avoid typing conflict
@@ -174,7 +303,7 @@ export const SoundViewer: React.FC<SoundViewerProps> = ({ assetId, name }) => {
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [isPlaying, loop, isMuted, volume]); // Dependencies needed for toggle functions to see correct state? 
+    }, [isPlaying, loop, isMuted, volume, isActive]); // Dependencies needed for toggle functions to see correct state? 
     // Wait, toggle functions use refs or state setters?
     // togglePlay uses waveSurferRef and setIsPlaying(!isPlaying). Needs isPlaying dependency.
 
@@ -222,13 +351,6 @@ export const SoundViewer: React.FC<SoundViewerProps> = ({ assetId, name }) => {
         // loop logic is handled in 'finish' event via ref
     };
 
-    const formatTime = (seconds: number) => {
-        if (!seconds || isNaN(seconds)) return "0:00";
-        const minutes = Math.floor(seconds / 60);
-        const secs = Math.floor(seconds % 60);
-        return `${minutes}:${secs < 10 ? '0' : ''}${secs}`;
-    };
-
     return (
         <div style={{
             width: '100%',
@@ -268,78 +390,23 @@ export const SoundViewer: React.FC<SoundViewerProps> = ({ assetId, name }) => {
                 </div>
 
                 {/* Controls */}
-                <div
-                    className="w-full max-w-3xl flex items-center gap-4 p-4 rounded-lg"
-                    style={{ backgroundColor: theme.colors.bg.secondary, border: `1px solid ${theme.colors.border.default}` }}
-                >
-                    {/* Playback Controls */}
-                    <div className="flex items-center gap-2">
-                        <button
-                            onClick={rewind}
-                            className="p-2 rounded hover:bg-white/10 transition-colors"
-                            title={t('sound.rewind')}
-                            disabled={!!errorMessage}
-                        >
-                            <SkipBack fill="currentColor" size={20} />
-                        </button>
-
-                        <button
-                            onClick={togglePlay}
-                            className="p-2 rounded hover:bg-white/10 transition-colors"
-                            title={isPlaying ? t('sound.pause') : t('sound.play')}
-                            disabled={!!errorMessage}
-                        >
-                            {isPlaying ? <Pause fill="currentColor" size={20} /> : <Play fill="currentColor" size={20} />}
-                        </button>
-                        <button
-                            onClick={stop}
-                            className="p-2 rounded hover:bg-white/10 transition-colors"
-                            title={t('sound.stop')}
-                            disabled={!!errorMessage}
-                        >
-                            <Square fill="currentColor" size={16} />
-                        </button>
-
-                        <div className="w-px h-6 bg-gray-700 mx-2" />
-
-                        <button
-                            onClick={toggleLoop}
-                            className={`p-2 rounded hover:bg-white/10 transition-colors ${loop ? 'text-blue-400' : ''}`}
-                            title={t('sound.loop')}
-                            style={{ color: loop ? theme.colors.accent.primary : 'inherit' }}
-                        >
-                            <Repeat size={16} />
-                        </button>
-                    </div>
-
-                    {/* Time */}
-                    <div className="text-xs font-mono min-w-[100px] text-center">
-                        {formatTime(currentTime)} / {formatTime(duration)}
-                    </div>
-
-                    {/* Spacer */}
-                    <div className="flex-1" />
-
-                    {/* Volume */}
-                    <div className="flex items-center gap-2">
-                        <button
-                            onClick={toggleMute}
-                            className="p-1 hover:text-white transition-colors"
-                            title={t('sound.mute')}
-                        >
-                            {isMuted || volume === 0 ? <VolumeX size={16} /> : <Volume2 size={16} />}
-                        </button>
-                        <input
-                            type="range"
-                            min="0"
-                            max="1"
-                            step="0.05"
-                            value={isMuted ? 0 : volume}
-                            onChange={handleVolumeChange}
-                            className="w-24 accent-blue-500 h-1"
-                        />
-                    </div>
-                </div>
+                <AudioControls
+                    isPlaying={isPlaying}
+                    loop={loop}
+                    isMuted={isMuted}
+                    volume={volume}
+                    currentTime={currentTime}
+                    duration={duration}
+                    hasError={!!errorMessage}
+                    theme={theme}
+                    t={t}
+                    onRewind={rewind}
+                    onTogglePlay={togglePlay}
+                    onStop={stop}
+                    onToggleLoop={toggleLoop}
+                    onToggleMute={toggleMute}
+                    onVolumeChange={handleVolumeChange}
+                />
             </div>
 
             {/* Footer */}

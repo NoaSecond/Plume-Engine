@@ -1,5 +1,6 @@
 ﻿#include "Engine.h"
 #include <Rendering/RHI/RHIDevice.h>
+#include "SceneSerializer.h"
 #include <Rendering/RHI/RHISwapChain.h>
 #include <Rendering/RHI/RHICommandBuffer.h>
 #include <thread>
@@ -35,10 +36,8 @@ namespace Plume {
 
         if (fs::exists(assetPath)) {
             // Load existing
-            std::ifstream file(assetPath);
-            std::stringstream buffer;
-            buffer << file.rdbuf();
-            m_Scene->DeserializeFromJson(buffer.str());
+            SceneSerializer serializer(m_Scene.get());
+            serializer.Deserialize(assetPath);
         } else {
             // Create default in-memory scene (EmptyLevel state)
             m_Scene->CreateEntity("Scene_Root", EntityType::Folder);
@@ -190,6 +189,10 @@ namespace Plume {
 
     void Engine::RotateCamera(const Plume::Vec3& delta) {
         if (m_ActiveScene) m_ActiveScene->RotateCamera(delta);
+    }
+
+    void Engine::SetCameraMode(int mode) {
+        if (m_ActiveScene) m_ActiveScene->SetCameraMode(static_cast<Scene::CameraMode>(mode));
     }
 
     void Engine::TranslateCameraLocal(const Plume::Vec3& delta, bool followPitch) {

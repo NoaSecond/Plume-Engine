@@ -3,51 +3,72 @@ import { Theme } from './types';
 export type { Theme };
 export type ThemeName = string;
 
-// Dynamically load all theme files in the current directory
-const modules = import.meta.glob<Record<string, Theme>>('./*.ts', { eager: true });
-
+// The themes are now provided dynamically by the C++ backend
+// through window.PLUME_THEME_LIST and window.PLUME_THEME_DATA
 export const themes: Record<string, Theme> = {};
 
 // Default theme identifier
 export let defaultTheme = 'plume-dark';
 
-// Process loaded modules
-for (const path in modules) {
-  // Extract filename as key (e.g. "./forest.ts" -> "forest")
-  const fileName = path.split('/').pop()?.replace('.ts', '') || '';
+// Hardcoded fallback for safety (Reference theme)
+export const fallbackTheme: Theme = {
+  name: 'plume-dark',
+  displayName: 'Plume Dark',
+  description: 'Fallback theme',
+  colors: {
+    bg: { primary: '#111111', secondary: '#181818', tertiary: '#222222', elevated: '#2A2A2A' },
+    text: { primary: '#E0E0E0', secondary: '#A0A0A0', muted: '#666666', disabled: '#404040' },
+    accent: { primary: '#4FC3F7', secondary: '#29B6F6', hover: '#81D4FA', active: '#0288D1' },
+    border: { default: '#333333', subtle: '#222222', focus: '#4FC3F7' },
+    status: { success: '#4CAF50', warning: '#FFC107', error: '#F44336', info: '#2196F3' },
+    viewport: { background: '#0F0F0F', grid: '#222222', selection: '#4FC3F780' },
+    selection: { background: '#4FC3F730', border: '#4FC3F7' },
+  },
+  shadows: { sm: '0 1px 2px 0 rgba(0, 0, 0, 0.3)', md: '0 4px 6px -1px rgba(0, 0, 0, 0.3)', lg: '0 10px 15px -3px rgba(0, 0, 0, 0.3)' },
+  borderRadius: { sm: '2px', md: '4px', lg: '6px' }
+};
 
-  // Skip index and types files
-  if (fileName === 'index' || fileName === 'types') continue;
+themes[defaultTheme] = fallbackTheme;
 
-  const module = modules[path];
+/**
+ * Initializes the theme system from the data injected by the C++ host
+ */
+export function initializeDynamicThemes(): { theme: Theme, list: any[] } {
+  const dynamicList = (window as any).PLUME_THEME_LIST || [];
+  const dynamicActive = (window as any).PLUME_THEME_DATA;
 
-  // Look for default export or named export matching the filename or just the first export that looks like a Theme
-  // Our convention is likely `export default theme` or `export const themeName = ...`
-  // We'll trust the default export first, then named exports
-  let validTheme: Theme | undefined = undefined;
+  // Clear existing themes to avoid duplicates on re-init
+  for (const key in themes) delete themes[key];
 
-  if (module.default && module.default.name && module.default.colors) {
-    validTheme = module.default;
+  if (dynamicActive) {
+    themes[dynamicActive.name] = dynamicActive;
+    defaultTheme = dynamicActive.name;
   } else {
-    // Fallback: search exports for a Theme-like object
-    for (const key of Object.keys(module)) {
-      const exportItem = module[key];
-      if (exportItem && typeof exportItem === 'object' && 'colors' in exportItem && 'name' in exportItem) {
-        validTheme = exportItem as Theme;
-        break;
-      }
+    // Fallback if no active theme is injected
+    themes[defaultTheme] = fallbackTheme;
+  }
+
+  // Populate the themes map from the metadata list
+  // Even if we don't have full data for all themes, we need them in the map
+  // to be visible in the selector.
+  dynamicList.forEach((t: any) => {
+    if (!themes[t.name]) {
+      // Create a stub if full data isn't available yet
+      // The backend will re-export full data when switching
+      themes[t.name] = {
+        ...fallbackTheme,
+        name: t.name,
+        displayName: t.displayName || t.name,
+        description: t.description || '',
+        colors: t.colors || fallbackTheme.colors,
+        shadows: t.shadows || fallbackTheme.shadows,
+        borderRadius: t.borderRadius || fallbackTheme.borderRadius
+      };
     }
-  }
+  });
 
-  if (validTheme) {
-    themes[validTheme.name] = validTheme;
-  }
-}
-
-// Ensure default theme exists, otherwise pick the first one available
-if (!themes[defaultTheme]) {
-  const keys = Object.keys(themes);
-  if (keys.length > 0) {
-    defaultTheme = keys[0];
-  }
+  return {
+    theme: themes[defaultTheme],
+    list: dynamicList
+  };
 }

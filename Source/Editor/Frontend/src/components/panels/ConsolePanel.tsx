@@ -15,7 +15,8 @@ interface ConsolePanelProps {
   onDock?: () => void;
 }
 
-export function ConsolePanel({ logs, onClear, onExecuteCommand, isOpen, setIsOpen, isDocked, onDock }: ConsolePanelProps) {
+export function ConsolePanel(props: ConsolePanelProps) {
+  const { logs, onClear, onExecuteCommand, isOpen, setIsOpen, isDocked, onDock } = props;
   const { theme } = useTheme();
   const { t } = useLanguage();
   const [command, setCommand] = useState('');
@@ -52,6 +53,25 @@ export function ConsolePanel({ logs, onClear, onExecuteCommand, isOpen, setIsOpe
   const commandPrefix = useMemo(() => command.trim().split(/\s+/)[0] || '', [command]);
 
   useEffect(() => {
+    const rawCmd = command.toLowerCase();
+
+    // Check if it's a "help" command context
+    if (rawCmd.startsWith('help ')) {
+      const arg = rawCmd.slice(5).trimStart(); // everything after "help "
+      const keys = Object.keys(COMMANDS);
+      // Filter commands that match the argument (even if arg is empty, show all)
+      // Provide the full suggestion string "help <cmd>" so user can tab-complete
+      const matches = keys
+        .filter(k => k.startsWith(arg))
+        .sort()
+        .map(k => `help ${k}`);
+
+      setSuggestions(matches);
+      setSelectedSuggestion(0);
+      return;
+    }
+
+    // Default behavior for other commands
     const p = commandPrefix.toLowerCase();
     if (!p) {
       setSuggestions([]);
@@ -62,7 +82,7 @@ export function ConsolePanel({ logs, onClear, onExecuteCommand, isOpen, setIsOpe
     const matches = keys.filter(k => k.startsWith(p)).sort();
     setSuggestions(matches);
     setSelectedSuggestion(0);
-  }, [commandPrefix]);
+  }, [command, commandPrefix]);
 
   const filteredLogs = logs.filter(log => {
     if (log.level === 'INFO' && !showInfo) return false;
@@ -174,16 +194,18 @@ export function ConsolePanel({ logs, onClear, onExecuteCommand, isOpen, setIsOpe
           >
             {t('console.clear')}
           </button>
-          <button
-            onClick={() => setIsOpen(false)}
-            className="px-2 py-0.5 rounded text-xs"
-            style={{
-              backgroundColor: theme.colors.bg.elevated,
-              color: theme.colors.text.secondary,
-            }}
-          >
-            ✕
-          </button>
+          {!isDocked && (
+            <button
+              onClick={() => setIsOpen(false)}
+              className="px-2 py-0.5 rounded text-xs"
+              style={{
+                backgroundColor: theme.colors.bg.elevated,
+                color: theme.colors.text.secondary,
+              }}
+            >
+              ✕
+            </button>
+          )}
         </div>
       </div>
 

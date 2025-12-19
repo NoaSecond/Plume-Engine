@@ -16,19 +16,18 @@ export const DetailsPanel: React.FC<DetailsPanelProps> = ({ selectedEntity, setE
     if (isNaN(val)) return;
 
     setEntities(prev => prev.map(e => {
-      if (e.id === selectedEntity.id) {
-        return {
-          ...e,
-          transform: {
-            ...e.transform,
-            [type]: {
-              ...e.transform[type],
-              [axis]: val
-            }
+      if (e.id !== selectedEntity.id) return e;
+
+      return {
+        ...e,
+        transform: {
+          ...e.transform,
+          [type]: {
+            ...e.transform[type],
+            [axis]: val
           }
-        };
-      }
-      return e;
+        }
+      };
     }));
   };
   const updateName = (name: string) => {
@@ -169,7 +168,7 @@ export const DetailsPanel: React.FC<DetailsPanelProps> = ({ selectedEntity, setE
                       }}
                     >
                       <span
-                        className={`px-1.5 font-bold cursor-ew-resize select-none ${axis === 'x' ? 'text-red-500' : axis === 'y' ? 'text-green-500' : 'text-blue-500'
+                        className={`px-1.5 font-bold cursor-ew-resize select-none ${{ x: 'text-red-500', y: 'text-green-500', z: 'text-blue-500' }[axis]
                           }`}
                       >
                         {axis.toUpperCase()}
