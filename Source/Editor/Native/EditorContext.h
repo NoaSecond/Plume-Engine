@@ -27,6 +27,7 @@ struct AppState {
     bool showFPS = false;
     bool vsync = true;
     int maxFPS = 144;
+    std::string theme = "plume-dark";
     
     // Viewport State
     struct {

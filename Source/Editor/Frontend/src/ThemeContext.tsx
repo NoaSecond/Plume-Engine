@@ -1,9 +1,10 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { ThemeName, Theme, themes, defaultTheme } from './themes/index';
+import { ThemeName, Theme, themes, defaultTheme, initializeDynamicThemes } from './themes/index';
 
 interface ThemeContextType {
   currentTheme: ThemeName;
   theme: Theme;
+  themeList: any[];
   setTheme: (theme: ThemeName) => void;
   toggleTheme: () => void;
 }
@@ -13,15 +14,54 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 const THEME_STORAGE_KEY = 'plume-engine-theme';
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [currentTheme, setCurrentTheme] = useState<ThemeName>(() => {
-    const stored = localStorage.getItem(THEME_STORAGE_KEY);
-    return (stored && stored in themes) ? stored as ThemeName : defaultTheme;
+  // Ensure the 'themes' object is populated from injected data
+  const initial = initializeDynamicThemes();
+
+  // Source of truth comes from window.PLUME_THEME_DATA (injected by C++)
+  const [theme, setThemeState] = useState<Theme>(() => {
+    return initial.theme || themes[defaultTheme];
   });
 
-  const theme = themes[currentTheme];
+  const [themeList, setThemeList] = useState<any[]>(() => {
+    return (window as any).PLUME_THEME_LIST || [];
+  });
 
-  // Apply theme to CSS variables for global access and export to C++
+  // Re-sync if window data changes (e.g. after a refresh or manual injection)
   useEffect(() => {
+    const handleSync = () => {
+      if ((window as any).PLUME_THEME_DATA) setThemeState((window as any).PLUME_THEME_DATA);
+      if ((window as any).PLUME_THEME_LIST) setThemeList((window as any).PLUME_THEME_LIST);
+    };
+
+    const handleWebviewMessage = (e: any) => {
+      const data = e.data || e.detail || e;
+      if (data && data.type === 'result' && data.success && data.message === 'Theme updated') {
+        if (data.data) {
+          setThemeState(data.data);
+          // Also update the global window object and the themes map
+          (window as any).PLUME_THEME_DATA = data.data;
+          themes[data.data.name] = data.data;
+        }
+      }
+    };
+
+    window.addEventListener('plume_theme_refresh', handleSync);
+    if ((window as any).chrome && (window as any).chrome.webview) {
+      (window as any).chrome.webview.addEventListener('message', handleWebviewMessage);
+    }
+
+    return () => {
+      window.removeEventListener('plume_theme_refresh', handleSync);
+      if ((window as any).chrome && (window as any).chrome.webview) {
+        (window as any).chrome.webview.removeEventListener('message', handleWebviewMessage);
+      }
+    };
+  }, []);
+
+  // Apply theme to CSS variables for global access
+  useEffect(() => {
+    if (!theme || !theme.colors) return;
+
     const root = document.documentElement;
     const t = theme.colors;
 
@@ -48,28 +88,6 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     root.style.setProperty('--color-border-subtle', t.border.subtle);
     root.style.setProperty('--color-border-focus', t.border.focus);
 
-    // Export theme data for C++ (splash screen)
-    const themeData = {
-      name: currentTheme,
-      colors: {
-        accent: {
-          primary: t.accent.primary
-        }
-      }
-    };
-
-    // Make it available globally for C++ to access
-    (window as any).PLUME_THEME_DATA = themeData;
-
-    // Send persistent save message to C++ backend
-    if ((window as any).chrome && (window as any).chrome.webview) {
-      (window as any).chrome.webview.postMessage({
-        action: 'save-theme',
-        name: currentTheme,
-        accent: t.accent.primary
-      });
-    }
-
     // Status colors
     root.style.setProperty('--color-status-success', t.status.success);
     root.style.setProperty('--color-status-warning', t.status.warning);
@@ -91,23 +109,27 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     root.style.setProperty('--radius-md', theme.borderRadius.md);
     root.style.setProperty('--radius-lg', theme.borderRadius.lg);
 
-    // Store in localStorage
-    localStorage.setItem(THEME_STORAGE_KEY, currentTheme);
-  }, [theme, currentTheme]);
+  }, [theme]);
 
-  const setTheme = (newTheme: ThemeName) => {
-    setCurrentTheme(newTheme);
+  const setTheme = (themeName: ThemeName) => {
+    // We send a command to C++, which will re-export theme_data.js and refresh the webview
+    if ((window as any).chrome && (window as any).chrome.webview) {
+      (window as any).chrome.webview.postMessage({
+        action: 'set-theme',
+        theme: themeName
+      });
+    }
   };
 
   const toggleTheme = () => {
-    const themeNames = Object.keys(themes) as ThemeName[];
-    const currentIndex = themeNames.indexOf(currentTheme);
-    const nextIndex = (currentIndex + 1) % themeNames.length;
-    setCurrentTheme(themeNames[nextIndex]);
+    if (themeList.length === 0) return;
+    const currentIndex = themeList.findIndex(t => t.name === theme.name);
+    const nextIndex = (currentIndex + 1) % themeList.length;
+    setTheme(themeList[nextIndex].name);
   };
 
   return (
-    <ThemeContext.Provider value={{ currentTheme, theme, setTheme, toggleTheme }}>
+    <ThemeContext.Provider value={{ currentTheme: theme.name, theme, setTheme, toggleTheme, themeList }}>
       {children}
     </ThemeContext.Provider>
   );

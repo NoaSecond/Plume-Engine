@@ -38,7 +38,7 @@ export function EditorPreferences({ isOpen, onClose }: EditorPreferencesProps) {
           <div className="p-2 space-y-1">
             <button
               onClick={() => setActiveTab('general')}
-              className="w-full text-left px-3 py-2 rounded text-sm transition-colors hover:bg-opacity-70 flex items-center gap-2"
+              className="w-full text-left px-3 py-2 rounded text-sm transition-colors hover-themed flex items-center gap-2"
               style={{
                 backgroundColor: activeTab === 'general' ? theme.colors.bg.elevated : 'transparent',
                 color: activeTab === 'general' ? theme.colors.text.primary : theme.colors.text.secondary
@@ -49,7 +49,7 @@ export function EditorPreferences({ isOpen, onClose }: EditorPreferencesProps) {
             </button>
             <button
               onClick={() => setActiveTab('theme')}
-              className="w-full text-left px-3 py-2 rounded text-sm transition-colors hover:bg-opacity-70 flex items-center gap-2"
+              className="w-full text-left px-3 py-2 rounded text-sm transition-colors hover-themed flex items-center gap-2"
               style={{
                 backgroundColor: activeTab === 'theme' ? theme.colors.bg.elevated : 'transparent',
                 color: activeTab === 'theme' ? theme.colors.text.primary : theme.colors.text.secondary
@@ -60,7 +60,7 @@ export function EditorPreferences({ isOpen, onClose }: EditorPreferencesProps) {
             </button>
             <button
               onClick={() => setActiveTab('shortcuts')}
-              className="w-full text-left px-3 py-2 rounded text-sm transition-colors hover:bg-opacity-70 flex items-center gap-2"
+              className="w-full text-left px-3 py-2 rounded text-sm transition-colors hover-themed flex items-center gap-2"
               style={{
                 backgroundColor: activeTab === 'shortcuts' ? theme.colors.bg.elevated : 'transparent',
                 color: activeTab === 'shortcuts' ? theme.colors.text.primary : theme.colors.text.secondary

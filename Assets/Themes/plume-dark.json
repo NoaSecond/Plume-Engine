@@ -1,0 +1,55 @@
+{
+    "name": "plume-dark",
+    "displayName": "Plume Dark",
+    "description": "The reference theme, inspired by modern AAA engines",
+    "colors": {
+        "bg": {
+            "primary": "#111111",
+            "secondary": "#181818",
+            "tertiary": "#222222",
+            "elevated": "#2A2A2A"
+        },
+        "text": {
+            "primary": "#E0E0E0",
+            "secondary": "#A0A0A0",
+            "muted": "#666666",
+            "disabled": "#404040"
+        },
+        "accent": {
+            "primary": "#4FC3F7",
+            "secondary": "#29B6F6",
+            "hover": "#81D4FA",
+            "active": "#0288D1"
+        },
+        "border": {
+            "default": "#333333",
+            "subtle": "#222222",
+            "focus": "#4FC3F7"
+        },
+        "status": {
+            "success": "#4CAF50",
+            "warning": "#FFC107",
+            "error": "#F44336",
+            "info": "#2196F3"
+        },
+        "viewport": {
+            "background": "#0F0F0F",
+            "grid": "#222222",
+            "selection": "#4FC3F780"
+        },
+        "selection": {
+            "background": "#4FC3F730",
+            "border": "#4FC3F7"
+        }
+    },
+    "shadows": {
+        "sm": "0 1px 2px 0 rgba(0, 0, 0, 0.3)",
+        "md": "0 4px 6px -1px rgba(0, 0, 0, 0.3)",
+        "lg": "0 10px 15px -3px rgba(0, 0, 0, 0.3)"
+    },
+    "borderRadius": {
+        "sm": "2px",
+        "md": "4px",
+        "lg": "6px"
+    }
+}

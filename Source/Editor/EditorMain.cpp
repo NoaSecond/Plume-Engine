@@ -7,6 +7,7 @@
 
 #include <Core/Engine.h>
 #include <Core/PluginManager.h>
+#include <Core/SceneSerializer.h>
 #include <Rendering/RHI/RHIDevice.h>
 #include <Rendering/RHI/RHISwapChain.h>
 #include <string>
@@ -15,6 +16,9 @@
 #include <unordered_map>
 #include <thread>
 #include <chrono>
+#include <iterator>
+#include <cctype>
+#include <algorithm>
 
 #include "SplashScreen.h"
 #include "resource.h"
@@ -23,6 +27,8 @@
 #include "Native/EditorContext.h"
 #include "Native/EditorWindow.h"
 #include "Native/WebViewManager.h"
+#include "Native/EditorUtils.h"
+#include "ThirdParty/nlohmann_json.hpp"
 
 using namespace Microsoft::WRL;
 #pragma comment(lib, "dwmapi.lib")
@@ -39,7 +45,8 @@ static AppState g_app;
 void ExportSceneData() {
     if (!g_app.engine) return;
     
-    std::string sceneJson = g_app.engine->GetMainScene()->SerializeToJson();
+    Plume::SceneSerializer serializer(g_app.engine->GetMainScene());
+    std::string sceneJson = serializer.SerializeToString();
     std::string dataPath = g_app.uiFolder + "/scene_data.js";
     std::string tempPath = dataPath + ".tmp";
     
@@ -55,28 +62,7 @@ void ExportSceneData() {
     }
 }
 
-void ExportThemeData() {
-    std::string dataPath = g_app.uiFolder + "/theme_data.js";
-    if (fs::exists(dataPath)) return;
 
-    std::string tempPath = dataPath + ".tmp";
-    std::ofstream file(tempPath);
-    if (file.is_open()) {
-        file << "window.PLUME_THEME_DATA = {";
-        file << "\"name\": \"nebula-midnight\",";
-        file << "\"colors\": {";
-        file << "\"accent\": {";
-        file << "\"primary\": \"#9C27B0\"";
-        file << "}";
-        file << "}";
-        file << "}};";
-        file.close();
-        try {
-            if (fs::exists(dataPath)) fs::remove(dataPath);
-            fs::rename(tempPath, dataPath);
-        } catch(...) {}
-    }
-}
 
 void LoadConfigurations() {
     try {
@@ -129,6 +115,8 @@ void LoadConfigurations() {
                         try { int v = std::stoi(val); g_app.vsync = (v != 0); } catch(...) {}
                     } else if (_stricmp(key.c_str(), "maxfps") == 0) {
                         try { int v = std::stoi(val); g_app.maxFPS = v; } catch(...) {}
+                    } else if (_stricmp(key.c_str(), "theme") == 0) {
+                        g_app.theme = val;
                     }
                 }
                 ifs.close();
@@ -189,24 +177,31 @@ void ExportRenderingData() {
 }
 
 std::string GetCurrentThemeAccentColor() {
-    std::string themePath = g_app.uiFolder + "/theme_data.js";
-    if (fs::exists(themePath)) {
-        std::ifstream themeFile(themePath);
-        if (themeFile.is_open()) {
-            std::string content((std::istreambuf_iterator<char>(themeFile)), std::istreambuf_iterator<char>());
-            size_t primaryPos = content.find("\"primary\":");
-            if (primaryPos != std::string::npos) {
-                size_t start = content.find("#", primaryPos);
-                if (start != std::string::npos) {
-                    size_t end = content.find("\"", start);
-                    if (end != std::string::npos) {
-                        return content.substr(start + 1, end - start - 1);
-                    }
+    fs::path exePath = fs::current_path();
+    fs::path assetsPath = exePath / ".." / ".." / "Assets";
+    if (!fs::exists(assetsPath)) assetsPath = exePath / ".." / "Assets";
+    if (!fs::exists(assetsPath)) assetsPath = exePath / "Assets";
+    
+    fs::path themeJsonPath = assetsPath / "Themes" / (g_app.theme + ".json");
+    if (fs::exists(themeJsonPath)) {
+        std::ifstream f(themeJsonPath);
+        if (f.is_open()) {
+            try {
+                nlohmann::json j;
+                f >> j;
+                if (j.contains("colors") && j["colors"].contains("accent") && j["colors"]["accent"].contains("primary")) {
+                    std::string hex = j["colors"]["accent"]["primary"].get<std::string>();
+                    if (hex.front() == '#') hex = hex.substr(1);
+                    return hex;
                 }
-            }
+            } catch(...) {}
         }
     }
-    return "9C27B0";
+
+    // Fallback defaults
+    if (g_app.theme == "nebula-midnight") return "DA70D6";
+    if (g_app.theme == "feather-light") return "64B5F6";
+    return "4FC3F7"; // plume-dark
 }
 
 void ExportPluginData() {
@@ -265,6 +260,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     }
     g_app.uiFolder = resolvedUiFolder;
     
+    LoadConfigurations();
+    Plume::EditorUtils::ExportThemeData(&g_app);
+    Plume::EditorUtils::ExportThemeList(&g_app);
+
     fs::path splashImagePath = exePath / ".." / ".." / "Assets" / "Branding" / "splash_image.png";
     if (!fs::exists(splashImagePath)) splashImagePath = exePath / ".." / "Assets" / "Branding" / "splash_image.png";
     if (!fs::exists(splashImagePath)) splashImagePath = exePath / "Assets" / "Branding" / "splash_image.png";
@@ -278,7 +277,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     splash.UpdateProgress(0.0f, "Initializing Plume Engine...");
     
     splash.UpdateProgress(0.02f, "Loading configurations...");
-    LoadConfigurations();
     splash.UpdateProgress(0.04f, "Configurations loaded");
 
     Plume::Engine engine;
@@ -350,7 +348,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     splash.UpdateProgress(0.55f, "Exporting data...");
     ExportSceneData();
     ExportPluginData();
-    ExportThemeData();
+    Plume::EditorUtils::ExportThemeData(&g_app);
+    Plume::EditorUtils::ExportThemeList(&g_app);
     ExportRenderingData();
 
     splash.UpdateProgress(0.6f, "Creating window...");
