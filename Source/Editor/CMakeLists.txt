@@ -14,9 +14,16 @@
     Native/EditorCommands.cpp
     Native/EditorUtils.h
     Native/EditorUtils.cpp
+    Native/AssetImporter.h
+    Native/AssetImporter.cpp
+    ThirdParty/ufbx/ufbx.c
 )
 target_link_libraries(PlumeEditor PRIVATE PlumeRuntime)
-target_include_directories(PlumeEditor PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(PlumeEditor PRIVATE 
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/Native
+    ${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty
+)
 
 # Force Unicode
 target_compile_definitions(PlumeEditor PRIVATE UNICODE _UNICODE)

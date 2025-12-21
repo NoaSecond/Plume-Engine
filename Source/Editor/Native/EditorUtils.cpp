@@ -1,4 +1,5 @@
 #include "EditorUtils.h"
+#include "AssetImporter.h"
 #include <Core/Engine.h>
 #include <Rendering/RHI/RHIDevice.h>
 #include <Rendering/RHI/RHISwapChain.h>
@@ -92,6 +93,13 @@ namespace EditorUtils {
 
     bool ProcessImportFile(const fs::path& src, const fs::path& contentDir) {
         if(!fs::exists(src)) return false;
+
+        std::string ext = src.extension().string();
+        std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+        if (ext == ".fbx" || ext == ".obj") {
+            return AssetImporter::ImportAsset(src, contentDir);
+        }
+
         try {
             std::ifstream ifs(src, std::ios::binary | std::ios::ate);
             if (ifs.is_open()) {
