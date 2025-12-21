@@ -58,6 +58,7 @@ namespace RHI {
 
         // Preview Pipeline
         void LoadPreviewAsset(const std::string& path);
+        void PreviewMaterial(const std::string& vertexCode, const std::string& fragmentCode);
         void StopPreview();
         
         void LoadMainLevel();

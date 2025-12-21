@@ -1,6 +1,6 @@
 import React, { memo } from 'react';
 import { Handle, Position, NodeProps } from 'reactflow';
-import { useTheme } from '../../../ThemeContext';
+import { useTheme } from '../../../../ThemeContext';
 
 const MathNode = ({ data, selected }: NodeProps) => {
     const { theme } = useTheme();

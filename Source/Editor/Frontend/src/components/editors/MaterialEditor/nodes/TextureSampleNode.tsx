@@ -1,6 +1,6 @@
 import React, { memo, useState, useEffect, useRef } from 'react';
 import { Handle, Position, NodeProps } from 'reactflow';
-import { useTheme } from '../../../ThemeContext';
+import { useTheme } from '../../../../ThemeContext';
 
 const TextureSampleNode = ({ data, selected }: NodeProps) => {
     const { theme } = useTheme();

@@ -3,6 +3,7 @@
 #include "OpenGLCommandBuffer.h"
 #include "OpenGLDevice.h"
 #include "OpenGLSwapChain.h"
+#include "Rendering/OpenGL/OpenGLLoader.h"
 #include <cmath>
 
 #ifdef _WIN32
@@ -169,6 +170,71 @@ namespace RHI {
 #ifdef _WIN32
         if (enabled) glEnable(GL_DEPTH_TEST);
         else glDisable(GL_DEPTH_TEST);
+#endif
+    }
+
+    void OpenGLCommandBuffer::SetMaterialShader(const std::string& vert, const std::string& frag) {
+#ifdef _WIN32
+        if (vert.empty() || frag.empty()) {
+            m_CurrentProgram = 0;
+            glUseProgram(0);
+            return;
+        }
+
+        GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
+        const char* vSource = vert.c_str();
+        glShaderSource(vertexShader, 1, &vSource, NULL);
+        glCompileShader(vertexShader);
+
+        GLint success;
+        glGetShaderiv(vertexShader, GL_COMPILE_STATUS, &success);
+        if (!success) {
+            char infoLog[512];
+            glGetShaderInfoLog(vertexShader, 512, NULL, infoLog);
+            // In a real engine, use a proper logging system. For now, we hope stdout acts as log or we break.
+            // Beep(750, 300); // Audible alert if shader fails
+        }
+
+        GLuint fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
+        const char* fSource = frag.c_str();
+        glShaderSource(fragmentShader, 1, &fSource, NULL);
+        glCompileShader(fragmentShader);
+
+        glGetShaderiv(fragmentShader, GL_COMPILE_STATUS, &success);
+        if (!success) {
+            char infoLog[512];
+            glGetShaderInfoLog(fragmentShader, 512, NULL, infoLog);
+        }
+
+        GLuint shaderProgram = glCreateProgram();
+        glAttachShader(shaderProgram, vertexShader);
+        glAttachShader(shaderProgram, fragmentShader);
+        glLinkProgram(shaderProgram);
+
+        glGetProgramiv(shaderProgram, GL_LINK_STATUS, &success);
+        if (!success) {
+            char infoLog[512];
+            glGetProgramInfoLog(shaderProgram, 512, NULL, infoLog);
+        }
+
+        glDeleteShader(vertexShader);
+        glDeleteShader(fragmentShader);
+
+        m_CurrentProgram = (unsigned int)shaderProgram;
+        glUseProgram(m_CurrentProgram);
+#endif
+    }
+
+    void OpenGLCommandBuffer::DrawMesh(const TransformComponent& transform) {
+#ifdef _WIN32
+        if (m_CurrentProgram == 0) {
+            DrawMeshPlaceholder(transform);
+            return;
+        }
+        DrawMeshPlaceholder(transform); 
+        
+        glUseProgram(0);
+        m_CurrentProgram = 0;
 #endif
     }
 

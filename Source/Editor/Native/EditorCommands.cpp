@@ -70,6 +70,38 @@ class ViewportBoundsCommand : public EditorCommand {
     }
 };
 
+class PreviewViewportBoundsCommand : public EditorCommand {
+    void Execute(AppState& appState, const nlohmann::json& payload) override {
+        appState.previewViewportBounds.x = payload.value("x", 0.0f);
+        appState.previewViewportBounds.y = payload.value("y", 0.0f);
+        appState.previewViewportBounds.width = payload.value("width", 300.0f);
+        appState.previewViewportBounds.height = payload.value("height", 300.0f);
+        
+        // Similar calculation for GL coordinates
+        RECT clientRect; GetClientRect(appState.hwnd, &clientRect);
+        int clientHeight = clientRect.bottom - clientRect.top;
+        
+        UINT dpi = 96; HMODULE user32 = GetModuleHandleA("user32.dll");
+        if (user32) {
+            typedef UINT(WINAPI *PFN_GetDpiForWindow)(HWND);
+            PFN_GetDpiForWindow pGetDpiForWindow = (PFN_GetDpiForWindow)GetProcAddress(user32, "GetDpiForWindow");
+            if (pGetDpiForWindow) dpi = pGetDpiForWindow(appState.hwnd);
+            else { HDC dc=GetDC(NULL); if(dc){dpi=GetDeviceCaps(dc,LOGPIXELSX);ReleaseDC(NULL,dc);} }
+        }
+        float scale = (float)dpi / 96.0f;
+        
+        int vpX = (int)round(appState.previewViewportBounds.x * scale);
+        int vpY = (int)round(appState.previewViewportBounds.y * scale);
+        int vpW = (int)round(appState.previewViewportBounds.width * scale);
+        int vpH = (int)round(appState.previewViewportBounds.height * scale);
+        int glY = clientHeight - vpY - vpH;
+        
+        if (appState.engine && appState.engine->GetRendererObject()) {
+            appState.engine->GetRendererObject()->SetPreviewViewportRegion(vpX, glY, vpW, vpH);
+        }
+    }
+};
+
 // --- Camera Commands ---
 class SetCameraModeCommand : public EditorCommand { void Execute(AppState& appState, const nlohmann::json& payload) override { if (appState.engine) appState.engine->SetCameraMode(payload.value("mode", 0)); }};
 class ViewportPointerCommand : public EditorCommand {
@@ -97,6 +129,16 @@ class PreviewAssetCommand : public EditorCommand {
         }
     }
 };
+
+class PreviewMaterialCommand : public EditorCommand {
+    void Execute(AppState& appState, const nlohmann::json& payload) override {
+        if (!appState.engine) return;
+        std::string vert = payload.value("vertex", "");
+        std::string frag = payload.value("fragment", "");
+        appState.engine->PreviewMaterial(vert, frag);
+    }
+};
+
 class RestoreMainSceneCommand : public EditorCommand { void Execute(AppState& appState, const nlohmann::json& payload) override { if (appState.engine) appState.engine->StopPreview(); }};
 class LoadAssetCommand : public EditorCommand {
     void Execute(AppState& appState, const nlohmann::json& payload) override {
@@ -180,6 +222,173 @@ class RenameCommand : public EditorCommand {
             fs::path base = fs::path(appState.uiFolder).parent_path();
             fs::path source = base / path; fs::path dest = source.parent_path() / newName;
             try { fs::rename(source, dest); sendResult(&appState, true, "Renamed"); sendContentListFor(&appState, fs::path(path).parent_path().string()); } catch(...) { sendResult(&appState, false, "Failed to rename"); }
+        }
+    }
+};
+
+// --- Import Command ---
+class ImportFileCommand : public EditorCommand {
+    void Execute(AppState& appState, const nlohmann::json& payload) override {
+        std::string pathVal = payload.value("path", "");
+        if (pathVal.empty()) pathVal = "Content";
+        
+        fs::path base = fs::path(appState.uiFolder).parent_path();
+        fs::path targetDir = base / pathVal;
+        
+        if (!fs::exists(targetDir)) {
+            try { fs::create_directories(targetDir); } catch(...) { sendResult(&appState, false, "Invalid target directory"); return; }
+        }
+
+        // Parse Filters from Frontend
+        // Format for Windows: "Display Name\0*.ext;*.ext2\0Display Name 2\0*.ext3\0\0"
+        std::vector<char> filterBuffer;
+        auto filtersJson = payload.value("filters", json::array());
+        int defaultIndex = 1;
+        int currentIndex = 1;
+
+        if (filtersJson.empty()) {
+            std::string def = "All Files (*.*)"; 
+            filterBuffer.insert(filterBuffer.end(), def.begin(), def.end());
+            filterBuffer.push_back('\0');
+            std::string pat = "*.*";
+            filterBuffer.insert(filterBuffer.end(), pat.begin(), pat.end());
+            filterBuffer.push_back('\0');
+        } else {
+            for (const auto& item : filtersJson) {
+                std::string rawName = item.value("name", "Unknown");
+                std::vector<std::string> exts = item.value("extensions", std::vector<std::string>());
+                
+                // Pattern (e.g. *.png;*.jpg)
+                std::string patternString;
+                for (size_t i = 0; i < exts.size(); ++i) {
+                    patternString += exts[i];
+                    if (i < exts.size() - 1) patternString += ";";
+                }
+                if (patternString.empty()) patternString = "*.*";
+
+                // Heuristic: If we find "Supported Files", lock it as default.
+                // If we find "All Files" and haven't locked "Supported Files" yet, set it.
+                // To do this robustly without state across iterations, we'll just check names.
+                
+                if (rawName == "Supported Files") {
+                    defaultIndex = currentIndex;
+                }
+                else if (rawName == "All Files" || patternString == "*.*") {
+                    // Only switch to All Files if we are currently pointing to something that ISN'T Supported Files.
+                    // But we can't easily check what defaultIndex *currently* points to name-wise.
+                    // However, we know frontend sends Supported Files FIRST.
+                    // So defaultIndex starts at 1. If Supported Files is present, it is at 1.
+                    // If we see "All Files" later, we should NOT update defaultIndex if we want Supported Files.
+                    
+                    // So: Do NOTHING for All Files if we want Supported Files to win and Supported Files is first.
+                    // But if Supported Files is NOT present, we might want All Files.
+                    
+                    // Current Implementation in TS: Supported Files is First.
+                    // So defaultIndex = 1 is correct.
+                    // We just need to stop All Files from overwriting it.
+                }
+
+                // Format Name: "Textures (*.png;*.jpg)"
+                std::string displayName = rawName + " (" + patternString + ")";
+                
+                filterBuffer.insert(filterBuffer.end(), displayName.begin(), displayName.end());
+                filterBuffer.push_back('\0');
+                
+                filterBuffer.insert(filterBuffer.end(), patternString.begin(), patternString.end());
+                filterBuffer.push_back('\0');
+                
+                currentIndex++;
+            }
+        }
+        filterBuffer.push_back('\0'); // Double null terminator
+
+        // Open File Dialog
+        OPENFILENAMEA ofn;
+        char szFile[MAX_PATH] = { 0 };
+        ZeroMemory(&ofn, sizeof(ofn));
+        ofn.lStructSize = sizeof(ofn);
+        ofn.hwndOwner = appState.hwnd;
+        ofn.lpstrFile = szFile;
+        ofn.nMaxFile = sizeof(szFile);
+        ofn.lpstrFilter = filterBuffer.data();
+        ofn.nFilterIndex = defaultIndex; // Use calculated default
+        ofn.lpstrFileTitle = NULL;
+        ofn.nMaxFileTitle = 0;
+        ofn.lpstrInitialDir = NULL;
+        ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST | OFN_NOCHANGEDIR;
+
+        if (GetOpenFileNameA(&ofn) == TRUE) {
+            fs::path sourcePath = szFile;
+            std::string filename = sourcePath.filename().string();
+            // fs::path destPath = targetDir / filename; // No longer needed for direct copy
+            
+            try {
+                // Use ProcessImportFile to convert to .plumeasset if applicable
+                bool success = ProcessImportFile(sourcePath, targetDir); 
+                
+                if (success) {
+                    sendResult(&appState, true, "Imported " + filename);
+                    sendContentListFor(&appState, pathVal); 
+                } else {
+                    sendResult(&appState, false, "Import failed (unknown format or file read error)");
+                }
+            } catch (const std::exception& e) {
+                sendResult(&appState, false, std::string("Import failed: ") + e.what());
+            }
+        }
+    }
+};
+
+class ImportFilesCommand : public EditorCommand {
+    void Execute(AppState& appState, const nlohmann::json& payload) override {
+        std::string pathVal = payload.value("path", "");
+        if (pathVal.empty()) pathVal = "Content";
+        fs::path base = fs::path(appState.uiFolder).parent_path();
+        fs::path targetDir = base / pathVal;
+        
+        if (!fs::exists(targetDir)) {
+             try { fs::create_directories(targetDir); } catch(...) {}
+        }
+
+        auto files = payload.value("files", json::array());
+        int successCount = 0;
+        
+        for (const auto& f : files) {
+            std::string p = f.value("path", "");
+            if (!p.empty()) {
+                 if (ProcessImportFile(fs::path(p), targetDir)) successCount++;
+            }
+        }
+        
+        if (successCount > 0) {
+            sendResult(&appState, true, "Imported " + std::to_string(successCount) + " files");
+            sendContentListFor(&appState, pathVal);
+        } else {
+            sendResult(&appState, false, "Failed to import files");
+        }
+    }
+};
+
+class ImportFileBlobCommand : public EditorCommand {
+    void Execute(AppState& appState, const nlohmann::json& payload) override {
+        std::string pathVal = payload.value("path", "");
+        if (pathVal.empty()) pathVal = "Content";
+        fs::path base = fs::path(appState.uiFolder).parent_path();
+        fs::path targetDir = base / pathVal;
+        
+        std::string name = payload.value("name", "");
+        std::string contentBase64 = payload.value("content", "");
+        
+        if (name.empty() || contentBase64.empty()) return;
+        
+        std::string decoded = base64_decode(contentBase64);
+        bool success = ProcessImportBuffer(name, decoded.data(), decoded.size(), targetDir);
+        
+        if (success) {
+             sendResult(&appState, true, "Imported " + name);
+             sendContentListFor(&appState, pathVal);
+        } else {
+             sendResult(&appState, false, "Failed to import blob");
         }
     }
 };
@@ -279,12 +488,15 @@ struct CommandInitializer {
         reg.RegisterCommand("plume_dom_ready", std::make_unique<DOMReadyCommand>());
         reg.RegisterCommand("plume_dom_heartbeat", std::make_unique<DOMReadyCommand>());
         reg.RegisterCommand("viewport-bounds", std::make_unique<ViewportBoundsCommand>());
+        reg.RegisterCommand("preview-viewport-bounds", std::make_unique<PreviewViewportBoundsCommand>());
         reg.RegisterCommand("set-camera-mode", std::make_unique<SetCameraModeCommand>());
         reg.RegisterCommand("viewport-pointer", std::make_unique<ViewportPointerCommand>());
         reg.RegisterCommand("camera-rotate", std::make_unique<CameraRotateCommand>());
         reg.RegisterCommand("camera-pan", std::make_unique<CameraPanCommand>());
         reg.RegisterCommand("camera-input", std::make_unique<CameraInputCommand>());
+        reg.RegisterCommand("camera-input", std::make_unique<CameraInputCommand>());
         reg.RegisterCommand("preview-asset", std::make_unique<PreviewAssetCommand>());
+        reg.RegisterCommand("preview-material", std::make_unique<PreviewMaterialCommand>());
         reg.RegisterCommand("restore-main-scene", std::make_unique<RestoreMainSceneCommand>());
         reg.RegisterCommand("load-asset", std::make_unique<LoadAssetCommand>());
         reg.RegisterCommand("save-asset", std::make_unique<SaveAssetCommand>());
@@ -297,7 +509,9 @@ struct CommandInitializer {
         reg.RegisterCommand("get-plugins", std::make_unique<GetPluginsCommand>());
         reg.RegisterCommand("set-theme", std::make_unique<SetThemeCommand>());
         reg.RegisterCommand("set-viewport-view", std::make_unique<SetViewportViewCommand>());
-        // (Note: Other commands like duplicate, paste, import-file, etc. can be added here)
+        reg.RegisterCommand("import-file", std::make_unique<ImportFileCommand>());
+        reg.RegisterCommand("import-files", std::make_unique<ImportFilesCommand>());
+        reg.RegisterCommand("import-file-blob", std::make_unique<ImportFileBlobCommand>());
     }
 };
 static CommandInitializer g_CommandInitializer;

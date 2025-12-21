@@ -142,6 +142,7 @@ export const fr = {
 
     // Material Editor
     'material.save': 'Sauvegarder',
+    'material.compile': 'Compiler le Shader',
     'material.fit_view': 'Ajuster la Vue',
     'material.lock': 'Verrouiller l\'Interactivité',
     'material.unlock': 'Déverrouiller l\'Interactivité',
@@ -157,11 +158,8 @@ export const fr = {
     'material.no_nodes': 'Aucun noeud trouvé',
     'material.category.constants': 'Constantes',
     'material.category.textures': 'Textures',
-    'material.category.maths': 'Maths',
-    'material.node.color': 'Couleur',
-    'material.node.texture': 'Échantillon Texture',
-    'material.node.add': 'Additionner',
-    'material.node.multiply': 'Multiplier',
+    'material.category.maths': 'Mathématiques',
+    'material.category.utility': 'Utilitaire',
 
     // Asset Viewers (Common)
     'asset.path': 'Chemin: {path}',

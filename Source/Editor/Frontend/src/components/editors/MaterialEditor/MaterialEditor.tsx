@@ -5,18 +5,28 @@ import ReactFlow, {
     SelectionMode,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
-import { useTheme } from '../../ThemeContext';
+import { useTheme } from '../../../ThemeContext';
 // import { useLanguage } from '../../LanguageContext'; // Used in sub-components
-import ResultNode from './MaterialNodes/ResultNode';
-import ColorNode from './MaterialNodes/ColorNode';
-import CommentNode from './MaterialNodes/CommentNode';
-import MathNode from './MaterialNodes/MathNode';
-import TextureSampleNode from './MaterialNodes/TextureSampleNode';
+import ResultNode from './nodes/ResultNode';
+import ColorNode from './nodes/ColorNode';
+import CommentNode from './nodes/CommentNode';
+import MathNode from './nodes/MathNode';
+import TextureSampleNode from './nodes/TextureSampleNode';
+import ClampNode from './nodes/ClampNode';
+import LerpNode from './nodes/LerpNode';
+import StepNode from './nodes/StepNode';
+import SmoothStepNode from './nodes/SmoothStepNode';
+import VectorConstructNode from './nodes/VectorConstructNode';
+import ComponentMaskNode from './nodes/ComponentMaskNode';
 import { NodeSearchMenu } from './NodeSearchMenu';
 import { NodeContextMenu } from './NodeContextMenu';
-import { EditorToolbar } from './material/EditorToolbar';
-import { useMaterialEditor } from '../../hooks/useMaterialEditor';
-import { useMaterialInteraction } from '../../hooks/useMaterialInteraction';
+import { EditorToolbar } from './EditorToolbar';
+import { Viewport } from '../../../components/viewport/Viewport';
+import { Entity, ToolType } from '../../../types';
+import { compileGraphToGLSL } from './compiler/GLSLGenerator';
+import { useLanguage } from '../../../LanguageContext';
+import { useMaterialEditor } from '../../../hooks/useMaterialEditor';
+import { useMaterialInteraction } from '../../../hooks/useMaterialInteraction';
 
 interface MaterialEditorProps {
     assetId: string;
@@ -45,6 +55,33 @@ export const MaterialEditor: React.FC<MaterialEditorProps> = ({ assetId, name, o
         initialNodes, initialEdges
     } = useMaterialEditor(assetId, name, onDirtyChange);
 
+    // Mount/Unmount lifecycle for Preview Scene
+    React.useEffect(() => {
+        // Switch to Preview Scene (Default Sphere)
+        // @ts-ignore
+        if (window.chrome?.webview) {
+            // @ts-ignore
+            window.chrome.webview.postMessage({
+                action: 'preview-material',
+                vertex: '', // Empty triggers default/current
+                fragment: ''
+            });
+
+            // If we wanted to ensure a specific mesh, we could also use preview-asset
+        }
+
+        return () => {
+            // Restore Main Scene when closing Material Editor
+            // @ts-ignore
+            if (window.chrome?.webview) {
+                // @ts-ignore
+                window.chrome.webview.postMessage({
+                    action: 'restore-main-scene'
+                });
+            }
+        };
+    }, []);
+
     const {
         menu, setMenu,
         nodeMenu, setNodeMenu,
@@ -57,12 +94,49 @@ export const MaterialEditor: React.FC<MaterialEditorProps> = ({ assetId, name, o
         createComment, startRename
     } = useMaterialInteraction(nodes, setNodes, edges, setEdges, setDirty, reactFlowInstance, reactFlowWrapper);
 
+    const { t } = useLanguage();
+
+    // Viewport State for Preview
+    const [cameraTransform, setCameraTransform] = React.useState({ position: { x: -2, y: 1.5, z: -2 }, rotation: { x: 25, y: -45, z: 0 } });
+    const [viewMode, setViewMode] = React.useState<'Lit' | 'Unlit' | 'Wireframe'>('Lit');
+    const [activeTool, setActiveTool] = React.useState<ToolType>('select');
+    const dummyEntities: Entity[] = React.useMemo(() => [
+        { id: 'Preview_Mesh', name: 'Preview_Mesh', type: 'Mesh', subType: 'Sphere', transform: { position: { x: 0, y: 0, z: 0 }, rotation: { x: 0, y: 0, z: 0 }, scale: { x: 1, y: 1, z: 1 } }, visible: true }
+    ], []);
+
+    const handleCompile = useCallback(() => {
+        // Generate GLSL
+        const { vertex, fragment } = compileGraphToGLSL(nodes, edges);
+        console.log("Compiled Fragment:", fragment);
+
+        // Send to Backend
+        // @ts-ignore
+        if (window.chrome?.webview) {
+            // @ts-ignore
+            window.chrome.webview.postMessage({
+                action: 'preview-material',
+                vertex: vertex,
+                fragment: fragment
+            });
+        } else {
+            console.warn("Backend not available, preview skipped.");
+        }
+    }, [nodes, edges]);
+
     const nodeTypes = useMemo(() => ({
         result: ResultNode,
         color: ColorNode,
         comment: CommentNode,
         add: MathNode,
         multiply: MathNode,
+        subtract: MathNode,
+        divide: MathNode,
+        clamp: ClampNode,
+        lerp: LerpNode,
+        step: StepNode,
+        smoothstep: SmoothStepNode,
+        vector: VectorConstructNode,
+        mask: ComponentMaskNode,
         texture: (props: any) => <TextureSampleNode {...props} data={{ ...props.data, availableTextures }} />
     }), [availableTextures]);
 
@@ -191,20 +265,54 @@ export const MaterialEditor: React.FC<MaterialEditorProps> = ({ assetId, name, o
         <div style={{ width: '100%', height: '100%', display: 'flex' }} onKeyDown={onKeyDown} tabIndex={0} onMouseMove={onMouseMove}>
             {/* Sidebar */}
             <div style={{ width: '300px', background: theme.colors.bg.secondary, borderRight: `1px solid ${theme.colors.border.default}`, display: 'flex', flexDirection: 'column' }}>
-                <div style={{ height: '250px', borderBottom: `1px solid ${theme.colors.border.default}`, display: 'flex', alignItems: 'center', justifyContent: 'center', background: theme.colors.bg.primary, position: 'relative' }}>
-                    <div style={{ width: '150px', height: '150px', borderRadius: '50%', background: 'radial-gradient(circle at 30% 30%, #666, #111)', boxShadow: '0 10px 20px rgba(0,0,0,0.5)' }}></div>
-                    <div style={{ position: 'absolute', top: 8, left: 8, fontSize: '10px', color: theme.colors.text.muted, textTransform: 'uppercase', fontWeight: 'bold' }}>Preview</div>
+                <div style={{ height: '300px', borderBottom: `1px solid ${theme.colors.border.default}`, display: 'flex', flexDirection: 'column', position: 'relative' }}>
+                    <div style={{
+                        padding: '4px 8px',
+                        borderBottom: `1px solid ${theme.colors.border.subtle}`,
+                        fontSize: '10px',
+                        color: theme.colors.text.muted,
+                        textTransform: 'uppercase',
+                        fontWeight: 'bold',
+                        backgroundColor: theme.colors.bg.tertiary
+                    }}>Preview</div>
+                    <Viewport
+                        entities={dummyEntities}
+                        selectedId={null}
+                        setSelectedId={() => { }}
+                        cameraTransform={cameraTransform}
+                        setCameraTransform={setCameraTransform}
+                        activeTool={activeTool}
+                        viewMode={viewMode}
+                        setViewMode={setViewMode}
+                        onAddEntity={() => { }}
+                        showToolbar={false}
+                        controlsEnabled={true}
+                        showGizmo={false}
+                        showViewOrientation={false}
+                        showCameraMode={false}
+                        showTransformInfo={false}
+                        isPreview={true}
+                    />
                 </div>
 
                 <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-                    <div style={{ padding: '16px', flex: 1, overflowY: 'auto' }}>
-                        <div style={{ fontSize: '12px', color: theme.colors.text.muted, textTransform: 'uppercase', fontWeight: 'bold', marginBottom: '16px' }}>Details</div>
+                    <div style={{ padding: '0px', flex: 1, overflowY: 'auto' }}>
+                        <div style={{
+                            padding: '4px 8px',
+                            borderBottom: `1px solid ${theme.colors.border.subtle}`,
+                            fontSize: '10px',
+                            color: theme.colors.text.muted,
+                            textTransform: 'uppercase',
+                            fontWeight: 'bold',
+                            backgroundColor: theme.colors.bg.tertiary,
+                            marginBottom: '16px'
+                        }}>Details</div>
                         {selectedNodes.length === 0 ? (
                             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100px', color: theme.colors.text.muted, opacity: 0.7, textAlign: 'center' }}>
                                 <span>Select a node to view details</span>
                             </div>
                         ) : (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '0 16px' }}>
                                 {selectedNodes.map(node => (
                                     <div key={node.id} style={{ paddingBottom: '16px', borderBottom: `1px solid ${theme.colors.border.subtle}` }}>
                                         <div style={{ color: theme.colors.accent.primary, fontWeight: 'bold', marginBottom: '8px' }}>{node.data.label || node.type}</div>
@@ -307,6 +415,7 @@ export const MaterialEditor: React.FC<MaterialEditorProps> = ({ assetId, name, o
                             <EditorToolbar
                                 theme={theme} onSave={handleSave} onFitView={handleFitView} onLock={handleLock}
                                 onZoomIn={handleZoomIn} onZoomOut={handleZoomOut}
+                                onCompile={handleCompile}
                                 isDirty={isDirty} isInteractive={isInteractive} isSaving={isSaving}
                                 isFitting={isFitting} isLocking={isLocking} isZoomingIn={isZoomingIn} isZoomingOut={isZoomingOut}
                             />

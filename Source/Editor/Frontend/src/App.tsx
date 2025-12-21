@@ -4,7 +4,7 @@ import { TabSystem, Tab } from './components/layout/TabSystem';
 import { SceneEditor } from './components/editors/SceneEditor';
 import { StaticMeshEditor } from './components/editors/StaticMeshEditor';
 import { TextureViewer } from './components/editors/TextureViewer';
-import { MaterialEditor } from './components/editors/MaterialEditor';
+import { MaterialEditor } from './components/editors/MaterialEditor/MaterialEditor';
 import { SoundViewer } from './components/editors/SoundViewer';
 import { ContentBrowserPanel } from './components/panels/ContentBrowserPanel';
 import { ConsolePanel } from './components/panels/ConsolePanel';

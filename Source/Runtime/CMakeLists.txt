@@ -32,6 +32,8 @@ set(RENDERING_SOURCES
     "Rendering/OpenGL/OpenGLSwapChain.cpp"
     "Rendering/OpenGL/OpenGLCommandBuffer.h"
     "Rendering/OpenGL/OpenGLCommandBuffer.cpp"
+    "Rendering/OpenGL/OpenGLLoader.h"
+    "Rendering/OpenGL/OpenGLLoader.cpp"
     "Rendering/DirectX12/DX12Device.h"
     "Rendering/DirectX12/DX12Device.cpp"
     "Rendering/DirectX12/DX12SwapChain.h"

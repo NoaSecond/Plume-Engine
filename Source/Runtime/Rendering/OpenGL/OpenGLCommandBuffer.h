@@ -34,8 +34,12 @@ namespace RHI {
         void DrawMeshPlaceholder(const TransformComponent& transform) override;
         void SetDepthTest(bool enabled) override;
 
+        void SetMaterialShader(const std::string& vert, const std::string& frag) override;
+        void DrawMesh(const TransformComponent& transform) override;
+
     private:
         OpenGLDevice* m_Device;
+        unsigned int m_CurrentProgram = 0;
     };
 
 } // namespace RHI

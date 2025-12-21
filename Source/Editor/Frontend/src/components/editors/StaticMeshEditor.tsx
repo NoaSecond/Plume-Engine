@@ -41,6 +41,28 @@ export const StaticMeshEditor: React.FC<StaticMeshEditorProps> = ({ entityId, on
 
     const selectedEntity = localEntities.find(e => e.id === selectedId);
 
+    // Initial Load of Backend Preview Scene
+    useEffect(() => {
+        // @ts-ignore
+        if (window.chrome?.webview) {
+            // @ts-ignore
+            window.chrome.webview.postMessage({
+                action: 'preview-asset',
+                path: entityId
+            });
+        }
+
+        return () => {
+            // @ts-ignore
+            if (window.chrome?.webview) {
+                // @ts-ignore
+                window.chrome.webview.postMessage({
+                    action: 'restore-main-scene'
+                });
+            }
+        };
+    }, [entityId]);
+
 
     return (
         <div className="flex flex-col h-full w-full">
@@ -59,6 +81,7 @@ export const StaticMeshEditor: React.FC<StaticMeshEditorProps> = ({ entityId, on
                     onAddEntity={() => { }} // Disabled in mesh editor
                     showToolbar={false}
                     controlsEnabled={isActive}
+                    isPreview={true}
                 />
                 <div
                     className="w-80 flex flex-col shrink-0 border-l"

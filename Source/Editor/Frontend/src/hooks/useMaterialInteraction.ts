@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef } from 'react';
 import { Node, Edge, Connection, ReactFlowInstance, addEdge, updateEdge, Position } from 'reactflow';
-import { NodeTypeItem } from '../components/editors/NodeSearchMenu';
+import { NodeTypeItem } from '../components/editors/MaterialEditor/NodeSearchMenu';
 
 export function useMaterialInteraction(
     nodes: Node[],

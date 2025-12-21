@@ -142,6 +142,7 @@ export const en = {
 
     // Material Editor
     'material.save': 'Save',
+    'material.compile': 'Compile Shader',
     'material.fit_view': 'Fit View',
     'material.lock': 'Lock Interactivity',
     'material.unlock': 'Unlock Interactivity',
@@ -158,10 +159,7 @@ export const en = {
     'material.category.constants': 'Constants',
     'material.category.textures': 'Textures',
     'material.category.maths': 'Maths',
-    'material.node.color': 'Color',
-    'material.node.texture': 'Texture Sample',
-    'material.node.add': 'Add',
-    'material.node.multiply': 'Multiply',
+    'material.category.utility': 'Utility',
 
     // Asset Viewers (Common)
     'asset.path': 'Path: {path}',

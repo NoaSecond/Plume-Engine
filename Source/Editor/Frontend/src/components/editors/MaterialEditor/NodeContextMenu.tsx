@@ -1,6 +1,6 @@
 import React from 'react';
-import { useTheme } from '../../ThemeContext';
-import { useLanguage } from '../../LanguageContext';
+import { useTheme } from '../../../ThemeContext';
+import { useLanguage } from '../../../LanguageContext';
 import { Node } from 'reactflow';
 
 interface NodeContextMenuProps {
