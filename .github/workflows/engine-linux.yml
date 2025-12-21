@@ -1,0 +1,53 @@
+name: Engine Linux CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      - name: Build Web Interface
+        run: |
+          cd Source/Editor/Frontend
+          npm install
+          npm run build
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-interface-linux
+          path: Bin/UI/
+
+  build-engine:
+    needs: build-frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download Web Interface
+        uses: actions/download-artifact@v4
+        with:
+          name: web-interface-linux
+          path: Bin/UI/
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgl1-mesa-dev libx11-dev libxcursor-dev libxrandr-dev libxinerama-dev libxi-dev
+      - name: Setup CMake
+        uses: jwlawrence/actions-setup-cmake@master
+      - name: Configure CMake
+        run: |
+          mkdir Build
+          cd Build
+          cmake .. -DCMAKE_BUILD_TYPE=Release
+      - name: Build Engine
+        run: |
+          cd Build
+          cmake --build . --config Release
