@@ -119,7 +119,63 @@ class CameraInputCommand : public EditorCommand {
     }
 };
 
-// --- Asset Commands ---
+class ChangeFolderColorCommand : public EditorCommand {
+    void Execute(AppState& appState, const nlohmann::json& payload) override {
+        std::string pathVal = payload.value("path", "");
+        std::string color = payload.value("color", "");
+        
+        if (pathVal.empty() || color.empty()) {
+            sendResult(&appState, false, "Invalid parameters");
+            return;
+        }
+
+        fs::path base = fs::path(appState.uiFolder).parent_path();
+        fs::path folderPath = base / utf8_to_path(pathVal);
+        
+        if (fs::exists(folderPath) && fs::is_directory(folderPath)) {
+            fs::path metaPath = folderPath / ".plumemeta";
+            json meta;
+            // Preserve existing meta if valid
+            if (fs::exists(metaPath)) {
+                try {
+                    std::ifstream ifs(metaPath);
+                    if (ifs.is_open()) ifs >> meta;
+                } catch(...) {}
+            }
+            
+            meta["color"] = color;
+            
+            std::ofstream ofs(metaPath);
+            if (ofs.is_open()) {
+                ofs << meta.dump(4);
+                sendResult(&appState, true, "Color updated");
+                sendContentListFor(&appState, fs::path(pathVal).parent_path().string()); // Refresh parent to see change
+            } else {
+                 sendResult(&appState, false, "Failed to write metadata");
+            }
+        } else {
+            sendResult(&appState, false, "Folder not found");
+        }
+    }
+};
+
+class OpenInExplorerCommand : public EditorCommand {
+    void Execute(AppState& appState, const nlohmann::json& payload) override {
+        std::string pathVal = payload.value("path", "");
+        if (pathVal.empty()) pathVal = "Content";
+        fs::path base = fs::path(appState.uiFolder).parent_path();
+        fs::path fullPath = base / pathVal;
+        fullPath = fs::absolute(fullPath);
+        
+        if (fs::is_directory(fullPath)) {
+            ShellExecuteA(NULL, "open", fullPath.string().c_str(), NULL, NULL, SW_SHOW);
+        } else {
+             std::string args = "/select,\"" + fullPath.string() + "\"";
+             ShellExecuteA(NULL, "open", "explorer.exe", args.c_str(), NULL, SW_SHOW);
+        }
+    }
+};
+
 class PreviewAssetCommand : public EditorCommand {
     void Execute(AppState& appState, const nlohmann::json& payload) override {
         std::string assetPath = payload.value("path", "");
@@ -512,6 +568,8 @@ struct CommandInitializer {
         reg.RegisterCommand("import-file", std::make_unique<ImportFileCommand>());
         reg.RegisterCommand("import-files", std::make_unique<ImportFilesCommand>());
         reg.RegisterCommand("import-file-blob", std::make_unique<ImportFileBlobCommand>());
+        reg.RegisterCommand("open-in-explorer", std::make_unique<OpenInExplorerCommand>());
+        reg.RegisterCommand("change-folder-color", std::make_unique<ChangeFolderColorCommand>());
     }
 };
 static CommandInitializer g_CommandInitializer;

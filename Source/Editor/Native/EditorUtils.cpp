@@ -49,7 +49,7 @@ namespace EditorUtils {
 
         if (!type.empty()) {
             std::string prefix = "";
-            if (type == "Texture") prefix = "T_";
+            if (type == "Texture") prefix = "TEX_";
             else if (type == "SoundWave") prefix = "SW_";
             else if (type == "StaticMesh") prefix = "SM_";
             
@@ -188,7 +188,7 @@ namespace EditorUtils {
         } else if (fs::is_directory(p)) {
             it["type"] = "folder";
             try {
-                fs::path meta = p / ".plume_meta";
+                fs::path meta = p / ".plumemeta";
                 if (fs::exists(meta)) {
                     std::ifstream ifs(meta);
                     if (ifs.is_open()) {

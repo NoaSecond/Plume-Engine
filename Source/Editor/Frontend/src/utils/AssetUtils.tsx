@@ -1,4 +1,4 @@
-import { File as FileIcon, Folder, Box, Image as ImageIcon, Music, Layers, Mountain, Bone, Film, FileCode } from 'lucide-react';
+import { File as FileIcon, Folder, Box, Image as ImageIcon, Music, Layers, Mountain, Bone, Film, FileCode, Skull, Dumbbell } from 'lucide-react';
 import { LucideIcon } from 'lucide-react';
 
 export const getAssetDefinition = (type: string, name: string = '', metaColor?: string, theme?: any) => {
@@ -33,13 +33,21 @@ export const getAssetDefinition = (type: string, name: string = '', metaColor?: 
         Icon = Mountain;
         color = "#FE9900";
     }
-    else if (lowerType === 'skeletalmesh' || lowerName.endsWith('.plumeskel')) {
+    else if (lowerType === 'skeletalmesh') {
         Icon = Bone;
-        color = "#FFECA1";
+        color = "#ffb6c1"; // Light Pink (Unreal-ish)
     }
-    else if (lowerType === 'animationsequence' || lowerType === 'anim' || lowerName.endsWith('.plumeanim')) {
+    else if (lowerType === 'skeleton') {
+        Icon = Skull;
+        color = "#64b5f6"; // Light Blue
+    }
+    else if (lowerType === 'physicsasset') {
+        Icon = Dumbbell; // Distinct from Box (StaticMesh)
+        color = "#f97316"; // Orange
+    }
+    else if (lowerType === 'animationsequence' || lowerType === 'anim') {
         Icon = Film;
-        color = "#BFD641";
+        color = "#a3e635"; // Lime Green
     }
     else if (lowerType === 'script') {
         Icon = FileCode;
@@ -47,7 +55,7 @@ export const getAssetDefinition = (type: string, name: string = '', metaColor?: 
     }
 
     // Plume meta helper detection
-    if (lowerName === '.plume_meta' || lowerName.endsWith('.plume_meta')) {
+    if (lowerName === '.plumemeta' || lowerName.endsWith('.plumemeta')) {
         Icon = FileCode;
         color = theme?.colors?.accent?.secondary || '#64748b';
     }

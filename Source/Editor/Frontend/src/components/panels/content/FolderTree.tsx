@@ -46,8 +46,8 @@ const TreeNode: React.FC<{ node: any; depth: number } & Omit<FolderTreeProps, 'n
         });
         return node.children.filter((c: any) =>
             !hidden.has(c.name) &&
-            c.name !== '.plume_meta' &&
-            !c.name.endsWith('.plume_meta')
+            c.name !== '.plumemeta' &&
+            !c.name.endsWith('.plumemeta')
         );
     }, [node.children]);
 
