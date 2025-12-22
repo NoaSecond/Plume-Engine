@@ -41,7 +41,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libgl1-mesa-dev libx11-dev libxcursor-dev libxrandr-dev libxinerama-dev libxi-dev
       - name: Setup CMake
-        uses: jwlawrence/actions-setup-cmake@master
+        uses: jwlawson/actions-setup-cmake@v2
       - name: Configure CMake
         run: |
           mkdir Build

@@ -37,7 +37,7 @@ jobs:
           name: web-interface-windows
           path: Bin/UI/
       - name: Setup CMake
-        uses: jwlawrence/actions-setup-cmake@master
+        uses: jwlawson/actions-setup-cmake@v2
       - name: Setup MSVC
         uses: ilammy/msvc-dev-cmd@v1
       - name: Configure CMake
