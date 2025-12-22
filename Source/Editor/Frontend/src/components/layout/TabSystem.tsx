@@ -6,7 +6,7 @@ import { getAssetDefinition } from '../../utils/AssetUtils';
 export interface Tab {
     id: string;
     title: string;
-    type: 'scene' | 'static-mesh' | 'texture' | 'sound' | 'material' | 'material-editor' | 'level' | 'skeletal-mesh' | 'animation-sequence' | 'editor-preferences' | 'project-settings' | 'plugin-manager' | 'content-browser' | 'console';
+    type: 'scene' | 'static-mesh' | 'texture' | 'sound' | 'material' | 'material-editor' | 'level' | 'skeleton' | 'animation-sequence' | 'editor-preferences' | 'project-settings' | 'plugin-manager' | 'content-browser' | 'console';
     data?: any; // e.g. entityId or filename
     closable: boolean;
     isDirty?: boolean;
@@ -33,7 +33,7 @@ export const TabSystem: React.FC<TabSystemProps> = ({ tabs, activeTabId, onTabCl
 
         let assetType = type;
         if (type === 'static-mesh') assetType = 'staticmesh';
-        if (type === 'skeletal-mesh') assetType = 'skeletalmesh';
+        if (type === 'skeleton') assetType = 'skeleton';
         if (type === 'animation-sequence') assetType = 'animationsequence';
         if (type === 'material-editor') assetType = 'material';
         if (type === 'scene') return <Globe size={14} className="mr-2" />; // Special case for Scene tab

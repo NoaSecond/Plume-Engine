@@ -7,6 +7,7 @@ import { TextureViewer } from './components/editors/TextureViewer';
 import { MaterialEditor } from './components/editors/MaterialEditor/MaterialEditor';
 import { SoundViewer } from './components/editors/SoundViewer';
 import { AnimationEditor } from './components/editors/AnimationEditor';
+import { SkeletonEditor } from './components/editors/SkeletonEditor';
 import { ContentBrowserPanel } from './components/panels/ContentBrowserPanel';
 import { ConsolePanel } from './components/panels/ConsolePanel';
 import { EditorPreferences } from './components/panels/EditorPreferences';
@@ -181,7 +182,7 @@ export default function App() {
     // Identify Asset Types based on Type property primarily
     const type = asset.type ? asset.type : '';
 
-    let tabType: 'static-mesh' | 'texture' | 'sound' | 'material-editor' | 'animation-sequence' | null = null;
+    let tabType: 'static-mesh' | 'texture' | 'sound' | 'material-editor' | 'animation-sequence' | 'skeleton' | null = null;
 
     // Prioritize explicit types
     if (type === 'StaticMesh') tabType = 'static-mesh';
@@ -189,6 +190,7 @@ export default function App() {
     else if (type === 'SoundWave') tabType = 'sound';
     else if (type === 'Material') tabType = 'material-editor';
     else if (type === 'AnimationSequence') tabType = 'animation-sequence';
+    else if (type === 'Skeleton') tabType = 'skeleton';
 
 
 
@@ -562,6 +564,13 @@ export default function App() {
               )}
               {tab.type === 'animation-sequence' && (
                 <AnimationEditor
+                  assetId={typeof tab.data === 'string' ? tab.data : (tab.data?.entityId || tab.data?.assetId || '')}
+                  name={tab.title}
+                  isActive={isActive}
+                />
+              )}
+              {tab.type === 'skeleton' && (
+                <SkeletonEditor
                   assetId={typeof tab.data === 'string' ? tab.data : (tab.data?.entityId || tab.data?.assetId || '')}
                   name={tab.title}
                   isActive={isActive}
