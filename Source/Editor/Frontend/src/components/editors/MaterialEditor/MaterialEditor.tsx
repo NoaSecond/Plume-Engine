@@ -262,41 +262,13 @@ export const MaterialEditor: React.FC<MaterialEditorProps> = ({ assetId, name, o
     }, [reactFlowInstance, reactFlowWrapper, setNodes]);
 
     return (
-        <div style={{ width: '100%', height: '100%', display: 'flex' }} onKeyDown={onKeyDown} tabIndex={0} onMouseMove={onMouseMove}>
-            {/* Sidebar */}
-            <div style={{ width: '300px', background: theme.colors.bg.secondary, borderRight: `1px solid ${theme.colors.border.default}`, display: 'flex', flexDirection: 'column' }}>
-                <div style={{ height: '300px', borderBottom: `1px solid ${theme.colors.border.default}`, display: 'flex', flexDirection: 'column', position: 'relative' }}>
-                    <div style={{
-                        padding: '4px 8px',
-                        borderBottom: `1px solid ${theme.colors.border.subtle}`,
-                        fontSize: '10px',
-                        color: theme.colors.text.muted,
-                        textTransform: 'uppercase',
-                        fontWeight: 'bold',
-                        backgroundColor: theme.colors.bg.tertiary
-                    }}>Preview</div>
-                    <Viewport
-                        entities={dummyEntities}
-                        selectedId={null}
-                        setSelectedId={() => { }}
-                        cameraTransform={cameraTransform}
-                        setCameraTransform={setCameraTransform}
-                        activeTool={activeTool}
-                        viewMode={viewMode}
-                        setViewMode={setViewMode}
-                        onAddEntity={() => { }}
-                        showToolbar={false}
-                        controlsEnabled={true}
-                        showGizmo={false}
-                        showViewOrientation={false}
-                        showCameraMode={false}
-                        showTransformInfo={false}
-                        isPreview={true}
-                    />
-                </div>
+        <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }} onKeyDown={onKeyDown} tabIndex={0} onMouseMove={onMouseMove}>
 
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-                    <div style={{ padding: '0px', flex: 1, overflowY: 'auto' }}>
+            {/* Main Content: Sidebar + Canvas */}
+            <div style={{ flex: 1, display: 'flex', width: '100%', minHeight: 0 }}>
+                {/* Sidebar */}
+                <div style={{ width: '300px', background: theme.colors.bg.secondary, borderRight: `1px solid ${theme.colors.border.default}`, display: 'flex', flexDirection: 'column' }}>
+                    <div style={{ height: '300px', borderBottom: `1px solid ${theme.colors.border.default}`, display: 'flex', flexDirection: 'column', position: 'relative' }}>
                         <div style={{
                             padding: '4px 8px',
                             borderBottom: `1px solid ${theme.colors.border.subtle}`,
@@ -304,131 +276,164 @@ export const MaterialEditor: React.FC<MaterialEditorProps> = ({ assetId, name, o
                             color: theme.colors.text.muted,
                             textTransform: 'uppercase',
                             fontWeight: 'bold',
-                            backgroundColor: theme.colors.bg.tertiary,
-                            marginBottom: '16px'
-                        }}>Details</div>
-                        {selectedNodes.length === 0 ? (
-                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100px', color: theme.colors.text.muted, opacity: 0.7, textAlign: 'center' }}>
-                                <span>Select a node to view details</span>
-                            </div>
-                        ) : (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '0 16px' }}>
-                                {selectedNodes.map(node => (
-                                    <div key={node.id} style={{ paddingBottom: '16px', borderBottom: `1px solid ${theme.colors.border.subtle}` }}>
-                                        <div style={{ color: theme.colors.accent.primary, fontWeight: 'bold', marginBottom: '8px' }}>{node.data.label || node.type}</div>
-                                        {/* Node Specific Editors - keeping inline for now as they are simple */}
-                                        {node.type === 'comment' && (
-                                            <>
-                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-                                                    <label style={{ color: theme.colors.text.secondary }}>Name</label>
-                                                    <input value={node.data.label || ''} onChange={(e) => handleNodeDataChange(node.id, 'label', e.target.value)} style={{ background: theme.colors.bg.tertiary, border: `1px solid ${theme.colors.border.subtle}`, color: theme.colors.text.primary, padding: '4px 8px', borderRadius: '4px', outline: 'none', fontSize: '12px', textAlign: 'left', flex: 1 }} />
-                                                </div>
-                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '8px' }}>
+                            backgroundColor: theme.colors.bg.tertiary
+                        }}>Preview</div>
+                        <Viewport
+                            entities={dummyEntities}
+                            selectedId={null}
+                            setSelectedId={() => { }}
+                            cameraTransform={cameraTransform}
+                            setCameraTransform={setCameraTransform}
+                            activeTool={activeTool}
+                            viewMode={viewMode}
+                            setViewMode={setViewMode}
+                            onAddEntity={() => { }}
+                            showToolbar={false}
+                            controlsEnabled={true}
+                            showGizmo={false}
+                            showViewOrientation={false}
+                            showCameraMode={false}
+                            showTransformInfo={false}
+                            isPreview={true}
+                        />
+                    </div>
+
+                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+                        <div style={{ padding: '0px', flex: 1, overflowY: 'auto' }}>
+                            <div style={{
+                                padding: '4px 8px',
+                                borderBottom: `1px solid ${theme.colors.border.subtle}`,
+                                fontSize: '10px',
+                                color: theme.colors.text.muted,
+                                textTransform: 'uppercase',
+                                fontWeight: 'bold',
+                                backgroundColor: theme.colors.bg.tertiary,
+                                marginBottom: '16px'
+                            }}>Details</div>
+                            {selectedNodes.length === 0 ? (
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100px', color: theme.colors.text.muted, opacity: 0.7, textAlign: 'center' }}>
+                                    <span>Select a node to view details</span>
+                                </div>
+                            ) : (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '0 16px' }}>
+                                    {selectedNodes.map(node => (
+                                        <div key={node.id} style={{ paddingBottom: '16px', borderBottom: `1px solid ${theme.colors.border.subtle}` }}>
+                                            <div style={{ color: theme.colors.accent.primary, fontWeight: 'bold', marginBottom: '8px' }}>{node.data.label || node.type}</div>
+                                            {/* Node Specific Editors - keeping inline for now as they are simple */}
+                                            {node.type === 'comment' && (
+                                                <>
+                                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                                                        <label style={{ color: theme.colors.text.secondary }}>Name</label>
+                                                        <input value={node.data.label || ''} onChange={(e) => handleNodeDataChange(node.id, 'label', e.target.value)} style={{ background: theme.colors.bg.tertiary, border: `1px solid ${theme.colors.border.subtle}`, color: theme.colors.text.primary, padding: '4px 8px', borderRadius: '4px', outline: 'none', fontSize: '12px', textAlign: 'left', flex: 1 }} />
+                                                    </div>
+                                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '8px' }}>
+                                                        <div style={{ color: theme.colors.text.secondary }}>Color:</div>
+                                                        <div style={{ width: '20px', height: '20px', background: node.data.color || theme.colors.accent.primary, border: `1px solid ${theme.colors.border.subtle}`, cursor: 'pointer', borderRadius: '4px' }} onClick={() => {
+                                                            const input = document.createElement('input'); input.type = 'color'; input.value = node.data.color || theme.colors.accent.primary;
+                                                            input.onchange = (e) => handleNodeDataChange(node.id, 'color', (e.target as HTMLInputElement).value); input.click();
+                                                        }}></div>
+                                                    </div>
+                                                </>
+                                            )}
+                                            {node.type === 'color' && (
+                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                                                     <div style={{ color: theme.colors.text.secondary }}>Color:</div>
-                                                    <div style={{ width: '20px', height: '20px', background: node.data.color || theme.colors.accent.primary, border: `1px solid ${theme.colors.border.subtle}`, cursor: 'pointer', borderRadius: '4px' }} onClick={() => {
-                                                        const input = document.createElement('input'); input.type = 'color'; input.value = node.data.color || theme.colors.accent.primary;
+                                                    <div style={{ width: '20px', height: '20px', background: node.data.color, border: `1px solid ${theme.colors.border.subtle}`, cursor: 'pointer', borderRadius: '4px' }} onClick={() => {
+                                                        const input = document.createElement('input'); input.type = 'color'; input.value = node.data.color;
                                                         input.onchange = (e) => handleNodeDataChange(node.id, 'color', (e.target as HTMLInputElement).value); input.click();
                                                     }}></div>
                                                 </div>
-                                            </>
-                                        )}
-                                        {node.type === 'color' && (
-                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                                <div style={{ color: theme.colors.text.secondary }}>Color:</div>
-                                                <div style={{ width: '20px', height: '20px', background: node.data.color, border: `1px solid ${theme.colors.border.subtle}`, cursor: 'pointer', borderRadius: '4px' }} onClick={() => {
-                                                    const input = document.createElement('input'); input.type = 'color'; input.value = node.data.color;
-                                                    input.onchange = (e) => handleNodeDataChange(node.id, 'color', (e.target as HTMLInputElement).value); input.click();
-                                                }}></div>
-                                            </div>
-                                        )}
-                                        {node.type === 'texture' && (
-                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-                                                <label style={{ color: theme.colors.text.secondary }}>Texture</label>
-                                                <select value={node.data.textureAssetId || ''} onChange={(e) => handleNodeDataChange(node.id, 'textureAssetId', e.target.value)} style={{ width: '100%', background: theme.colors.bg.tertiary, border: `1px solid ${theme.colors.border.subtle}`, color: theme.colors.text.primary, padding: '4px 8px', borderRadius: '4px', outline: 'none', fontSize: '12px', appearance: 'none', cursor: 'pointer' }}>
-                                                    <option value="">Select a texture...</option>
-                                                    {availableTextures.map(tex => (
-                                                        <option key={tex.id} value={tex.id}>{tex.name.replace('.plumeasset', '')}</option>
-                                                    ))}
-                                                </select>
-                                            </div>
-                                        )}
-                                    </div>
-                                ))}
-                            </div>
-                        )}
+                                            )}
+                                            {node.type === 'texture' && (
+                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                                                    <label style={{ color: theme.colors.text.secondary }}>Texture</label>
+                                                    <select value={node.data.textureAssetId || ''} onChange={(e) => handleNodeDataChange(node.id, 'textureAssetId', e.target.value)} style={{ width: '100%', background: theme.colors.bg.tertiary, border: `1px solid ${theme.colors.border.subtle}`, color: theme.colors.text.primary, padding: '4px 8px', borderRadius: '4px', outline: 'none', fontSize: '12px', appearance: 'none', cursor: 'pointer' }}>
+                                                        <option value="">Select a texture...</option>
+                                                        {availableTextures.map(tex => (
+                                                            <option key={tex.id} value={tex.id}>{tex.name.replace('.plumeasset', '')}</option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
                     </div>
+                </div>
+
+                {/* Editor Canvas */}
+                <div ref={reactFlowWrapper} style={{ flex: 1, height: '100%', display: 'flex', flexDirection: 'column', position: 'relative', zIndex: 10 }}
+                    onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; }}
+                    onDrop={handleDrop}
+                >
+                    <svg style={{ position: 'absolute', width: 0, height: 0, pointerEvents: 'none' }}>
+                        <defs>
+                            <linearGradient id="edge-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                                <stop offset="0%" stopColor={theme.colors.accent.secondary} />
+                                <stop offset="20%" stopColor={theme.colors.text.secondary} />
+                                <stop offset="80%" stopColor={theme.colors.text.secondary} />
+                                <stop offset="100%" stopColor={theme.colors.accent.secondary} />
+                            </linearGradient>
+                        </defs>
+                    </svg>
+                    <div className="flex-1" style={{ height: '100%' }}>
+                        <ReactFlow
+                            id={assetId}
+                            className={!isInteractive ? "locked-interaction" : ""}
+                            nodes={nodes} edges={edges} nodeTypes={nodeTypes}
+                            onNodesChange={handleNodesChange} onEdgesChange={handleEdgesChange}
+                            onConnect={onConnect}
+                            onEdgeUpdate={onEdgeUpdate} onEdgeUpdateStart={onEdgeUpdateStart} onEdgeUpdateEnd={onEdgeUpdateEnd}
+                            onConnectStart={onConnectStart} onConnectEnd={onConnectEnd}
+                            onPaneClick={onPaneClick} onNodeClick={onPaneClick}
+                            onPaneContextMenu={onPaneContextMenu} onNodeContextMenu={onNodeContextMenu}
+                            onInit={setReactFlowInstance}
+                            fitView proOptions={{ hideAttribution: true }}
+                            style={{ backgroundColor: theme.colors.bg.primary }}
+                            panOnDrag={[2]} selectionOnDrag={true} panOnScroll={false} zoomOnScroll={true}
+                            selectionMode={SelectionMode.Partial}
+                            multiSelectionKeyCode={['Control', 'Shift', 'Meta']}
+                            selectionKeyCode={null} deleteKeyCode="Delete"
+                            connectionLineStyle={{ strokeDasharray: '5 5' }}
+                        >
+                            <style>
+                                {`
+                                    .locked-interaction .react-flow__node,
+                                    .locked-interaction .react-flow__edge {
+                                        pointer-events: none !important;
+                                    }
+                                    .react-flow__selection {
+                                        background-color: ${theme.colors.selection.background} !important;
+                                        border: 1px solid ${theme.colors.selection.border} !important;
+                                    }
+                                    .react-flow__nodesselection {
+                                        display: none !important;
+                                    }
+                                `}
+                            </style>
+                            <Background color="#555" gap={16} />
+                            <Panel position="top-right">
+                                <EditorToolbar
+                                    theme={theme} onSave={handleSave} onFitView={handleFitView} onLock={handleLock}
+                                    onZoomIn={handleZoomIn} onZoomOut={handleZoomOut}
+                                    onCompile={handleCompile}
+                                    isDirty={isDirty} isInteractive={isInteractive} isSaving={isSaving}
+                                    isFitting={isFitting} isLocking={isLocking} isZoomingIn={isZoomingIn} isZoomingOut={isZoomingOut}
+                                />
+                            </Panel>
+                        </ReactFlow>
+                    </div>
+
+                    {menu && menu.isOpen && <NodeSearchMenu x={menu.x} y={menu.y} onSelect={onNodeSelect} onClose={closeMenu} />}
+                    {nodeMenu && <NodeContextMenu x={nodeMenu.x} y={nodeMenu.y} node={nodeMenu.node} selectedNodes={selectedNodes} onClose={closeMenu} onDelete={(id) => deleteNodes([id])} onDuplicate={duplicateNode => duplicateNodes(selectedNodes.length > 0 ? selectedNodes : [duplicateNode])} onComment={createComment} onRename={(id) => startRename(id)} />}
                 </div>
             </div>
 
-            {/* Editor Canvas */}
-            <div ref={reactFlowWrapper} style={{ flex: 1, height: '100%', display: 'flex', flexDirection: 'column', position: 'relative', zIndex: 10 }}
-                onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; }}
-                onDrop={handleDrop}
-            >
-                <svg style={{ position: 'absolute', width: 0, height: 0, pointerEvents: 'none' }}>
-                    <defs>
-                        <linearGradient id="edge-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                            <stop offset="0%" stopColor={theme.colors.accent.secondary} />
-                            <stop offset="20%" stopColor={theme.colors.text.secondary} />
-                            <stop offset="80%" stopColor={theme.colors.text.secondary} />
-                            <stop offset="100%" stopColor={theme.colors.accent.secondary} />
-                        </linearGradient>
-                    </defs>
-                </svg>
-                <div className="flex-1" style={{ height: '100%' }}>
-                    <ReactFlow
-                        id={assetId}
-                        className={!isInteractive ? "locked-interaction" : ""}
-                        nodes={nodes} edges={edges} nodeTypes={nodeTypes}
-                        onNodesChange={handleNodesChange} onEdgesChange={handleEdgesChange}
-                        onConnect={onConnect}
-                        onEdgeUpdate={onEdgeUpdate} onEdgeUpdateStart={onEdgeUpdateStart} onEdgeUpdateEnd={onEdgeUpdateEnd}
-                        onConnectStart={onConnectStart} onConnectEnd={onConnectEnd}
-                        onPaneClick={onPaneClick} onNodeClick={onPaneClick}
-                        onPaneContextMenu={onPaneContextMenu} onNodeContextMenu={onNodeContextMenu}
-                        onInit={setReactFlowInstance}
-                        fitView proOptions={{ hideAttribution: true }}
-                        style={{ backgroundColor: theme.colors.bg.primary }}
-                        panOnDrag={[2]} selectionOnDrag={true} panOnScroll={false} zoomOnScroll={true}
-                        selectionMode={SelectionMode.Partial}
-                        multiSelectionKeyCode={['Control', 'Shift', 'Meta']}
-                        selectionKeyCode={null} deleteKeyCode="Delete"
-                        connectionLineStyle={{ strokeDasharray: '5 5' }}
-                    >
-                        <style>
-                            {`
-                                .locked-interaction .react-flow__node,
-                                .locked-interaction .react-flow__edge {
-                                    pointer-events: none !important;
-                                }
-                                .react-flow__selection {
-                                    background-color: ${theme.colors.selection.background} !important;
-                                    border: 1px solid ${theme.colors.selection.border} !important;
-                                }
-                                .react-flow__nodesselection {
-                                    display: none !important;
-                                }
-                            `}
-                        </style>
-                        <Background color="#555" gap={16} />
-                        <Panel position="top-right">
-                            <EditorToolbar
-                                theme={theme} onSave={handleSave} onFitView={handleFitView} onLock={handleLock}
-                                onZoomIn={handleZoomIn} onZoomOut={handleZoomOut}
-                                onCompile={handleCompile}
-                                isDirty={isDirty} isInteractive={isInteractive} isSaving={isSaving}
-                                isFitting={isFitting} isLocking={isLocking} isZoomingIn={isZoomingIn} isZoomingOut={isZoomingOut}
-                            />
-                        </Panel>
-                    </ReactFlow>
-                </div>
-
-                {menu && menu.isOpen && <NodeSearchMenu x={menu.x} y={menu.y} onSelect={onNodeSelect} onClose={closeMenu} />}
-                {nodeMenu && <NodeContextMenu x={nodeMenu.x} y={nodeMenu.y} node={nodeMenu.node} selectedNodes={selectedNodes} onClose={closeMenu} onDelete={(id) => deleteNodes([id])} onDuplicate={duplicateNode => duplicateNodes(selectedNodes.length > 0 ? selectedNodes : [duplicateNode])} onComment={createComment} onRename={(id) => startRename(id)} />}
-
-                <div className="h-8 border-t flex items-center px-4 text-xs" style={{ backgroundColor: theme.colors.bg.secondary, borderColor: theme.colors.border.default, color: theme.colors.text.secondary }}>
-                    <span>Path: {assetId}</span>
-                </div>
+            {/* Footer */}
+            <div className="h-8 border-t flex items-center px-4 text-xs" style={{ backgroundColor: theme.colors.bg.secondary, borderColor: theme.colors.border.default, color: theme.colors.text.secondary }}>
+                <span>Path: {assetId}</span>
             </div>
         </div>
     );
