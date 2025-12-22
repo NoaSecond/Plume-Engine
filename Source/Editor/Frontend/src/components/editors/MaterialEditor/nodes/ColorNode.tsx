@@ -1,6 +1,6 @@
 import React, { memo, useCallback, useRef } from 'react';
 import { Handle, Position, NodeProps } from 'reactflow';
-import { useTheme } from '../../../ThemeContext';
+import { useTheme } from '../../../../ThemeContext';
 
 const ColorNode = ({ data, id, selected }: NodeProps) => {
     const { theme } = useTheme();

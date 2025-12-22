@@ -556,12 +556,16 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
                 { id: 'create_material', label: t('browser.context.create_material') },
                 { id: 'create_level', label: t('browser.context.create_level') }
               ] : ctxType === 'folder' ? [
+                { id: 'open_in_explorer', label: t('browser.context.open_explorer') },
+                { id: 'sep1', type: 'separator' },
                 { id: 'change_color', label: t('browser.context.change_color') },
                 { id: 'rename', label: t('browser.context.rename'), shortcut: 'F2' },
                 { id: 'delete', label: t('browser.context.delete'), shortcut: 'Del' },
                 { id: 'duplicate', label: t('browser.context.duplicate'), shortcut: 'Ctrl+D' },
                 { id: 'copy', label: t('browser.context.copy'), shortcut: 'Ctrl+C' }
               ] : [
+                { id: 'open_in_explorer', label: t('browser.context.open_explorer') },
+                { id: 'sep1', type: 'separator' },
                 { id: 'delete', label: t('browser.context.delete'), shortcut: 'Del' },
                 { id: 'rename', label: t('browser.context.rename'), shortcut: 'F2' },
                 { id: 'duplicate', label: t('browser.context.duplicate'), shortcut: 'Ctrl+D' },
@@ -649,7 +653,7 @@ export const ContentBrowserPanel: React.FC<ContentBrowserProps> = ({ show, onClo
 
                 const __webview = (window as any).chrome?.webview;
                 if (__webview) {
-                  __webview.postMessage({ action: 'change-color', path: targetPath, color: hex });
+                  __webview.postMessage({ action: 'change-folder-color', path: targetPath, color: hex });
                   __webview.postMessage({ action: 'list-content', path: browser.currentPath });
                 }
                 setColorPicker(null);

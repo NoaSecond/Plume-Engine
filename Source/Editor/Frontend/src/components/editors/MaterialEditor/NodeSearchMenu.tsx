@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useTheme } from '../../ThemeContext';
-import { useLanguage } from '../../LanguageContext';
+import { useTheme } from '../../../ThemeContext';
+import { useLanguage } from '../../../LanguageContext';
 
 export interface NodeTypeItem {
     label: string;
@@ -16,6 +16,14 @@ const AVAILABLE_NODES: NodeTypeItem[] = [
     // Maths
     { type: 'add', label: 'Add', category: 'Maths', data: { label: 'Add' } },
     { type: 'multiply', label: 'Multiply', category: 'Maths', data: { label: 'Multiply' } },
+    { type: 'subtract', label: 'Subtract', category: 'Maths', data: { label: 'Subtract' } },
+    { type: 'divide', label: 'Divide', category: 'Maths', data: { label: 'Divide' } },
+    { type: 'clamp', label: 'Clamp', category: 'Maths', data: { label: 'Clamp' } },
+    { type: 'lerp', label: 'Lerp', category: 'Maths', data: { label: 'Lerp' } },
+    { type: 'step', label: 'Step', category: 'Maths', data: { label: 'Step' } },
+    { type: 'smoothstep', label: 'Smooth Step', category: 'Maths', data: { label: 'Smooth Step' } },
+    { type: 'vector', label: 'Vector3', category: 'Constants', data: { label: 'Vector3' } },
+    { type: 'mask', label: 'Component Mask', category: 'Utility', data: { label: 'Mask', mask: 'r' } },
 ];
 
 interface NodeSearchMenuProps {
@@ -147,7 +155,7 @@ export const NodeSearchMenu: React.FC<NodeSearchMenuProps> = ({ x, y, onSelect, 
                                     onMouseEnter={(e) => e.currentTarget.style.background = theme.colors.accent.primary + '20'}
                                     onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                                 >
-                                    {t(`material.node.${node.type}`)}
+                                    {node.label}
                                 </div>
                             ))}
                         </div>

@@ -34,6 +34,8 @@ namespace RHI {
         void DrawGizmo() override {}
         void DrawMeshPlaceholder(const TransformComponent& transform) override {}
         void SetDepthTest(bool enabled) override {}
+        void SetMaterialShader(const std::string& vert, const std::string& frag) override {}
+        void DrawMesh(const TransformComponent& transform) override {}
 
         VkCommandBuffer GetVkCommandBuffer() const { return m_CommandBuffer; }
 

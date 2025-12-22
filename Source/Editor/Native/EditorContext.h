@@ -34,6 +34,10 @@ struct AppState {
         float x = 0, y = 0, width = 800, height = 600;
     } viewportBounds;
 
+    struct {
+        float x = 0, y = 0, width = 300, height = 300;
+    } previewViewportBounds;
+
     bool isRenderingEnabled = true;
 
     std::mutex keysMutex;

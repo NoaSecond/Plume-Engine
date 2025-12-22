@@ -338,13 +338,19 @@ export function useContentBrowser(show: boolean, onLog: (msg: string, type: 'WAR
     const handleImport = () => {
         const __webview = (window as any).chrome?.webview;
         if (__webview) {
+            const textureExts = ['*.png', '*.jpg', '*.jpeg', '*.tga', '*.bmp', '*.psd', '*.svg'];
+            const modelExts = ['*.fbx', '*.obj', '*.gltf', '*.glb'];
+            const audioExts = ['*.wav', '*.mp3', '*.ogg'];
+            const allSupported = [...textureExts, ...modelExts, ...audioExts];
+
             __webview.postMessage({
                 action: 'import-file',
                 path: currentPath,
                 filters: [
-                    { name: 'Textures', extensions: ['*.png', '*.jpg', '*.jpeg', '*.tga', '*.bmp', '*.psd', '*.svg'] },
-                    { name: 'Models', extensions: ['*.fbx', '*.obj', '*.gltf', '*.glb'] },
-                    { name: 'Audio', extensions: ['*.wav', '*.mp3', '*.ogg'] },
+                    { name: 'Supported Files', extensions: allSupported },
+                    { name: 'Textures', extensions: textureExts },
+                    { name: 'Models', extensions: modelExts },
+                    { name: 'Audio', extensions: audioExts },
                     { name: 'All Files', extensions: ['*.*'] }
                 ]
             });

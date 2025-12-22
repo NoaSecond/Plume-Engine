@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Maximize, Lock, Unlock, ZoomIn as ZoomInIcon, ZoomOut as ZoomOutIcon, Save } from 'lucide-react';
+import { Maximize, Lock, Unlock, ZoomIn as ZoomInIcon, ZoomOut as ZoomOutIcon, Save, Play } from 'lucide-react';
 import { useLanguage } from '../../../LanguageContext';
 
 interface ToolbarButtonProps {
@@ -84,6 +84,7 @@ interface EditorToolbarProps {
     onLock: () => void;
     onZoomIn: () => void;
     onZoomOut: () => void;
+    onCompile: () => void;
     isDirty: boolean;
     isInteractive: boolean;
     isSaving: boolean;
@@ -93,11 +94,13 @@ interface EditorToolbarProps {
     isZoomingOut: boolean;
 }
 
-export const EditorToolbar = ({ theme, onSave, onFitView, onLock, onZoomIn, onZoomOut, isDirty, isInteractive, isSaving, isFitting, isLocking, isZoomingIn, isZoomingOut }: EditorToolbarProps) => {
+export const EditorToolbar = ({ theme, onSave, onFitView, onLock, onZoomIn, onZoomOut, onCompile, isDirty, isInteractive, isSaving, isFitting, isLocking, isZoomingIn, isZoomingOut }: EditorToolbarProps) => {
     const { t } = useLanguage();
     return (
         <div style={{ display: 'flex', gap: '8px', padding: '4px' }}>
             <ToolbarButton theme={theme} onClick={onSave} icon={Save} label={t('material.save')} shortcut="Ctrl+S" disabled={!isDirty} forceActive={isSaving} />
+            <div style={{ width: '1px', background: theme.colors.border.default, margin: '0 4px', height: '24px', alignSelf: 'center' }} />
+            <ToolbarButton theme={theme} onClick={onCompile} icon={Play} label={t('material.compile') || "Compile"} tooltip="Generate HLSL" />
             <div style={{ width: '1px', background: theme.colors.border.default, margin: '0 4px', height: '24px', alignSelf: 'center' }} />
             <ToolbarButton theme={theme} onClick={onFitView} icon={Maximize} tooltip={t('material.fit_view')} shortcut="Ctrl+F" forceActive={isFitting} />
             <ToolbarButton theme={theme} onClick={onLock} icon={isInteractive ? Unlock : Lock} tooltip={isInteractive ? t('material.lock') : t('material.unlock')} shortcut="Ctrl+L" forceActive={isLocking} active={!isInteractive} />

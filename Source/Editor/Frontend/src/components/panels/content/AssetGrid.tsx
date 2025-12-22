@@ -103,7 +103,7 @@ export const AssetGrid: React.FC<AssetGridProps> = ({
                 hiddenSources.add(meta.source);
             }
         });
-        const visible = assets.filter(a => !hiddenSources.has(a.name) && a.name !== '.plume_meta' && !a.name.endsWith('.plume_meta'));
+        const visible = assets.filter(a => !hiddenSources.has(a.name) && a.name !== '.plumemeta' && !a.name.endsWith('.plumemeta'));
         return searchQuery ? visible.filter(a => a.name.toLowerCase().includes(searchQuery.toLowerCase())) : visible;
     }, [assets, searchQuery]);
 

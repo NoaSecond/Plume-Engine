@@ -28,6 +28,10 @@ namespace RHI {
         virtual void DrawGizmo() = 0;
         virtual void DrawMeshPlaceholder(const TransformComponent& transform) = 0;
         virtual void SetDepthTest(bool enabled) = 0;
+
+        // Custom Material Support
+        virtual void SetMaterialShader(const std::string& vert, const std::string& frag) = 0;
+        virtual void DrawMesh(const TransformComponent& transform) = 0;
     };
 
 } // namespace RHI

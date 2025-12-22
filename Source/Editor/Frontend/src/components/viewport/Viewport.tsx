@@ -17,9 +17,20 @@ interface ViewportProps {
   onAddEntity: (type: Entity['type'], subType?: string) => void;
   showToolbar?: boolean;
   controlsEnabled?: boolean;
+  showGizmo?: boolean;
+  showViewOrientation?: boolean;
+  showCameraMode?: boolean;
+  showTransformInfo?: boolean;
+  isPreview?: boolean;
 }
 
-export const Viewport: React.FC<ViewportProps> = ({ entities, selectedId, setSelectedId, cameraTransform, setCameraTransform, activeTool, viewMode, setViewMode, onAddEntity, showToolbar = true, controlsEnabled = true }) => {
+export const Viewport: React.FC<ViewportProps> = ({
+  entities, selectedId, setSelectedId, cameraTransform, setCameraTransform,
+  activeTool, viewMode, setViewMode, onAddEntity,
+  showToolbar = true, controlsEnabled = true,
+  showGizmo = true, showViewOrientation = true, showCameraMode = true, showTransformInfo = true,
+  isPreview = false
+}) => {
   const { theme } = useTheme();
   const [showViewModeMenu, setShowViewModeMenu] = useState(false);
   const [showCameraModeMenu, setShowCameraModeMenu] = useState(false);
@@ -80,7 +91,7 @@ export const Viewport: React.FC<ViewportProps> = ({ entities, selectedId, setSel
       if (window.chrome?.webview) {
         // @ts-ignore
         window.chrome.webview.postMessage({
-          action: 'viewport-bounds',
+          action: isPreview ? 'preview-viewport-bounds' : 'viewport-bounds',
           x: Math.round(rect.left),
           y: Math.round(rect.top),
           width: Math.round(rect.width),
@@ -357,65 +368,67 @@ export const Viewport: React.FC<ViewportProps> = ({ entities, selectedId, setSel
         onContextMenu={(e) => e.preventDefault()}
       >
         <div className="absolute top-2 left-2 flex space-x-2 z-10 opacity-90 transition-opacity pointer-events-auto">
-          <div className="relative" ref={viewOrientationRef} onClick={() => {
-            const newState = !showViewOrientationMenu;
-            setShowViewOrientationMenu(newState);
-            if (newState) {
-              setShowViewModeMenu(false);
-              setShowCameraModeMenu(false);
-            }
-          }}>
-            <div
-              className="backdrop-blur px-2 py-1 rounded text-xs cursor-pointer flex items-center"
-              style={{
-                backgroundColor: `${theme.colors.bg.primary}e6`, // 90% opacity
-                border: `1px solid ${theme.colors.border.default}`,
-                color: theme.colors.text.primary
-              }}
-            >
-              {viewportView} <ChevronDown size={10} className="ml-1" />
-            </div>
-            {showViewOrientationMenu && (
+          {showViewOrientation && (
+            <div className="relative" ref={viewOrientationRef} onClick={() => {
+              const newState = !showViewOrientationMenu;
+              setShowViewOrientationMenu(newState);
+              if (newState) {
+                setShowViewModeMenu(false);
+                setShowCameraModeMenu(false);
+              }
+            }}>
               <div
-                className="absolute top-full left-0 mt-1 w-32 rounded shadow-xl flex flex-col py-1 z-50 pointer-events-auto"
+                className="backdrop-blur px-2 py-1 rounded text-xs cursor-pointer flex items-center"
                 style={{
-                  backgroundColor: theme.colors.bg.primary,
-                  border: `1px solid ${theme.colors.border.default}`
+                  backgroundColor: `${theme.colors.bg.primary}e6`, // 90% opacity
+                  border: `1px solid ${theme.colors.border.default}`,
+                  color: theme.colors.text.primary
                 }}
               >
-                {viewOptions.map((opt, idx) => {
-                  if (opt.type === 'separator') {
-                    return <div key={`sep-${idx}`} className="h-px mx-1 my-1" style={{ backgroundColor: theme.colors.border.subtle }} />;
-                  }
-                  return (
-                    <div
-                      key={opt.value}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setViewportView(opt.value!);
-                        // @ts-ignore
-                        if (window.chrome?.webview) {
-                          // @ts-ignore
-                          window.chrome.webview.postMessage({
-                            action: 'set-viewport-view',
-                            view: opt.value
-                          });
-                        }
-                        setShowViewOrientationMenu(false);
-                      }}
-                      className="px-3 py-1.5 text-xs flex justify-between cursor-pointer transition-colors"
-                      style={{ color: theme.colors.text.primary }}
-                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.colors.accent.primary}
-                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                    >
-                      <span>{opt.label}</span>
-                      {viewportView === opt.value && <Check size={12} />}
-                    </div>
-                  );
-                })}
+                {viewportView} <ChevronDown size={10} className="ml-1" />
               </div>
-            )}
-          </div>
+              {showViewOrientationMenu && (
+                <div
+                  className="absolute top-full left-0 mt-1 w-32 rounded shadow-xl flex flex-col py-1 z-50 pointer-events-auto"
+                  style={{
+                    backgroundColor: theme.colors.bg.primary,
+                    border: `1px solid ${theme.colors.border.default}`
+                  }}
+                >
+                  {viewOptions.map((opt, idx) => {
+                    if (opt.type === 'separator') {
+                      return <div key={`sep-${idx}`} className="h-px mx-1 my-1" style={{ backgroundColor: theme.colors.border.subtle }} />;
+                    }
+                    return (
+                      <div
+                        key={opt.value}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setViewportView(opt.value!);
+                          // @ts-ignore
+                          if (window.chrome?.webview) {
+                            // @ts-ignore
+                            window.chrome.webview.postMessage({
+                              action: 'set-viewport-view',
+                              view: opt.value
+                            });
+                          }
+                          setShowViewOrientationMenu(false);
+                        }}
+                        className="px-3 py-1.5 text-xs flex justify-between cursor-pointer transition-colors"
+                        style={{ color: theme.colors.text.primary }}
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.colors.accent.primary}
+                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                      >
+                        <span>{opt.label}</span>
+                        {viewportView === opt.value && <Check size={12} />}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="relative" ref={viewModeRef} onClick={() => {
             const newState = !showViewModeMenu;
@@ -460,91 +473,97 @@ export const Viewport: React.FC<ViewportProps> = ({ entities, selectedId, setSel
             )}
           </div>
 
-          <div className="relative" ref={cameraModeRef} onClick={() => {
-            const newState = !showCameraModeMenu;
-            setShowCameraModeMenu(newState);
-            if (newState) setShowViewModeMenu(false);
-          }}>
-            <div
-              className="backdrop-blur px-2 py-1 rounded text-xs cursor-pointer select-none transition-colors flex items-center"
-              style={{
-                backgroundColor: `${theme.colors.bg.primary}e6`,
-                border: `1px solid ${theme.colors.border.default}`,
-                color: theme.colors.text.primary
-              }}
-            >
-              {cameraMode === 'SixDOF' ? "6DOF" : "3DOF"} <ChevronDown size={10} className="ml-1" />
-            </div>
-            {showCameraModeMenu && (
+          {showCameraMode && (
+            <div className="relative" ref={cameraModeRef} onClick={() => {
+              const newState = !showCameraModeMenu;
+              setShowCameraModeMenu(newState);
+              if (newState) setShowViewModeMenu(false);
+            }}>
               <div
-                className="absolute top-full left-0 mt-1 w-32 rounded shadow-xl flex flex-col py-1 z-50 pointer-events-auto"
+                className="backdrop-blur px-2 py-1 rounded text-xs cursor-pointer select-none transition-colors flex items-center"
                 style={{
-                  backgroundColor: theme.colors.bg.primary,
-                  border: `1px solid ${theme.colors.border.default}`
+                  backgroundColor: `${theme.colors.bg.primary}e6`,
+                  border: `1px solid ${theme.colors.border.default}`,
+                  color: theme.colors.text.primary
                 }}
               >
-                {['SixDOF', 'ThreeDOF'].map((mode) => (
-                  <div
-                    key={mode}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      const newMode = mode as 'SixDOF' | 'ThreeDOF';
-                      setCameraMode(newMode);
-                      // @ts-ignore
-                      if (window.chrome?.webview) {
-                        // @ts-ignore
-                        window.chrome.webview.postMessage({
-                          action: 'set-camera-mode',
-                          mode: newMode === 'SixDOF' ? 0 : 1
-                        });
-                      }
-                      setShowCameraModeMenu(false);
-                    }}
-                    className="px-3 py-1.5 text-xs flex justify-between cursor-pointer transition-colors"
-                    style={{ color: theme.colors.text.primary }}
-                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.colors.accent.primary}
-                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                  >
-                    <span>{mode === 'SixDOF' ? "6DOF" : "3DOF"}</span>
-                    {cameraMode === mode && <Check size={12} />}
-                  </div>
-                ))}
+                {cameraMode === 'SixDOF' ? "6DOF" : "3DOF"} <ChevronDown size={10} className="ml-1" />
               </div>
-            )}
-          </div>
+              {showCameraModeMenu && (
+                <div
+                  className="absolute top-full left-0 mt-1 w-32 rounded shadow-xl flex flex-col py-1 z-50 pointer-events-auto"
+                  style={{
+                    backgroundColor: theme.colors.bg.primary,
+                    border: `1px solid ${theme.colors.border.default}`
+                  }}
+                >
+                  {['SixDOF', 'ThreeDOF'].map((mode) => (
+                    <div
+                      key={mode}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const newMode = mode as 'SixDOF' | 'ThreeDOF';
+                        setCameraMode(newMode);
+                        // @ts-ignore
+                        if (window.chrome?.webview) {
+                          // @ts-ignore
+                          window.chrome.webview.postMessage({
+                            action: 'set-camera-mode',
+                            mode: newMode === 'SixDOF' ? 0 : 1
+                          });
+                        }
+                        setShowCameraModeMenu(false);
+                      }}
+                      className="px-3 py-1.5 text-xs flex justify-between cursor-pointer transition-colors"
+                      style={{ color: theme.colors.text.primary }}
+                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.colors.accent.primary}
+                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                    >
+                      <span>{mode === 'SixDOF' ? "6DOF" : "3DOF"}</span>
+                      {cameraMode === mode && <Check size={12} />}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Camera position and rotation display - top right */}
-        <div className="absolute top-2 right-2 z-10 opacity-90 pointer-events-none">
-          <div
-            className="backdrop-blur px-3 py-2 rounded text-xs font-mono"
-            style={{
-              backgroundColor: `${theme.colors.bg.primary}e6`,
-              border: `1px solid ${theme.colors.border.default}`,
-              color: theme.colors.text.secondary
-            }}
-          >
-            <div className="flex flex-col space-y-0.5">
-              <div>
-                <span style={{ color: theme.colors.text.muted }}>Pos:</span>{' '}
-                <span style={{ color: '#ef4444' }}>X {cameraTransform.position.x.toFixed(1)}</span>{' '}
-                <span style={{ color: '#22c55e' }}>Y {cameraTransform.position.y.toFixed(1)}</span>{' '}
-                <span style={{ color: '#3b82f6' }}>Z {cameraTransform.position.z.toFixed(1)}</span>
-              </div>
-              <div>
-                <span style={{ color: theme.colors.text.muted }}>Rot:</span>{' '}
-                <span style={{ color: '#ef4444' }}>X {cameraTransform.rotation.x.toFixed(1)}°</span>{' '}
-                <span style={{ color: '#22c55e' }}>Y {cameraTransform.rotation.y.toFixed(1)}°</span>{' '}
-                <span style={{ color: '#3b82f6' }}>Z {cameraTransform.rotation.z.toFixed(1)}°</span>
+        {showTransformInfo && (
+          <div className="absolute top-2 right-2 z-10 opacity-90 pointer-events-none">
+            <div
+              className="backdrop-blur px-3 py-2 rounded text-xs font-mono"
+              style={{
+                backgroundColor: `${theme.colors.bg.primary}e6`,
+                border: `1px solid ${theme.colors.border.default}`,
+                color: theme.colors.text.secondary
+              }}
+            >
+              <div className="flex flex-col space-y-0.5">
+                <div>
+                  <span style={{ color: theme.colors.text.muted }}>Pos:</span>{' '}
+                  <span style={{ color: '#ef4444' }}>X {cameraTransform.position.x.toFixed(1)}</span>{' '}
+                  <span style={{ color: '#22c55e' }}>Y {cameraTransform.position.y.toFixed(1)}</span>{' '}
+                  <span style={{ color: '#3b82f6' }}>Z {cameraTransform.position.z.toFixed(1)}</span>
+                </div>
+                <div>
+                  <span style={{ color: theme.colors.text.muted }}>Rot:</span>{' '}
+                  <span style={{ color: '#ef4444' }}>X {cameraTransform.rotation.x.toFixed(1)}°</span>{' '}
+                  <span style={{ color: '#22c55e' }}>Y {cameraTransform.rotation.y.toFixed(1)}°</span>{' '}
+                  <span style={{ color: '#3b82f6' }}>Z {cameraTransform.rotation.z.toFixed(1)}°</span>
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* Gizmo overlay */}
-        <div className="absolute bottom-4 left-4 z-20 pointer-events-none">
-          <Gizmo3D rotation={cameraTransform.rotation} />
-        </div>
+        {showGizmo && (
+          <div className="absolute bottom-4 left-4 z-20 pointer-events-none">
+            <Gizmo3D rotation={cameraTransform.rotation} />
+          </div>
+        )}
 
         {/* Center overlay for tool info or hints could go here */}
       </div>

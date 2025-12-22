@@ -53,13 +53,14 @@ namespace Plume {
         void SetRotationLocked(bool locked) { m_IsRotationLocked = locked; }
         bool IsRotationLocked() const { return m_IsRotationLocked; }
 
-    private:
         struct EntityData {
             TagComponent Tag;
             TransformComponent Transform;
             TypeComponent Type;
             bool Visible = true;
         };
+
+    private:
         std::vector<EntityData> m_Registry;
         CameraMode m_CameraMode = CameraMode::ThreeDOF;
         ProjectionMode m_ProjectionMode = ProjectionMode::Perspective;

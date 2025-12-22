@@ -162,7 +162,9 @@ namespace Plume {
 
             // Delegate to the high-level Renderer which knows how to draw the scene
             if (m_RendererObject && m_ActiveScene) {
-                m_RendererObject->RenderScene(m_ActiveScene);
+                // Pass true if active scene is preview scene
+                bool isPreview = (m_ActiveScene == m_PreviewScene.get());
+                m_RendererObject->RenderScene(m_ActiveScene, isPreview);
             }
 
             cmdBuffer->EndRenderPass();
@@ -208,14 +210,39 @@ namespace Plume {
         m_PreviewScene->CreateEntity("Preview_Camera", EntityType::Camera);
         
         // Setup Mesh
-        // TODO: Pass actual path to importer once available
-        // For now, subType "Cube" triggers the placeholder cube in Renderer
-        auto mesh = m_PreviewScene->CreateEntity("Preview_Mesh", EntityType::Mesh, "Cube");
+        std::string meshType = "Sphere";
+        if (!path.empty()) {
+            // In a real engine we would load the mesh resource here.
+            // For now, we just pass the path as the subtype if it's a file, 
+            // or we could support basic types if path is "Cube", etc.
+            // But since our "Mesh" entity currently just takes a subtype string which Renderer interprets...
+            // Let's assume the Renderer can handle the path or we defaults.
+            meshType = path; 
+        }
+        auto mesh = m_PreviewScene->CreateEntity("Preview_Mesh", EntityType::Mesh, meshType); 
         
         // Center camera? 
         // Default camera is at -1.5, 2.0, -1.5 looking at origin slightly.
+        Plume::TransformComponent camTrans;
+        camTrans.Position = { 0.0f, 0.0f, 3.5f };
+        camTrans.Rotation = { 0.0f, 0.0f, 0.0f };
+        m_PreviewScene->SetCameraTransform(camTrans);
         
         m_ActiveScene = m_PreviewScene.get();
+        
+        // Clear previous overrides
+        if (m_RendererObject) m_RendererObject->SetOverrideShader("", "");
+    }
+
+    void Engine::PreviewMaterial(const std::string& vertexCode, const std::string& fragmentCode) {
+        // Ensure we are in preview mode
+        if (m_ActiveScene != m_PreviewScene.get()) {
+            LoadPreviewAsset(""); // Load default preview scene
+        }
+
+        if (m_RendererObject) {
+            m_RendererObject->SetOverrideShader(vertexCode, fragmentCode);
+        }
     }
 
     void Engine::StopPreview() {

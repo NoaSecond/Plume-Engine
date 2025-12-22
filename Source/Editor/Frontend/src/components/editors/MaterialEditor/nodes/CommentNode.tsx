@@ -1,6 +1,6 @@
 import React, { memo, useState, useRef, useEffect } from 'react';
 import { NodeProps, NodeResizer, useReactFlow } from 'reactflow';
-import { useTheme } from '../../../ThemeContext';
+import { useTheme } from '../../../../ThemeContext';
 
 const CommentNode = ({ id, data, selected }: NodeProps) => {
     const { theme } = useTheme();
