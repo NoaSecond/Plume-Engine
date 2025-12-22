@@ -1,8 +1,8 @@
 <img src="Assets/Branding/plume_logo.svg" alt="Plume Engine Icon" width="96" height="96" />
 
-[![Frontend](https://github.com/NoaSecond/Plume-Engine/actions/workflows/frontend.yml/badge.svg)](https://github.com/NoaSecond/Plume-Engine/actions/workflows/frontend.yml)
-[![Windows Build](https://github.com/NoaSecond/Plume-Engine/actions/workflows/engine-windows.yml/badge.svg)](https://github.com/NoaSecond/Plume-Engine/actions/workflows/engine-windows.yml)
-[![Linux Build](https://github.com/NoaSecond/Plume-Engine/actions/workflows/engine-linux.yml/badge.svg)](https://github.com/NoaSecond/Plume-Engine/actions/workflows/engine-linux.yml)
+[![Frontend](https://github.com/NoaSecond/Plume-Engine/actions/workflows/frontend.yml/badge.svg)](https://github.com/NoaSecond/PlumeEngine-Editor/actions/workflows/frontend.yml)
+[![Windows Build](https://github.com/NoaSecond/Plume-Engine/actions/workflows/engine-windows.yml/badge.svg)](https://github.com/NoaSecond/PlumeEngine-Editor/actions/workflows/engine-windows.yml)
+[![Linux Build](https://github.com/NoaSecond/Plume-Engine/actions/workflows/engine-linux.yml/badge.svg)](https://github.com/NoaSecond/PlumeEngine-Editor/actions/workflows/engine-linux.yml)
 [![License: Proprietary](https://img.shields.io/badge/License-Proprietary-red.svg)](LICENSE)
 [![Author: Noa Second](https://img.shields.io/badge/Author-Noa%20Second-blue.svg)](https://noasecond.com)
 
