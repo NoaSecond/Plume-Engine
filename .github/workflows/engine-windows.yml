@@ -1,0 +1,51 @@
+name: Engine Windows CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      - name: Build Web Interface
+        run: |
+          cd Source/Editor/Frontend
+          npm install
+          npm run build
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-interface-windows
+          path: Bin/UI/
+
+  build-engine:
+    needs: build-frontend
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download Web Interface
+        uses: actions/download-artifact@v4
+        with:
+          name: web-interface-windows
+          path: Bin/UI/
+      - name: Setup CMake
+        uses: jwlawson/actions-setup-cmake@v2
+      - name: Setup MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+      - name: Configure CMake
+        run: |
+          mkdir Build
+          cd Build
+          cmake .. -DCMAKE_BUILD_TYPE=Release
+      - name: Build Engine
+        run: |
+          cd Build
+          cmake --build . --config Release
