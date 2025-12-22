@@ -1,30 +1,19 @@
 <img src="Assets/Branding/plume_logo.svg" alt="Plume Engine Icon" width="96" height="96" />
 
+[![Frontend](https://github.com/NoaSecond/Plume-Engine/actions/workflows/frontend.yml/badge.svg)](https://github.com/NoaSecond/Plume-Engine/actions/workflows/frontend.yml)
+[![Windows Build](https://github.com/NoaSecond/Plume-Engine/actions/workflows/engine-windows.yml/badge.svg)](https://github.com/NoaSecond/Plume-Engine/actions/workflows/engine-windows.yml)
+[![Linux Build](https://github.com/NoaSecond/Plume-Engine/actions/workflows/engine-linux.yml/badge.svg)](https://github.com/NoaSecond/Plume-Engine/actions/workflows/engine-linux.yml)
+[![License: Proprietary](https://img.shields.io/badge/License-Proprietary-red.svg)](LICENSE)
+[![Author: Noa Second](https://img.shields.io/badge/Author-Noa%20Second-blue.svg)](https://noasecond.com)
+
 # Plume Engine
 
 Game engine combining C++ performance with a modern React-powered editor for rapid, creative development.
 
-## Features
-
-### Editor
-- **Modern UI**: Professional interface with 3 built-in themes
-  - Plume Dark (AAA-inspired default)
-  - Nebula Midnight (Cyberpunk/Sci-fi)
-  - Feather Light (Bright minimalist)
-- **Hot-Reload**: Instant theme switching without page reload
-- **Viewport**: Real-time 3D scene visualization
-- **Hierarchy**: Scene graph with entity management
-- **Details Panel**: Entity properties inspector
-- **Content Browser**: Asset management (Ctrl+Space)
-- **Console**: Debug logs and runtime commands
-
-### Engine
+### Engine and Editor
 - **C++ Runtime**: High-performance core
 - **Scene Management**: Entity-component system
 - **Hot-Reload UI**: Development-friendly workflow
-
-### Rendering Architecture Update
-- **Composition Hardware (Overlay) (Recommended)**: The project now uses a hardware composition overlay approach for UI integration. 3D rendering happens in a native window (HWND) using the engine's RHI backends while the modern HTML UI is displayed by a WebView2 control placed above the renderer with transparent background. This abandons previous attempts at sharing GPU textures between processes or subsystems (shared textures/shared handles).
 
 ## Build Instructions
 
@@ -69,19 +58,6 @@ Navigate to `Bin/Release` and launch `PlumeEditor.exe`.
 - CMake 3.20+
 - Visual Studio 2019+ (Windows)
 - WebView2 Runtime
-
-## Camera Controls
-
-The Plume Engine Editor features a stabilized 6DOF camera system.
-
-- **ZQSD**: Move Horizontally (Forward / Left / Backward / Right) relative to the camera view.
-- **Left Shift**: Move Up (Screen Vertical).
-- **Left Ctrl**: Move Down (Screen Vertical).
-- **A / E**: Roll Camera (Left / Right).
-- **Mouse**: Look around.
-  - **Yaw** (Left/Right) is Global (around the World Up axis) to prevent drifting.
-  - **Pitch** (Up/Down) is Local (relative to the screen).
-  - **Roll** (Tilt) is Manual (via keys) and stable.
 
 ## Created by Noa Second
 
