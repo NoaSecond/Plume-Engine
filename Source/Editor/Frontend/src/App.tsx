@@ -6,6 +6,7 @@ import { StaticMeshEditor } from './components/editors/StaticMeshEditor';
 import { TextureViewer } from './components/editors/TextureViewer';
 import { MaterialEditor } from './components/editors/MaterialEditor/MaterialEditor';
 import { SoundViewer } from './components/editors/SoundViewer';
+import { AnimationEditor } from './components/editors/AnimationEditor';
 import { ContentBrowserPanel } from './components/panels/ContentBrowserPanel';
 import { ConsolePanel } from './components/panels/ConsolePanel';
 import { EditorPreferences } from './components/panels/EditorPreferences';
@@ -180,13 +181,14 @@ export default function App() {
     // Identify Asset Types based on Type property primarily
     const type = asset.type ? asset.type : '';
 
-    let tabType: 'static-mesh' | 'texture' | 'sound' | 'material-editor' | null = null;
+    let tabType: 'static-mesh' | 'texture' | 'sound' | 'material-editor' | 'animation-sequence' | null = null;
 
     // Prioritize explicit types
     if (type === 'StaticMesh') tabType = 'static-mesh';
     else if (type === 'Texture') tabType = 'texture';
     else if (type === 'SoundWave') tabType = 'sound';
     else if (type === 'Material') tabType = 'material-editor';
+    else if (type === 'AnimationSequence') tabType = 'animation-sequence';
 
 
 
@@ -553,6 +555,13 @@ export default function App() {
               )}
               {tab.type === 'sound' && (
                 <SoundViewer
+                  assetId={typeof tab.data === 'string' ? tab.data : (tab.data?.entityId || tab.data?.assetId || '')}
+                  name={tab.title}
+                  isActive={isActive}
+                />
+              )}
+              {tab.type === 'animation-sequence' && (
+                <AnimationEditor
                   assetId={typeof tab.data === 'string' ? tab.data : (tab.data?.entityId || tab.data?.assetId || '')}
                   name={tab.title}
                   isActive={isActive}
