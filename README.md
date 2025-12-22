@@ -62,6 +62,6 @@ Navigate to `Bin/Release` and launch `PlumeEditor.exe`.
 - Visual Studio 2019+ (Windows)
 - WebView2 Runtime
 
-## Created by Noa Second
+## Created by [Noa Second](https://noasecond.com)
 
 Built with modern C++ and React, designed to last.
