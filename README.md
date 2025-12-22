@@ -10,10 +10,13 @@
 
 Game engine combining C++ performance with a modern React-powered editor for rapid, creative development.
 
-### Engine and Editor
-- **C++ Runtime**: High-performance core
-- **Scene Management**: Entity-component system
-- **Hot-Reload UI**: Development-friendly workflow
+### Key Features
+
+- **High-Performance ECS**: A data-oriented Entity Component System designed for cache efficiency and massive entity scaling.
+- **Multi-API RHI**: A unified Rendering Hardware Interface supporting modern graphics APIs including OpenGL, Vulkan, DirectX 12, and Metal.
+- **React-Powered Tooling**: An extensible, modern editor UI leveraging the full React ecosystem and TypeScript for a premier developer experience.
+- **Cross-Platform Runtime**: Native C++ execution with first-class support for Windows and Linux environments.
+- **Modern Build Pipeline**: Streamlined CMake and NPM integration for a unified, predictable build process across different environments.
 
 ## Build Instructions
 
